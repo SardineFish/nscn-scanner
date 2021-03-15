@@ -6,7 +6,8 @@ use redis::{AsyncCommands, RedisError, aio::MultiplexedConnection};
 use reqwest::{Client, Response, StatusCode, header::HeaderMap};
 use serde::{Serialize, Deserialize};
 use tokio::{sync::mpsc::{Sender, channel}, task::{self, JoinHandle}};
-use crate::{error::{*, self}, proxy::ProxyPool};
+use std::sync::Arc;
+use crate::{error::{*, self}, proxy::ProxyPool, redis_pool::{ RedisPool}};
 
 
 #[derive(Serialize, Deserialize)]
@@ -65,27 +66,30 @@ const MAX_TASKS: usize = 32;
 #[derive(Clone)]
 pub struct HttpScanner {
     collection: Collection,
-    redis: redis::Client,
+    redis_url: String,
     proxy_pool: ProxyPool,
+    dispatcher_conn: MultiplexedConnection,
 }
 
 impl HttpScanner {
-    pub fn new(db: Database, redis: redis::Client, proxy_pool: ProxyPool) -> Self {
+    pub async fn open(db: Database, redis_url: &str, proxy_pool: ProxyPool) -> Self {
         Self {
             collection: db.collection(COLLECTION),
-            redis,
+            redis_url: redis_url.to_owned(),
             proxy_pool,
+            dispatcher_conn: redis::Client::open(redis_url).unwrap().get_multiplexed_tokio_connection().await.unwrap(),
         }
     }
-    pub async fn enqueue(&self, address: &str) {
-        let mut conn = self.redis.get_async_connection().await.unwrap();
+    pub async fn enqueue(&self, address: &str) -> Result<(), ErrorMsg> {
+        let mut conn = self.dispatcher_conn.clone();
         let result: Result<i32, RedisError> = conn.lpush(TASK_QUEUE, address).await;
         if let Err(err) = result {
             log::error!("Failed to enqueue http scan task: {}", err);
         }
+        Ok(())
     }
     pub fn start(&self) -> JoinHandle<()> {
-        let redis = self.redis.clone();
+        let redis = redis::Client::open(self.redis_url.as_str()).unwrap();
         let scanner = self.clone();
 
         task::spawn(async move {
@@ -98,7 +102,8 @@ impl HttpScanner {
             loop {
                 while task_count < MAX_TASKS
                 {
-                    let result: Result<(String, String), redis::RedisError> = redis.get_multiplexed_tokio_connection().await.unwrap().brpop(TASK_QUEUE, 0).await;
+                    let result: Result<(String, String), redis::RedisError> = redis.get_async_connection().await.unwrap()
+                        .brpop(TASK_QUEUE, 0).await;
                     match result {
                         Err(err) if err.is_timeout() => (),
                         Err(err) => log::error!("Failed to execute cmd BRPOP :{}", err),

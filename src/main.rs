@@ -13,7 +13,9 @@ use config::Config;
 use http::HttpScanner;
 use proxy::ProxyPool;
 use redis::aio::MultiplexedConnection;
+use redis_pool::RedisPool;
 use tokio::task;
+use std::sync::Arc;
 
 #[tokio::main]
 async fn main()
@@ -22,13 +24,13 @@ async fn main()
 
     let config = Config::from_file("config.json").await.unwrap();
 
-
     let mongodb = mongodb::Client::with_uri_str(&config.mongodb).await.unwrap();
     let db = mongodb.database("nscn");
+    let redis_pool = Arc::new(RedisPool::open(&config.redis));
     let redis = redis::Client::open(config.redis.as_str()).unwrap();
     let conn = redis.get_multiplexed_tokio_connection().await.unwrap();
     let proxy_pool = ProxyPool::new(&config.proxy_pool);
-    let http_scanner = HttpScanner::new(db, redis, proxy_pool);
+    let http_scanner = HttpScanner::open(db, &config.redis, proxy_pool).await;
     let join = http_scanner.start();
     
     http_scanner.enqueue("47.102.198.236").await;
@@ -38,7 +40,7 @@ async fn main()
             Err(err) => log::error!("Failed to fetch address list from '{}': {}", url, err.msg),
             Ok(list) => {
                 let mut count = 0;
-                // log::info!("{}", list.len());
+                log::info!("Get {} address range from {}", list.len(), url);
                 for range in list {
                     count += range.len();
                     for ip in range {
