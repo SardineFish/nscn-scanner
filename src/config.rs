@@ -1,3 +1,5 @@
+#[macro_use]
+use lazy_static::lazy_static;
 use serde::{Deserialize};
 use tokio::fs::read_to_string;
 use crate::error::*;
@@ -8,6 +10,7 @@ pub struct Config {
     pub mongodb: String,
     pub redis: String,
     pub addr_src: Vec<String>,
+    pub proxy: String,
 }
 
 impl Config {
@@ -15,4 +18,12 @@ impl Config {
         let data = read_to_string(path).await?;
         Ok(serde_json::from_str(&data)?)
     }
+}
+
+lazy_static!{
+    pub static ref GLOBAL_CONFIG: Config = {
+        let data = std::fs::read_to_string("config.json").unwrap();
+        let config: Config = serde_json::from_str(&data).unwrap();
+        config
+    };
 }

@@ -1,11 +1,14 @@
+#![feature(generators, generator_trait)]
+
 mod http;
 mod scheduler;
 mod error;
 mod proxy;
 mod config;
 mod address;
+mod redis_pool;
 
-use address::parse_ipv4_cidr;
+use address::{fetch_address_list, parse_ipv4_cidr};
 use config::Config;
 use http::HttpScanner;
 use proxy::ProxyPool;
@@ -25,10 +28,29 @@ async fn main()
     let redis = redis::Client::open(config.redis.as_str()).unwrap();
     let conn = redis.get_multiplexed_tokio_connection().await.unwrap();
     let proxy_pool = ProxyPool::new(&config.proxy_pool);
-    let http_scanner = HttpScanner::new(db, conn, proxy_pool);
+    let http_scanner = HttpScanner::new(db, redis, proxy_pool);
     let join = http_scanner.start();
     
-    http_scanner.enqueue("47.102.198.236:5000").await;
+    http_scanner.enqueue("47.102.198.236").await;
+
+    for url in config.addr_src {
+        match fetch_address_list(&url).await {
+            Err(err) => log::error!("Failed to fetch address list from '{}': {}", url, err.msg),
+            Ok(list) => {
+                let mut count = 0;
+                // log::info!("{}", list.len());
+                for range in list {
+                    count += range.len();
+                    for ip in range {
+                        let addr = std::net::Ipv4Addr::from(ip);
+                        // log::info!("{}", addr.to_string());
+                        http_scanner.enqueue(addr.to_string().as_str()).await;
+                    }
+                }
+                log::info!("Enqueue {} address", count);
+            }
+        }
+    }
 
     // let range = parse_ipv4_cidr("47.102.198.0/24").unwrap();
     // for ip in range {

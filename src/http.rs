@@ -13,7 +13,14 @@ use crate::{error::{*, self}, proxy::ProxyPool};
 struct HttpScanResult {
     address: String,
     time: bson::DateTime,
-    result: Result<ResponseData, String>,
+    result: ScanResult<ResponseData>,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(tag="state", content="response")]
+enum ScanResult<T> {
+    Ok(T),
+    Err(String),
 }
 
 #[derive(Serialize, Deserialize)]
@@ -58,12 +65,12 @@ const MAX_TASKS: usize = 32;
 #[derive(Clone)]
 pub struct HttpScanner {
     collection: Collection,
-    redis: MultiplexedConnection,
+    redis: redis::Client,
     proxy_pool: ProxyPool,
 }
 
 impl HttpScanner {
-    pub fn new(db: Database, redis: MultiplexedConnection, proxy_pool: ProxyPool) -> Self {
+    pub fn new(db: Database, redis: redis::Client, proxy_pool: ProxyPool) -> Self {
         Self {
             collection: db.collection(COLLECTION),
             redis,
@@ -71,7 +78,8 @@ impl HttpScanner {
         }
     }
     pub async fn enqueue(&self, address: &str) {
-        let result: Result<i32, RedisError> = self.redis.clone().lpush(TASK_QUEUE, address).await;
+        let mut conn = self.redis.get_async_connection().await.unwrap();
+        let result: Result<i32, RedisError> = conn.lpush(TASK_QUEUE, address).await;
         if let Err(err) = result {
             log::error!("Failed to enqueue http scan task: {}", err);
         }
@@ -90,7 +98,7 @@ impl HttpScanner {
             loop {
                 while task_count < MAX_TASKS
                 {
-                    let result: Result<(String, String), redis::RedisError> = redis.clone().brpop(TASK_QUEUE, 1000).await;
+                    let result: Result<(String, String), redis::RedisError> = redis.get_multiplexed_tokio_connection().await.unwrap().brpop(TASK_QUEUE, 0).await;
                     match result {
                         Err(err) if err.is_timeout() => (),
                         Err(err) => log::error!("Failed to execute cmd BRPOP :{}", err),
@@ -160,9 +168,9 @@ impl HttpScanTask {
             result: match result {
                 Ok(response) => {
                     log::info!("GET {} - {}", self.address, response.status());
-                    Ok(ResponseData::from_response(response).await)
+                    ScanResult::Ok(ResponseData::from_response(response).await)
                 },
-                Err(err) => Err(err.to_string())
+                Err(err) => ScanResult::Err(err.to_string())
             },
         };
 
