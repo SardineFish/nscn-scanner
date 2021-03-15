@@ -1,4 +1,4 @@
-#![feature(generators, generator_trait)]
+
 
 mod http;
 mod scheduler;
