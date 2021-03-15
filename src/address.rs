@@ -22,10 +22,13 @@ pub fn parse_ipv4_cidr(addr: &str) -> Result<Range<u32>, ErrorMsg> {
 
 pub async fn fetch_address_list(url: &str) -> Result<Vec<Range<u32>>, ErrorMsg> {
     log::info!("{}", url);
-    let client = reqwest::Client::builder()
-        .proxy(Proxy::http(&GLOBAL_CONFIG.proxy)?)
-        .proxy(Proxy::https(&GLOBAL_CONFIG.proxy)?)
-        .build()?;
+    let mut builder = reqwest::Client::builder();
+    if let Some(proxy_addr) = &GLOBAL_CONFIG.proxy {
+        builder = builder.proxy(Proxy::http(proxy_addr)?)
+            .proxy(Proxy::https(proxy_addr)?);
+    }
+
+    let client = builder.build()?;
     let body = client.get(url).send().await?.text().await?;
     Ok(body.split_whitespace()
         .filter_map(|addr|parse_ipv4_cidr(addr).ok())

@@ -10,7 +10,7 @@ pub struct Config {
     pub mongodb: String,
     pub redis: String,
     pub addr_src: Vec<String>,
-    pub proxy: String,
+    pub proxy: Option<String>,
     pub max_tasks: usize,
     pub request_timeout: u64,
 }
