@@ -1,0 +1,17 @@
+[package]
+name = "nscn"
+version = "0.1.0"
+authors = ["SardineFish <Sardine@live.cn>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+reqwest = { version = "0.11", features = ["json"] }
+tokio = { version = "1", features = ["full"] }
+mongodb = "1.2.0"
+redis = { version = "0.20.0", features = ["tokio-comp"] }
+serde = "1.0.124"
+log = "0.4.0"
+env_logger = "0.8.3"
+chrono = "0.4.19"
