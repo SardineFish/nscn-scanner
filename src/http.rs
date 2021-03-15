@@ -8,6 +8,7 @@ use serde::{Serialize, Deserialize};
 use tokio::{sync::mpsc::{Sender, channel}, task::{self, JoinHandle}};
 use std::sync::Arc;
 use crate::{error::{*, self}, proxy::ProxyPool, redis_pool::{ RedisPool}};
+use crate::config::GLOBAL_CONFIG;
 
 
 #[derive(Serialize, Deserialize)]
@@ -61,7 +62,6 @@ impl SerializeHeaders for HeaderMap {
 
 const COLLECTION: &str = "http";
 const TASK_QUEUE: &str = "http:task_queue";
-const MAX_TASKS: usize = 32;
 
 #[derive(Clone)]
 pub struct HttpScanner {
@@ -100,7 +100,7 @@ impl HttpScanner {
             log::info!("Start http scanner");
 
             loop {
-                while task_count < MAX_TASKS
+                while task_count < GLOBAL_CONFIG.max_tasks
                 {
                     let result: Result<(String, String), redis::RedisError> = redis.get_async_connection().await.unwrap()
                         .brpop(TASK_QUEUE, 0).await;
@@ -160,7 +160,7 @@ impl HttpScanTask {
 
         let client = reqwest::Client::builder()
             .proxy(proxy)
-            .timeout(Duration::from_secs(10))
+            .timeout(Duration::from_secs(GLOBAL_CONFIG.request_timeout))
             .build()?;
 
         let result = client.get(format!("http://{}", self.address))
@@ -172,7 +172,7 @@ impl HttpScanTask {
             time: Utc::now().into(),
             result: match result {
                 Ok(response) => {
-                    log::info!("GET {} - {}", self.address, response.status());
+                    log::info!("GET {} proxy by {} - {}", self.address, proxy_addr, response.status());
                     ScanResult::Ok(ResponseData::from_response(response).await)
                 },
                 Err(err) => ScanResult::Err(err.to_string())

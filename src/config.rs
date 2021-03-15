@@ -11,6 +11,8 @@ pub struct Config {
     pub redis: String,
     pub addr_src: Vec<String>,
     pub proxy: String,
+    pub max_tasks: usize,
+    pub request_timeout: u64,
 }
 
 impl Config {
