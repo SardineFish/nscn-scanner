@@ -1,4 +1,4 @@
-use std::fmt::{Debug, Display};
+use std::fmt::{self, Debug, Display};
 
 use mongodb::bson;
 
@@ -11,5 +11,11 @@ impl<T> From<T> for ErrorMsg where T : Display {
         Self {
             msg: format!("{}", err),
         }
+    }
+}
+
+impl Debug for ErrorMsg {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.msg)
     }
 }

@@ -1,0 +1,30 @@
+{
+    // See https://go.microsoft.com/fwlink/?LinkId=733558
+    // for the documentation about the tasks.json format
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Start Redis Server",
+            "type": "shell",
+            "command": "bash",
+            "args": [
+                "-c",
+                "redis-server"
+            ],
+            "options": {
+                "cwd": "./data"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Start Mongodb",
+            "type": "shell",
+            "command": "mongod",
+            "args": [
+                "--dbpath",
+                "${workspaceFolder}/data/db"
+            ],
+            "problemMatcher": []
+        }
+    ]
+}

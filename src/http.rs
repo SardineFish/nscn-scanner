@@ -1,12 +1,12 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, time::Duration};
 
 use chrono::Utc;
 use mongodb::{Collection, Database, bson};
 use redis::{AsyncCommands, RedisError, aio::MultiplexedConnection};
 use reqwest::{Client, Response, header::HeaderMap};
 use serde::{Serialize, Deserialize};
-use tokio::{sync::mpsc::{Sender, channel}, task};
-use crate::error::{*, self};
+use tokio::{sync::mpsc::{Sender, channel}, task::{self, JoinHandle}};
+use crate::{error::{*, self}, proxy::ProxyPool};
 
 
 #[derive(Serialize, Deserialize)]
@@ -53,16 +53,19 @@ const COLLECTION: &str = "http";
 const TASK_QUEUE: &str = "http:task_queue";
 const MAX_TASKS: usize = 4;
 
+#[derive(Clone)]
 pub struct HttpScanner {
     collection: Collection,
     redis: MultiplexedConnection,
+    proxy_pool: ProxyPool,
 }
 
 impl HttpScanner {
-    pub fn new(db: Database, redis: MultiplexedConnection) -> Self {
+    pub fn new(db: Database, redis: MultiplexedConnection, proxy_pool: ProxyPool) -> Self {
         Self {
             collection: db.collection(COLLECTION),
             redis,
+            proxy_pool,
         }
     }
     pub async fn enqueue(&self, address: &str) {
@@ -71,61 +74,98 @@ impl HttpScanner {
             log::error!("Failed to enqueue http scan task: {}", err);
         }
     }
-    pub async fn start(&self) {
+    pub fn start(&self) -> JoinHandle<()> {
         let redis = self.redis.clone();
+        let scanner = self.clone();
 
-        let (sender, mut receiver) = channel::<()>(1024);
+        task::spawn(async move {
+            let (sender, mut receiver) = channel::<()>(1024);
 
-        let mut task_count = 0;
+            let mut task_count = 0;
+            
+            log::info!("Start http scanner");
 
-        loop {
-            while task_count < MAX_TASKS
-            {
-                let result: Result<String, redis::RedisError> = redis.clone().brpop(TASK_QUEUE, 1000).await;
-                match result {
-                    Err(err) if err.is_timeout() => (),
-                    Err(err) => log::error!("{}", err),
-                    Ok(addr) => {
-                        let sender = sender.clone();
-                        let collection = self.collection.clone();
-                        task::spawn(async {
-                            Self::run(addr, collection, sender).await;
-                        });
-                        task_count += 1;
-                    },
-                };
+            loop {
+                while task_count < MAX_TASKS
+                {
+                    let result: Result<(String, String), redis::RedisError> = redis.clone().brpop(TASK_QUEUE, 1000).await;
+                    match result {
+                        Err(err) if err.is_timeout() => (),
+                        Err(err) => log::error!("{}", err),
+                        Ok((_, addr)) => {
+                            scanner.spawn_task(addr, &sender);
+                            task_count += 1;
+                        },
+                    };
+                }
+                if let Some(_) = receiver.recv().await {
+                    task_count -= 1;
+                }
             }
-            if let Some(_) = receiver.recv().await {
-                task_count -= 1;
-            }
-        }
-
+        })
     }
-    async fn run(address: String, collection: Collection, complete: Sender<()>) {
-        let result = Self::scan(&address, collection).await;
+    
+    fn spawn_task(&self, addr: String, complete_sender: &Sender<()>) {
+        log::debug!("Start http scanning for {}", addr);
+        let task = HttpScanTask {
+            address: addr,
+            collection: self.collection.clone(),
+            complete: complete_sender.clone(),
+            proxy_pool: self.proxy_pool.clone(),
+        };
+
+        task::spawn(async move {
+            task.run().await;
+        });
+    }
+}
+
+struct HttpScanTask {
+    address: String,
+    collection: Collection,
+    complete: Sender<()>,
+    proxy_pool: ProxyPool,
+}
+
+impl HttpScanTask {
+    async fn run(&self) {
+        let result = self.scan().await;
         match result {
             Ok(_) => (),
-            Err(err) => log::error!("{} {}", address, err.msg),
+            Err(err) => log::error!("{} {}", self.address, err.msg),
         }
-        if let Err(err) = complete.send(()).await{
+        if let Err(err) = self.complete.send(()).await{
             log::error!("Failed to send task complete signal: {}", err);
         }
     }
-    async fn scan(address: &str, collection: Collection) -> Result<(), ErrorMsg> {
-        let result = reqwest::get(format!("http://{}", address))
+    async fn scan(&self) -> Result<(), ErrorMsg> {
+        let proxy_addr = self.proxy_pool.get().await;
+        let proxy = reqwest::Proxy::http(format!("http://{}", proxy_addr))?;
+        log::info!("Get http proxy {}", proxy_addr);
+
+        let client = reqwest::Client::builder()
+            .proxy(proxy)
+            .timeout(Duration::from_secs(10))
+            .build()?;
+
+        let result = client.get(format!("http://{}", self.address))
+            .send()
             .await;
 
         let scan_result = HttpScanResult {
-            address: address.to_owned(),
+            address: self.address.to_owned(),
             time: Utc::now().into(),
             result: match result {
-                Ok(response) => Ok(ResponseData::from_response(response).await),
+                Ok(response) => {
+                    log::info!("GET {} - {}", self.address, response.status());
+                    Ok(ResponseData::from_response(response).await)
+                },
                 Err(err) => Err(err.to_string())
             },
         };
 
         let doc = bson::to_document(&scan_result)?;
-        collection.insert_one(doc, None)
+        self.collection.insert_one(doc, None)
             .await?;
 
         Ok(())
