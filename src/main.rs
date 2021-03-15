@@ -3,7 +3,9 @@ mod scheduler;
 mod error;
 mod proxy;
 mod config;
+mod address;
 
+use address::parse_ipv4_cidr;
 use config::Config;
 use http::HttpScanner;
 use proxy::ProxyPool;
@@ -26,7 +28,13 @@ async fn main()
     let http_scanner = HttpScanner::new(db, conn, proxy_pool);
     let join = http_scanner.start();
     
-    http_scanner.enqueue("47.102.198.236").await;
+    http_scanner.enqueue("47.102.198.236:5000").await;
+
+    // let range = parse_ipv4_cidr("47.102.198.0/24").unwrap();
+    // for ip in range {
+    //     let addr = std::net::Ipv4Addr::from(ip);
+    //     http_scanner.enqueue(addr.to_string().as_str()).await;
+    // }
 
     join.await.unwrap();
 }

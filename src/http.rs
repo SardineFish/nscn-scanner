@@ -3,7 +3,7 @@ use std::{collections::HashMap, time::Duration};
 use chrono::Utc;
 use mongodb::{Collection, Database, bson};
 use redis::{AsyncCommands, RedisError, aio::MultiplexedConnection};
-use reqwest::{Client, Response, header::HeaderMap};
+use reqwest::{Client, Response, StatusCode, header::HeaderMap};
 use serde::{Serialize, Deserialize};
 use tokio::{sync::mpsc::{Sender, channel}, task::{self, JoinHandle}};
 use crate::{error::{*, self}, proxy::ProxyPool};
@@ -18,6 +18,7 @@ struct HttpScanResult {
 
 #[derive(Serialize, Deserialize)]
 struct ResponseData {
+    status: i32,
     headers: HashMap<String, Vec<String>>,
     body: String,
 }
@@ -26,6 +27,7 @@ impl ResponseData {
     async fn from_response(response: Response) -> Self {
         Self {
             headers: response.headers().serialize(),
+            status: response.status().as_u16() as i32,
             body: response.text().await.unwrap_or("Failed to parse body".to_owned()),
         }
     }
@@ -51,7 +53,7 @@ impl SerializeHeaders for HeaderMap {
 
 const COLLECTION: &str = "http";
 const TASK_QUEUE: &str = "http:task_queue";
-const MAX_TASKS: usize = 4;
+const MAX_TASKS: usize = 32;
 
 #[derive(Clone)]
 pub struct HttpScanner {
@@ -91,7 +93,7 @@ impl HttpScanner {
                     let result: Result<(String, String), redis::RedisError> = redis.clone().brpop(TASK_QUEUE, 1000).await;
                     match result {
                         Err(err) if err.is_timeout() => (),
-                        Err(err) => log::error!("{}", err),
+                        Err(err) => log::error!("Failed to execute cmd BRPOP :{}", err),
                         Ok((_, addr)) => {
                             scanner.spawn_task(addr, &sender);
                             task_count += 1;
@@ -106,7 +108,7 @@ impl HttpScanner {
     }
     
     fn spawn_task(&self, addr: String, complete_sender: &Sender<()>) {
-        log::debug!("Start http scanning for {}", addr);
+        log::info!("Start http scanning for {}", addr);
         let task = HttpScanTask {
             address: addr,
             collection: self.collection.clone(),
@@ -141,7 +143,7 @@ impl HttpScanTask {
     async fn scan(&self) -> Result<(), ErrorMsg> {
         let proxy_addr = self.proxy_pool.get().await;
         let proxy = reqwest::Proxy::http(format!("http://{}", proxy_addr))?;
-        log::info!("Get http proxy {}", proxy_addr);
+        log::debug!("Use http proxy {}", proxy_addr);
 
         let client = reqwest::Client::builder()
             .proxy(proxy)

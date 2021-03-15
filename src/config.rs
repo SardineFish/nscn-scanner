@@ -7,6 +7,7 @@ pub struct Config {
     pub proxy_pool: String,
     pub mongodb: String,
     pub redis: String,
+    pub addr_src: Vec<String>,
 }
 
 impl Config {
