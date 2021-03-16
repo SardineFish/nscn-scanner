@@ -121,7 +121,7 @@ impl HttpScanner {
     }
     
     fn spawn_task(&self, addr: String, complete_sender: &Sender<()>) {
-        log::info!("Start http scanning for {}", addr);
+        log::debug!("Start http scanning for {}", addr);
         let task = HttpScanTask {
             address: addr,
             collection: self.collection.clone(),
@@ -156,7 +156,9 @@ impl HttpScanTask {
     async fn scan(&self) -> Result<(), ErrorMsg> {
         let proxy_addr = self.proxy_pool.get().await;
         let proxy = reqwest::Proxy::http(format!("http://{}", proxy_addr))?;
-        log::debug!("Use http proxy {}", proxy_addr);
+        // log::debug!("Use http proxy {}", proxy_addr);
+        
+        log::info!("Http scan {} through {}", self.address, proxy_addr);
 
         let client = reqwest::Client::builder()
             .proxy(proxy)

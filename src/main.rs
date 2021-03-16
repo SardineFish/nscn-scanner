@@ -30,6 +30,7 @@ async fn main()
     let redis = redis::Client::open(config.redis.as_str()).unwrap();
     let conn = redis.get_multiplexed_tokio_connection().await.unwrap();
     let proxy_pool = ProxyPool::new(&config.proxy_pool);
+    proxy_pool.start().await;
     let http_scanner = HttpScanner::open(db, &config.redis, proxy_pool).await;
     let join = http_scanner.start();
     
