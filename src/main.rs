@@ -1,4 +1,4 @@
-
+#![allow(dead_code)]
 
 mod http;
 mod scheduler;
@@ -13,9 +13,10 @@ mod redis_pool;
 use address::{fetch_address_list};
 use config::Config;
 use http::HttpScanner;
+use mongodb::Database;
 use proxy::ProxyPool;
 use config::GLOBAL_CONFIG;
-use tokio::time::sleep;
+use tokio::{task, time::sleep};
 
 #[tokio::main]
 async fn main()
@@ -44,14 +45,20 @@ async fn main()
     //     http_scanner.enqueue(addr.to_string().as_str()).await;
     // }
 
+    task::spawn(async move {
+        qps(db.clone()).await
+    }).await.unwrap();
+
+    // join.await.unwrap();
+}
+
+async fn qps(db: Database) {
     loop {
         let count_start = db.collection("http").estimated_document_count(None).await.unwrap();
         sleep(tokio::time::Duration::from_secs(10)).await;
         let count_end = db.collection("http").estimated_document_count(None).await.unwrap();
         log::info!("{}/s", (count_end - count_start) / 10);
     }
-
-    // join.await.unwrap();
 }
 
 async fn try_dispatch_address(scanner: &HttpScanner) {

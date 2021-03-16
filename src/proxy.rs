@@ -47,6 +47,7 @@ impl ProxyPool {
         mem::swap(&mut *guard, &mut pool);
         Ok(())
     }
+    #[allow(dead_code)]
     pub async fn get_client(&self) -> reqwest::Client {
         self.get_proxy_client().await.client
     }
