@@ -6,16 +6,15 @@ mod error;
 mod proxy;
 mod config;
 mod address;
+
+#[allow(dead_code)]
 mod redis_pool;
 
-use address::{fetch_address_list, parse_ipv4_cidr};
+use address::{fetch_address_list};
 use config::Config;
 use http::HttpScanner;
 use proxy::ProxyPool;
-use redis::aio::MultiplexedConnection;
-use redis_pool::RedisPool;
-use tokio::task;
-use std::sync::Arc;
+use config::GLOBAL_CONFIG;
 
 #[tokio::main]
 async fn main()
@@ -26,17 +25,29 @@ async fn main()
 
     let mongodb = mongodb::Client::with_uri_str(&config.mongodb).await.unwrap();
     let db = mongodb.database("nscn");
-    let redis_pool = Arc::new(RedisPool::open(&config.redis));
-    let redis = redis::Client::open(config.redis.as_str()).unwrap();
-    let conn = redis.get_multiplexed_tokio_connection().await.unwrap();
+    // let redis_pool = Arc::new(RedisPool::open(&config.redis));
+    // let redis = redis::Client::open(config.redis.as_str()).unwrap();
+    // let conn = redis.get_multiplexed_tokio_connection().await.unwrap();
     let proxy_pool = ProxyPool::new(&config.proxy_pool);
     proxy_pool.start().await;
     let http_scanner = HttpScanner::open(db, &config.redis, proxy_pool).await;
     let join = http_scanner.start();
     
-    http_scanner.enqueue("47.102.198.236").await;
+    // http_scanner.enqueue("47.102.198.236").await.unwrap();
 
-    for url in config.addr_src {
+    try_dispatch_address(&http_scanner).await;
+
+    // let range = parse_ipv4_cidr("47.102.198.0/24").unwrap();
+    // for ip in range {
+    //     let addr = std::net::Ipv4Addr::from(ip);
+    //     http_scanner.enqueue(addr.to_string().as_str()).await;
+    // }
+
+    join.await.unwrap();
+}
+
+async fn try_dispatch_address(scanner: &HttpScanner) {
+    for url in &GLOBAL_CONFIG.addr_src {
         match fetch_address_list(&url).await {
             Err(err) => log::error!("Failed to fetch address list from '{}': {}", url, err.msg),
             Ok(list) => {
@@ -47,19 +58,13 @@ async fn main()
                     for ip in range {
                         let addr = std::net::Ipv4Addr::from(ip);
                         // log::info!("{}", addr.to_string());
-                        http_scanner.enqueue(addr.to_string().as_str()).await;
+                        if let Err(err) = scanner.enqueue(addr.to_string().as_str()).await {
+                            log::error!("Failed to enqueue http scan task: {}", err.msg);
+                        }
                     }
                 }
                 log::info!("Enqueue {} address", count);
             }
         }
     }
-
-    // let range = parse_ipv4_cidr("47.102.198.0/24").unwrap();
-    // for ip in range {
-    //     let addr = std::net::Ipv4Addr::from(ip);
-    //     http_scanner.enqueue(addr.to_string().as_str()).await;
-    // }
-
-    join.await.unwrap();
 }

@@ -1,7 +1,5 @@
 use std::fmt::{self, Debug, Display};
 
-use mongodb::bson;
-
 pub struct ErrorMsg{
     pub msg: String,
 }

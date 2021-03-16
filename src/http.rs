@@ -1,13 +1,12 @@
-use std::{collections::HashMap, time::Duration};
+use std::{collections::HashMap};
 
 use chrono::Utc;
 use mongodb::{Collection, Database, bson};
 use redis::{AsyncCommands, RedisError, aio::MultiplexedConnection};
-use reqwest::{Client, Response, StatusCode, header::HeaderMap};
+use reqwest::{ Response, header::HeaderMap};
 use serde::{Serialize, Deserialize};
 use tokio::{sync::mpsc::{Sender, channel}, task::{self, JoinHandle}};
-use std::sync::Arc;
-use crate::{error::{*, self}, proxy::ProxyPool, redis_pool::{ RedisPool}};
+use crate::{error::{*}, proxy::ProxyPool};
 use crate::config::GLOBAL_CONFIG;
 
 

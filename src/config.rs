@@ -1,4 +1,3 @@
-#[macro_use]
 use lazy_static::lazy_static;
 use serde::{Deserialize};
 use tokio::fs::read_to_string;
