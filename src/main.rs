@@ -13,8 +13,10 @@ mod redis_pool;
 use address::{fetch_address_list};
 use config::Config;
 use http::HttpScanner;
+use mongodb::bson;
 use proxy::ProxyPool;
 use config::GLOBAL_CONFIG;
+use tokio::time::sleep;
 
 #[tokio::main]
 async fn main()
@@ -30,8 +32,8 @@ async fn main()
     // let conn = redis.get_multiplexed_tokio_connection().await.unwrap();
     let proxy_pool = ProxyPool::new(&config.proxy_pool);
     proxy_pool.start().await;
-    let http_scanner = HttpScanner::open(db, &config.redis, proxy_pool).await;
-    let join = http_scanner.start();
+    let http_scanner = HttpScanner::open(db.clone(), &config.redis, proxy_pool).await;
+    let _ = http_scanner.start();
     
     // http_scanner.enqueue("47.102.198.236").await.unwrap();
 
@@ -43,7 +45,14 @@ async fn main()
     //     http_scanner.enqueue(addr.to_string().as_str()).await;
     // }
 
-    join.await.unwrap();
+    loop {
+        let count_start = db.collection("https").count_documents(bson::doc! {}, None).await.unwrap();
+        sleep(tokio::time::Duration::from_secs(10)).await;
+        let count_end = db.collection("https").count_documents(bson::doc! {}, None).await.unwrap();
+        log::info!("{}/s", (count_end - count_start) / 10);
+    }
+
+    // join.await.unwrap();
 }
 
 async fn try_dispatch_address(scanner: &HttpScanner) {
