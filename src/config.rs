@@ -7,13 +7,20 @@ use crate::error::*;
 pub struct Config {
     pub proxy_pool: String,
     pub proxy_pool_retry: u64,
-    pub proxy_pool_verify: String,
+    pub proxy_pool_verify: Vec<ProxyVerify>,
     pub mongodb: String,
     pub redis: String,
     pub addr_src: Vec<String>,
     pub proxy: Option<String>,
     pub max_tasks: usize,
     pub request_timeout: u64,
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+pub enum ProxyVerify {
+    Plain(String),
+    Echo{base: String, pattern: String},
 }
 
 impl Config {

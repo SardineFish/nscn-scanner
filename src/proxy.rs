@@ -1,3 +1,4 @@
+use chrono::Utc;
 use rand::{RngCore, SeedableRng};
 use reqwest::{Proxy, StatusCode};
 use serde::{Deserialize};
@@ -5,7 +6,7 @@ use tokio::{sync::Mutex, task::{self, JoinHandle}, time::sleep};
 use std::{ collections::HashMap, mem::{self}, sync::Arc};
 
 use crate::error::*;
-use crate::config::GLOBAL_CONFIG;
+use crate::config::{GLOBAL_CONFIG, ProxyVerify};
 
 #[derive(Clone, Deserialize)]
 struct ProxyInfo {
@@ -47,13 +48,16 @@ impl ProxyPool {
         Ok(())
     }
     pub async fn get_client(&self) -> reqwest::Client {
+        self.get_proxy_client().await.client
+    }
+    pub async fn get_proxy_client(&self) -> HttpProxyClient {
         loop {
             let t = self.rng.lock().await.next_u32();
             {
                 let guard = self.client_pool.lock().await;
                 if guard.len() > 0 {
                     let idx = ((t as u64) * guard.len() as u64 / u32::MAX as u64) % (guard.len() as u64);
-                    return guard[idx as usize].client.clone();
+                    return guard[idx as usize].clone();
                 }
             }
             log::warn!("Proxy pool is empty, retry in {}s", GLOBAL_CONFIG.proxy_pool_retry);
@@ -64,6 +68,7 @@ impl ProxyPool {
 
 struct ProxyPoolUpdator {
     client_map: HashMap<String, HttpProxyClient>,
+
 }
 
 impl ProxyPoolUpdator {
@@ -115,28 +120,53 @@ impl ProxyPoolUpdator {
     }
 
     async fn verify(client: &HttpProxyClient) -> bool {
-        let result = client.client.get(&GLOBAL_CONFIG.proxy_pool_verify)
-            .send()
-            .await;
-        match result {
-            Err(err) => {
-                log::error!("Failed to verify proxy {}: {}", client.proxy_addr, err);
+        match Self::try_verify(client).await {
+            Err(err)=> {
+                log::warn!("Failed to verify {}: {}", client.proxy_addr, err);
                 false
             },
-            Ok(response) if response.status() != StatusCode::OK => {
-                log::warn!("Proxy {} verify failed with status {}", client.proxy_addr, response.status());
-                false
-            },
-            _ => {
-                log::info!("Proxy {} verify pass.", client.proxy_addr);
-                true
+            Ok(result) => {
+                result
             }
         }
-    }   
+    }
+    async fn try_verify(client: &HttpProxyClient) -> Result<bool, reqwest::Error> {
+        for (idx, verify_method) in GLOBAL_CONFIG.proxy_pool_verify.iter().enumerate() {
+            match verify_method {
+                ProxyVerify::Plain(url) => {
+                    let response = client.client.get(url)
+                        .send()
+                        .await?;
+                    if response.status() != StatusCode::OK {
+                        log::warn!("Verify {} stage {} failed {}", client.proxy_addr, idx, response.status());
+                        return Ok(false);
+                    }
+                },
+                ProxyVerify::Echo{base, pattern} => {
+                    let url = pattern.replace("{challenge}", Utc::now().timestamp_millis().to_string().as_str());
+                    let response = client.client.get(format!("{}{}", base, url))
+                        .send()
+                        .await?;
+
+                    if response.status() != StatusCode::OK {
+                        log::warn!("Verify {} stage {} failed {}", client.proxy_addr, idx, response.status());
+                        return Ok(false);
+                    }
+                    let body = response.text().await?;
+                    if body != url {
+                        log::warn!("Verify {} stage {} failed {} != {}", client.proxy_addr, idx, url, body);
+                        return Ok(false);
+                    } 
+                }
+            }
+        }
+
+        Ok(true)
+    }
 }
 
 #[derive(Clone)]
-struct HttpProxyClient {
+pub struct HttpProxyClient {
     pub proxy_addr: String,
     pub client: reqwest::Client,
 }

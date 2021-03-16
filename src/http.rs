@@ -13,6 +13,7 @@ use crate::config::GLOBAL_CONFIG;
 #[derive(Serialize, Deserialize)]
 struct HttpScanResult {
     address: String,
+    proxy: String,
     time: bson::DateTime,
     result: ScanResult<ResponseData>,
 }
@@ -159,15 +160,16 @@ impl HttpScanTask {
         
         // log::info!("Http scan {} through {}", self.address, proxy_addr);
 
-        let client = self.proxy_pool.get_client().await;
+        let client = self.proxy_pool.get_proxy_client().await;
 
-        let result = client.get(format!("http://{}", self.address))
+        let result = client.client.get(format!("http://{}", self.address))
             .send()
             .await;
 
         let scan_result = HttpScanResult {
             address: self.address.to_owned(),
             time: Utc::now().into(),
+            proxy: client.proxy_addr,
             result: match result {
                 Ok(response) => {
                     log::info!("GET {} - {}", self.address, response.status());
