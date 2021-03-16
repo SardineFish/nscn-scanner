@@ -7,6 +7,7 @@ use crate::error::*;
 pub struct Config {
     pub proxy_pool: String,
     pub proxy_pool_retry: u64,
+    pub proxy_pool_verify: String,
     pub mongodb: String,
     pub redis: String,
     pub addr_src: Vec<String>,

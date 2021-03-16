@@ -13,7 +13,6 @@ mod redis_pool;
 use address::{fetch_address_list};
 use config::Config;
 use http::HttpScanner;
-use mongodb::bson;
 use proxy::ProxyPool;
 use config::GLOBAL_CONFIG;
 use tokio::time::sleep;
@@ -30,7 +29,7 @@ async fn main()
     // let redis_pool = Arc::new(RedisPool::open(&config.redis));
     // let redis = redis::Client::open(config.redis.as_str()).unwrap();
     // let conn = redis.get_multiplexed_tokio_connection().await.unwrap();
-    let proxy_pool = ProxyPool::new(&config.proxy_pool);
+    let proxy_pool = ProxyPool::new();
     proxy_pool.start().await;
     let http_scanner = HttpScanner::open(db.clone(), &config.redis, proxy_pool).await;
     let _ = http_scanner.start();

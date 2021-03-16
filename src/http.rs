@@ -93,6 +93,7 @@ impl HttpScanner {
 
         task::spawn(async move {
             let (sender, mut receiver) = channel::<()>(1024);
+            let mut conn =  redis.get_async_connection().await.unwrap();
 
             let mut task_count = 0;
             
@@ -101,8 +102,7 @@ impl HttpScanner {
             loop {
                 while task_count < GLOBAL_CONFIG.max_tasks
                 {
-                    let result: Result<(String, String), redis::RedisError> = redis.get_async_connection().await.unwrap()
-                        .brpop(TASK_QUEUE, 0).await;
+                    let result: Result<(String, String), redis::RedisError> = conn.brpop(TASK_QUEUE, 0).await;
                     match result {
                         Err(err) if err.is_timeout() => (),
                         Err(err) => log::error!("Failed to execute cmd BRPOP :{}", err),

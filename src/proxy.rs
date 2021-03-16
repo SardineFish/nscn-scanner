@@ -1,4 +1,5 @@
 use rand::{RngCore, SeedableRng};
+use reqwest::{Proxy, StatusCode};
 use serde::{Deserialize};
 use tokio::{sync::Mutex, task::{self, JoinHandle}, time::sleep};
 use std::{ collections::HashMap, mem::{self}, sync::Arc};
@@ -13,15 +14,13 @@ struct ProxyInfo {
 
 #[derive(Clone)]
 pub struct ProxyPool {
-    addr: String,
-    client_pool: Arc<Mutex<Vec<reqwest::Client>>>,
+    client_pool: Arc<Mutex<Vec<HttpProxyClient>>>,
     rng: Arc<Mutex<rand::rngs::SmallRng>>,
 }
 
 impl ProxyPool {
-    pub fn new(addr: &str) -> Self {
+    pub fn new() -> Self {
         Self {
-            addr: addr.to_owned(),
             client_pool: Arc::new(Mutex::new(Vec::new())),
             rng: Arc::new(Mutex::new(rand::rngs::SmallRng::from_entropy())),
         }
@@ -41,11 +40,10 @@ impl ProxyPool {
             }
         })
     }
-    async fn update_pool(updater: &mut ProxyPoolUpdator, client_pool: &Arc<Mutex<Vec<reqwest::Client>>>) -> Result<(), ErrorMsg> {
+    async fn update_pool(updater: &mut ProxyPoolUpdator, client_pool: &Arc<Mutex<Vec<HttpProxyClient>>>) -> Result<(), ErrorMsg> {
         let mut pool = updater.update().await?;
         let mut guard = client_pool.lock().await;
         mem::swap(&mut *guard, &mut pool);
-        log::info!("Get {} proxy servers.", guard.len());
         Ok(())
     }
     pub async fn get_client(&self) -> reqwest::Client {
@@ -55,7 +53,7 @@ impl ProxyPool {
                 let guard = self.client_pool.lock().await;
                 if guard.len() > 0 {
                     let idx = ((t as u64) * guard.len() as u64 / u32::MAX as u64) % (guard.len() as u64);
-                    return guard[idx as usize].clone();
+                    return guard[idx as usize].client.clone();
                 }
             }
             log::warn!("Proxy pool is empty, retry in {}s", GLOBAL_CONFIG.proxy_pool_retry);
@@ -65,7 +63,7 @@ impl ProxyPool {
 }
 
 struct ProxyPoolUpdator {
-    client_map: HashMap<String, reqwest::Client>,
+    client_map: HashMap<String, HttpProxyClient>,
 }
 
 impl ProxyPoolUpdator {
@@ -75,24 +73,25 @@ impl ProxyPoolUpdator {
         }
     }
 
-    pub async fn update(&mut self) -> Result<Vec<reqwest::Client>, ErrorMsg>
+    pub async fn update(&mut self) -> Result<Vec<HttpProxyClient>, ErrorMsg>
     {
         let proxy_list: Vec<ProxyInfo> = reqwest::get(&GLOBAL_CONFIG.proxy_pool)
             .await?
             .json()
             .await?;
-        let mut client_list = Vec::<reqwest::Client>::new();
+            
+        log::info!("Get {} proxy servers.", proxy_list.len());
+
+        let mut client_list = Vec::<HttpProxyClient>::new();
 
         for proxy in &proxy_list {
             if let Some(client) = self.client_map.get(&proxy.proxy) {
                 client_list.push(client.clone());
             } else {
-                let proxy_addr = format!("http://{}", proxy.proxy);
-                let client = reqwest::Client::builder()
-                    .proxy(reqwest::Proxy::http(&proxy_addr)?)
-                    .timeout(std::time::Duration::from_secs(GLOBAL_CONFIG.request_timeout))
-                    .build()?;
-                client_list.push(client);
+                match HttpProxyClient::with_http_proxy(&proxy.proxy) {
+                    Ok(client) => client_list.push(client),
+                    Err(err) => log::error!("Failed to create proxy client: {}", err.msg),
+                }
             }
         }
         self.client_map.clear();
@@ -100,6 +99,58 @@ impl ProxyPoolUpdator {
             self.client_map.insert(proxy.proxy, client_list[i].clone());
         }
 
-        Ok(client_list)
+        let mut verified_client = Vec::<HttpProxyClient>::new();
+
+        let result = futures::future::join_all(client_list.iter().map(|client| Self::verify(client))).await;
+
+        for (i, result) in result.into_iter().enumerate() {
+            if result {
+                verified_client.push(client_list[i].clone());
+            }
+        }
+        
+        log::info!("{} proxy servers available.", verified_client.len());
+
+        Ok(verified_client)
+    }
+
+    async fn verify(client: &HttpProxyClient) -> bool {
+        let result = client.client.get(&GLOBAL_CONFIG.proxy_pool_verify)
+            .send()
+            .await;
+        match result {
+            Err(err) => {
+                log::error!("Failed to verify proxy {}: {}", client.proxy_addr, err);
+                false
+            },
+            Ok(response) if response.status() != StatusCode::OK => {
+                log::warn!("Proxy {} verify failed with status {}", client.proxy_addr, response.status());
+                false
+            },
+            _ => {
+                log::info!("Proxy {} verify pass.", client.proxy_addr);
+                true
+            }
+        }
+    }   
+}
+
+#[derive(Clone)]
+struct HttpProxyClient {
+    pub proxy_addr: String,
+    pub client: reqwest::Client,
+}
+
+impl HttpProxyClient {
+    pub fn with_http_proxy(addr: &str) -> Result<Self, ErrorMsg> {
+        let proxy_addr = format!("http://{}", addr);
+        let client = reqwest::Client::builder()
+            .proxy(Proxy::http(proxy_addr)?)
+            .timeout(std::time::Duration::from_secs(GLOBAL_CONFIG.request_timeout))
+            .build()?;
+        Ok(Self {
+            proxy_addr: addr.to_owned(),
+            client
+        })
     }
 }
