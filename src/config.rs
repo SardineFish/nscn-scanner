@@ -14,6 +14,8 @@ pub struct Config {
     pub proxy: Option<String>,
     pub max_tasks: usize,
     pub request_timeout: u64,
+    pub dispatch_task: bool,
+    pub reset_task_queue: bool,
 }
 
 #[derive(Deserialize)]

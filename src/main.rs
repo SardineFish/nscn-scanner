@@ -62,6 +62,16 @@ async fn qps(db: Database) {
 }
 
 async fn try_dispatch_address(scanner: &HttpScanner) {
+    if !GLOBAL_CONFIG.dispatch_task {
+        return;
+    }
+    log::info!("Start dispatching http scan address");
+    if GLOBAL_CONFIG.reset_task_queue {
+        if let Err(err) = scanner.clear_task_queue().await {
+            log::error!("Failed to reset task queue: {}", err.msg);
+        } else {
+        }
+    }
     for url in &GLOBAL_CONFIG.addr_src {
         match fetch_address_list(&url).await {
             Err(err) => log::error!("Failed to fetch address list from '{}': {}", url, err.msg),

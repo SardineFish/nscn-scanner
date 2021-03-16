@@ -80,6 +80,15 @@ impl HttpScanner {
             dispatcher_conn: redis::Client::open(redis_url).unwrap().get_multiplexed_tokio_connection().await.unwrap(),
         }
     }
+    pub async fn clear_task_queue(&self) -> Result<(), ErrorMsg> {
+        let mut conn = self.dispatcher_conn.clone();
+        let result: Result<i32, RedisError> = conn.del(TASK_QUEUE).await;
+        if let Err(err) = result {
+            log::error!("Failed to enqueue http scan task: {}", err);
+        }
+        log::info!("Task queue cleared.");
+        Ok(())
+    }
     pub async fn enqueue(&self, address: &str) -> Result<(), ErrorMsg> {
         let mut conn = self.dispatcher_conn.clone();
         let result: Result<i32, RedisError> = conn.lpush(TASK_QUEUE, address).await;
