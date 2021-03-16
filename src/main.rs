@@ -46,9 +46,9 @@ async fn main()
     // }
 
     loop {
-        let count_start = db.collection("http").count_documents(bson::doc! {}, None).await.unwrap();
+        let count_start = db.collection("http").estimated_document_count(None).await.unwrap();
         sleep(tokio::time::Duration::from_secs(10)).await;
-        let count_end = db.collection("http").count_documents(bson::doc! {}, None).await.unwrap();
+        let count_end = db.collection("http").estimated_document_count(None).await.unwrap();
         log::info!("{}/s", (count_end - count_start) / 10);
     }
 
