@@ -154,16 +154,13 @@ impl HttpScanTask {
         }
     }
     async fn scan(&self) -> Result<(), ErrorMsg> {
-        let proxy_addr = self.proxy_pool.get().await;
-        let proxy = reqwest::Proxy::http(format!("http://{}", proxy_addr))?;
+        // let proxy_addr = self.proxy_pool.get().await;
+        // let proxy = reqwest::Proxy::http(format!("http://{}", proxy_addr))?;
         // log::debug!("Use http proxy {}", proxy_addr);
         
-        log::info!("Http scan {} through {}", self.address, proxy_addr);
+        // log::info!("Http scan {} through {}", self.address, proxy_addr);
 
-        let client = reqwest::Client::builder()
-            .proxy(proxy)
-            .timeout(Duration::from_secs(GLOBAL_CONFIG.request_timeout))
-            .build()?;
+        let client = self.proxy_pool.get_client().await;
 
         let result = client.get(format!("http://{}", self.address))
             .send()
@@ -174,7 +171,7 @@ impl HttpScanTask {
             time: Utc::now().into(),
             result: match result {
                 Ok(response) => {
-                    log::info!("GET {} proxy by {} - {}", self.address, proxy_addr, response.status());
+                    log::info!("GET {} - {}", self.address, response.status());
                     ScanResult::Ok(ResponseData::from_response(response).await)
                 },
                 Err(err) => ScanResult::Err(err.to_string())
