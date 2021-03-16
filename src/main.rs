@@ -70,12 +70,15 @@ async fn try_dispatch_address(scanner: &HttpScanner) {
                 log::info!("Get {} address range from {}", list.len(), url);
                 for range in list {
                     count += range.len();
-                    for ip in range {
-                        let addr = std::net::Ipv4Addr::from(ip);
-                        // log::info!("{}", addr.to_string());
-                        if let Err(err) = scanner.enqueue(addr.to_string().as_str()).await {
-                            log::error!("Failed to enqueue http scan task: {}", err.msg);
-                        }
+                    // for ip in range {
+                    //     let addr = std::net::Ipv4Addr::from(ip);
+                    //     // log::info!("{}", addr.to_string());
+                    //     if let Err(err) = scanner.enqueue(addr.to_string().as_str()).await {
+                    //         log::error!("Failed to enqueue http scan task: {}", err.msg);
+                    //     }
+                    // }
+                    if let Err(err) = scanner.enqueue_range(range).await {
+                        log::error!("Failed to enqueue http scan task: {}", err.msg);
                     }
                 }
                 log::info!("Enqueue {} address", count);

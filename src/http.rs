@@ -1,4 +1,4 @@
-use std::{collections::HashMap};
+use std::{collections::HashMap, ops::Range};
 
 use chrono::Utc;
 use mongodb::{Collection, Database, bson};
@@ -85,6 +85,19 @@ impl HttpScanner {
         let result: Result<i32, RedisError> = conn.lpush(TASK_QUEUE, address).await;
         if let Err(err) = result {
             log::error!("Failed to enqueue http scan task: {}", err);
+        }
+        Ok(())
+    }
+    pub async fn enqueue_range(&self, range: Range<u32>) -> Result<(), ErrorMsg> {
+        let mut pipe = redis::pipe();
+        for ip in range {
+            let addr = std::net::Ipv4Addr::from(ip).to_string();
+            pipe.lpush(TASK_QUEUE, &addr).ignore();
+        }
+        let mut conn = self.dispatcher_conn.clone();
+        let result: Result<(), RedisError> = pipe.query_async(&mut conn).await;
+        if let Err(err) = result {
+            log::error!("Failed to enqueue http scan range: {}", err);
         }
         Ok(())
     }
