@@ -33,9 +33,12 @@ async fn main()
     let proxy_pool = ProxyPool::new();
     proxy_pool.start().await;
     let http_scanner = HttpScanner::open(db.clone(), &config.redis, proxy_pool).await;
-    let _ = http_scanner.start();
+    let join = http_scanner.start();
     
     // http_scanner.enqueue("47.102.198.236").await.unwrap();
+    task::spawn(async move {
+        qps(db.clone()).await
+    });
 
     try_dispatch_address(&http_scanner).await;
 
@@ -45,11 +48,8 @@ async fn main()
     //     http_scanner.enqueue(addr.to_string().as_str()).await;
     // }
 
-    task::spawn(async move {
-        qps(db.clone()).await
-    }).await.unwrap();
 
-    // join.await.unwrap();
+    join.await.unwrap();
 }
 
 async fn qps(db: Database) {
