@@ -1,18 +1,19 @@
 #![allow(dead_code)]
 
-mod http;
+mod http_scanner;
 mod scheduler;
 mod error;
 mod proxy;
 mod config;
 mod address;
+mod http;
 
 #[allow(dead_code)]
 mod redis_pool;
 
 use address::{fetch_address_list};
 use config::Config;
-use http::HttpScanner;
+use http_scanner::HttpScanner;
 use mongodb::Database;
 use proxy::ProxyPool;
 use config::GLOBAL_CONFIG;

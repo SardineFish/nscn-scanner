@@ -2,10 +2,10 @@ use chrono::Utc;
 use rand::{RngCore, SeedableRng};
 use reqwest::{Proxy, StatusCode};
 use serde::{Deserialize};
-use tokio::{sync::Mutex, task::{self, JoinHandle}, time::sleep};
-use std::{ collections::HashMap, mem::{self}, sync::Arc};
+use tokio::{io::AsyncWriteExt, net::TcpStream, sync::Mutex, task::{self, JoinHandle}, time::sleep};
+use std::{collections::HashMap, mem::{self}, sync::Arc};
 
-use crate::error::*;
+use crate::{error::*, http::WriteRequest};
 use crate::config::{GLOBAL_CONFIG, ProxyVerify};
 
 #[derive(Clone, Deserialize)]
@@ -41,13 +41,12 @@ impl ProxyPool {
             }
         })
     }
-    async fn update_pool(updater: &mut ProxyPoolUpdator, client_pool: &Arc<Mutex<Vec<HttpProxyClient>>>) -> Result<(), ErrorMsg> {
+    async fn update_pool(updater: &mut ProxyPoolUpdator, client_pool: &Arc<Mutex<Vec<HttpProxyClient>>>) -> Result<(), SimpleError> {
         let mut pool = updater.update().await?;
         let mut guard = client_pool.lock().await;
         mem::swap(&mut *guard, &mut pool);
         Ok(())
     }
-    #[allow(dead_code)]
     pub async fn get_client(&self) -> reqwest::Client {
         self.get_proxy_client().await.client
     }
@@ -79,7 +78,7 @@ impl ProxyPoolUpdator {
         }
     }
 
-    pub async fn update(&mut self) -> Result<Vec<HttpProxyClient>, ErrorMsg>
+    pub async fn update(&mut self) -> Result<Vec<HttpProxyClient>, SimpleError>
     {
         let proxy_list: Vec<ProxyInfo> = reqwest::get(&GLOBAL_CONFIG.proxy_pool)
             .await?
@@ -162,6 +161,14 @@ impl ProxyPoolUpdator {
             }
         }
 
+        log::info!("Proxy {} passed all tests.", client.proxy_addr);
+
+        let tunnel_proxy = TunnelProxyClient::new(&client.proxy_addr);
+        match tunnel_proxy.verify().await {
+            Ok(_) => (),
+            Err(err) => log::warn!("Proxy {} failed on tunnel verify: {}", client.proxy_addr, err.msg),
+        }
+
         Ok(true)
     }
 }
@@ -173,15 +180,55 @@ pub struct HttpProxyClient {
 }
 
 impl HttpProxyClient {
-    pub fn with_http_proxy(addr: &str) -> Result<Self, ErrorMsg> {
+    pub fn with_http_proxy(addr: &str) -> Result<Self, SimpleError> {
         let proxy_addr = format!("http://{}", addr);
         let client = reqwest::Client::builder()
-            .proxy(Proxy::http(proxy_addr)?)
+            .proxy(Proxy::http(&proxy_addr)?)
+            .proxy(Proxy::https(&proxy_addr)?)
             .timeout(std::time::Duration::from_secs(GLOBAL_CONFIG.request_timeout))
             .build()?;
         Ok(Self {
             proxy_addr: addr.to_owned(),
             client
         })
+    }
+}
+
+struct TunnelProxyClient {
+    pub proxy_addr: String,
+}
+
+impl TunnelProxyClient {
+    fn new(addr: &str) -> Self {
+        Self {
+            proxy_addr: addr.to_owned(),
+        }
+    }
+    pub async fn establish(&self, addr: &str) -> Result<TcpStream, SimpleError> {
+        let mut tcp = TcpStream::connect(&self.proxy_addr).await?;
+        let mut headers = [httparse::EMPTY_HEADER; 16];
+        let mut request = httparse::Request::new(&mut headers);
+        request.method = Some("CONNECT");
+        request.path = Some(addr);
+        request.version = Some(1);
+        let message = request.write_request()?;
+        tcp.write_all(message.as_bytes()).await?;
+
+        let mut buffer: [u8; 512] = [0; 512];
+        headers = [httparse::EMPTY_HEADER; 16];
+        let mut response = httparse::Response::new(&mut headers);
+        crate::http::parse_from_stream(&mut response, &mut tcp, &mut buffer).await?;
+
+        match response.code {
+            Some(200) => Ok(tcp),
+            Some(code) => Err(format!("Server refused to open tunnel: {}", code))?,
+            None => Err("Invalid server response.")?,
+        }
+    }
+
+    pub async fn verify(&self) -> Result<(), SimpleError> {
+        let _ = self.establish(&GLOBAL_CONFIG.proxy_pool_verify_https).await?;
+        log::info!("Proxy {} passed tunnel test.", self.proxy_addr);
+        Ok(())
     }
 }

@@ -5,7 +5,7 @@ use reqwest::Proxy;
 use crate::error::*;
 use crate::config::GLOBAL_CONFIG;
 
-pub fn parse_ipv4_cidr(addr: &str) -> Result<Range<u32>, ErrorMsg> {
+pub fn parse_ipv4_cidr(addr: &str) -> Result<Range<u32>, SimpleError> {
     let slices: Vec<&str> = addr.split("/").collect();
     if slices.len() < 2 {
         log::warn!("Invalid CIDR address");
@@ -20,7 +20,7 @@ pub fn parse_ipv4_cidr(addr: &str) -> Result<Range<u32>, ErrorMsg> {
     }
 }
 
-pub async fn fetch_address_list(url: &str) -> Result<Vec<Range<u32>>, ErrorMsg> {
+pub async fn fetch_address_list(url: &str) -> Result<Vec<Range<u32>>, SimpleError> {
     log::info!("{}", url);
     let mut builder = reqwest::Client::builder();
     if let Some(proxy_addr) = &GLOBAL_CONFIG.proxy {

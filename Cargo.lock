@@ -872,6 +872,7 @@ dependencies = [
  "chrono",
  "env_logger",
  "futures",
+ "httparse",
  "lazy_static",
  "log",
  "mongodb",

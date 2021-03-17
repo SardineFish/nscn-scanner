@@ -8,6 +8,7 @@ pub struct Config {
     pub proxy_pool: String,
     pub proxy_pool_retry: u64,
     pub proxy_pool_verify: Vec<ProxyVerify>,
+    pub proxy_pool_verify_https: String,
     pub mongodb: String,
     pub redis: String,
     pub addr_src: Vec<String>,
@@ -26,7 +27,7 @@ pub enum ProxyVerify {
 }
 
 impl Config {
-    pub async fn from_file(path: &str) -> Result<Self, ErrorMsg> {
+    pub async fn from_file(path: &str) -> Result<Self, SimpleError> {
         let data = read_to_string(path).await?;
         Ok(serde_json::from_str(&data)?)
     }
