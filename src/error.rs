@@ -1,5 +1,7 @@
 use std::fmt::{self, Debug, Display};
 
+use openssl::ssl::HandshakeError;
+
 pub struct SimpleError{
     pub msg: String,
 }
@@ -8,6 +10,11 @@ impl SimpleError {
     pub fn new(msg: &str) -> Self{
         Self{ 
             msg: msg.to_owned(),
+        }
+    }
+    pub fn from_debug<T: Debug>(err: T) -> Self {
+        Self {
+            msg: format!("{:?}", err)
         }
     }
 }

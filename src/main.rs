@@ -7,6 +7,8 @@ mod proxy;
 mod config;
 mod address;
 mod http;
+mod ssl_context;
+mod async_ssl;
 
 #[allow(dead_code)]
 mod redis_pool;

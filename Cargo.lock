@@ -876,6 +876,7 @@ dependencies = [
  "lazy_static",
  "log",
  "mongodb",
+ "openssl",
  "rand 0.8.3",
  "redis",
  "reqwest",

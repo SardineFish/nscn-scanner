@@ -4,6 +4,9 @@ use reqwest::{Proxy, StatusCode};
 use serde::{Deserialize};
 use tokio::{io::AsyncWriteExt, net::TcpStream, sync::Mutex, task::{self, JoinHandle}, time::sleep};
 use std::{collections::HashMap, mem::{self}, sync::Arc};
+use openssl::{ssl, x509::X509, x509::X509Ref};
+use crate::ssl_context::SSL_CONTEXT;
+use crate::async_ssl;
 
 use crate::{error::*, http::WriteRequest};
 use crate::config::{GLOBAL_CONFIG, ProxyVerify};
@@ -68,7 +71,6 @@ impl ProxyPool {
 
 struct ProxyPoolUpdator {
     client_map: HashMap<String, HttpProxyClient>,
-
 }
 
 impl ProxyPoolUpdator {
@@ -227,8 +229,20 @@ impl TunnelProxyClient {
     }
 
     pub async fn verify(&self) -> Result<(), SimpleError> {
-        let _ = self.establish(&GLOBAL_CONFIG.proxy_pool_verify_https).await?;
+        let stream = self.establish(&GLOBAL_CONFIG.proxy_pool_verify_https).await?;
         log::info!("Proxy {} passed tunnel test.", self.proxy_addr);
-        Ok(())
+
+        let ssl = ssl::Ssl::new(&SSL_CONTEXT)?;
+        let mut ssl_stream = async_ssl::SslStream::new(ssl, stream)?;
+        ssl_stream.connect().await?;
+        
+
+        match ssl_stream.sync_ssl().peer_certificate() {
+            Some(cert) => {
+                log::info!("Get cert though {} - {:?}", self.proxy_addr, cert);
+                Ok(())
+            },
+            None => Err(SimpleError::new("None certificate")),
+        }
     }
 }
