@@ -55,7 +55,7 @@ impl ProxyPool {
                     return guard[idx as usize].clone();
                 }
             }
-            log::warn!("Proxy pool is empty, retry in {}s", GLOBAL_CONFIG.proxy_pool.update_interval);
+            // log::warn!("Proxy pool is empty, retry in {}s", GLOBAL_CONFIG.proxy_pool.update_interval);
             sleep(tokio::time::Duration::from_secs(GLOBAL_CONFIG.proxy_pool.update_interval)).await;
         }
     }
@@ -69,7 +69,7 @@ impl ProxyPool {
                     return guard[idx as usize].clone();
                 }
             }
-            log::warn!("Proxy pool is empty, retry in {}s", GLOBAL_CONFIG.proxy_pool.update_interval);
+            // log::warn!("Proxy pool is empty, retry in {}s", GLOBAL_CONFIG.proxy_pool.update_interval);
             sleep(tokio::time::Duration::from_secs(GLOBAL_CONFIG.proxy_pool.update_interval)).await;
         }
     }
@@ -155,12 +155,18 @@ impl ProxyPoolUpdator {
             .collect();
         
         log::info!("{} http proxy servers available.", verified_http_client.len());
+        if verified_http_client.len() == 0 {
+            log::warn!("Http proxy pool empty.");
+        }
         {
             let mut guard = self.http_proxy_pool.lock().await;
             std::mem::swap(&mut *guard, &mut verified_http_client);
         }
 
-        log::info!("{} proxy servers available for tunnel proxy.", verified_tunnel_client.len());
+        log::info!("{} https proxy servers available.", verified_tunnel_client.len());
+        if verified_tunnel_client.len() == 0 {
+            log::warn!("Https proxy pool empty.");
+        }
         {
             let mut guard = self.https_proxy_pool.lock().await;
             std::mem::swap(&mut *guard, &mut verified_tunnel_client);
