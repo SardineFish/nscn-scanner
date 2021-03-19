@@ -64,7 +64,7 @@ impl HttpsScanner {
                 Err(err) => log::error!("Failed to pop https scanning task: {}", err),
                 Ok((_, addr)) => {
                     let task = HttpsScanTask {
-                        addr: addr,
+                        addr: format!("{}:443", addr),
                         collection: collection.clone(),
                         complete: complete_sender.clone(),
                         proxy_pool: self.proxy_pool.clone(),
