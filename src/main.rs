@@ -9,6 +9,7 @@ mod address;
 mod http;
 mod ssl_context;
 mod async_ssl;
+mod https_scanner;
 
 #[allow(dead_code)]
 mod redis_pool;

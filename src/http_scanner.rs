@@ -20,7 +20,7 @@ struct HttpScanResult {
 
 #[derive(Serialize, Deserialize)]
 #[serde(tag="state", content="response")]
-enum ScanResult<T> {
+pub enum ScanResult<T> {
     Ok(T),
     Err(String),
 }

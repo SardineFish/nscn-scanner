@@ -247,7 +247,7 @@ impl HttpProxyClient {
 }
 
 #[derive(Clone)]
-struct TunnelProxyClient {
+pub struct TunnelProxyClient {
     pub proxy_addr: String,
 }
 
