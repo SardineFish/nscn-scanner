@@ -1,11 +1,10 @@
 use chrono::Utc;
-use futures::FutureExt;
 use rand::{RngCore, SeedableRng};
 use reqwest::{Proxy, StatusCode};
 use serde::{Deserialize};
 use tokio::{io::AsyncWriteExt, net::TcpStream, sync::Mutex, task::{self, JoinHandle}, time::{sleep, timeout}};
-use std::{collections::HashMap, mem::{self}, sync::Arc};
-use openssl::{ssl, x509::X509, x509::X509Ref};
+use std::{collections::HashMap, sync::Arc};
+use openssl::{ssl};
 use crate::ssl_context::SSL_CONTEXT;
 use crate::async_ssl;
 
@@ -34,7 +33,7 @@ impl ProxyPool {
     }
     pub async fn start(&self) -> JoinHandle<()> {
         let mut updater = ProxyPoolUpdator::new(self.http_client_pool.clone(), self.tunnel_client_pool.clone());
-        let client_pool = self.http_client_pool.clone();
+        // let client_pool = self.http_client_pool.clone();
         if let Err(err) = updater.try_update().await {
             log::error!("Failed to initially update proxy pool: {}", err.msg);
         }

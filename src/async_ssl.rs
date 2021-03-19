@@ -1,10 +1,9 @@
 use std::{io::{Read, Write}, sync::atomic::AtomicPtr, task::{Context, Poll}};
 use std::pin::Pin;
 use futures::{Future, future::poll_fn};
-use openssl::{error::ErrorStack, ssl::{Error as SslError, HandshakeError as SyncHandshakeError, Ssl as SyncSsl, SslRef, SslStream as SyncSslStream}};
+use openssl::{error::ErrorStack, ssl::{Error as SslError,Ssl as SyncSsl, SslRef, SslStream as SyncSslStream}};
 use openssl::ssl;
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
-use std::ptr::NonNull;
 
 pub struct StreamWrapper<S> {
     inner: S,
@@ -23,7 +22,7 @@ impl<S> StreamWrapper<S> {
         self
     }
     fn wrap_context_ptr(cx: &mut Context<'_>) -> AtomicPtr<Context<'static>> {
-        unsafe { AtomicPtr::new(cx as *mut Context<'_> as usize as *mut Context<'static>) }   
+        AtomicPtr::new(cx as *mut Context<'_> as usize as *mut Context<'static>)  
     }
 }
 
@@ -57,7 +56,7 @@ impl<S> Write for StreamWrapper<S> where S: AsyncWrite + Unpin {
     fn flush(&mut self) -> std::io::Result<()> {
         let stream = Pin::new(&mut self.inner);
         
-        let mut ptr = self.ctx.get_mut();
+        let ptr = self.ctx.get_mut();
         let ctx = unsafe { ptr.as_mut().unwrap() };
         match stream.poll_flush(ctx) {
             Poll::Ready(r) => r,
@@ -149,7 +148,7 @@ impl<S> SslStream<S> where S: AsyncRead + AsyncWrite + Unpin {
     fn poll_connect(&mut self) -> Poll<Result<(), SslError>>
     {
         match self.0.connect() {
-            Ok(stream) => Poll::Ready(Ok(())),
+            Ok(_) => Poll::Ready(Ok(())),
             Err(err) => match err.code() {
                 ssl::ErrorCode::WANT_READ | ssl::ErrorCode::WANT_WRITE => Poll::Pending,
                 _ => Poll::Ready(Err(err)),

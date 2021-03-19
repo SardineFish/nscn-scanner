@@ -1,10 +1,8 @@
 use std::{ops::Range};
 use chrono::Utc;
-use reqwest::StatusCode;
 use serde::{Serialize};
-use openssl::x509::X509;
 use openssl::ssl::Ssl;
-use redis::{AsyncCommands, Commands, RedisError, pipe};
+use redis::{AsyncCommands, RedisError, pipe};
 use tokio::{net::TcpStream, sync::mpsc::{Receiver, Sender, channel}, task::{self, JoinHandle}, time::{sleep, timeout}};
 use mongodb::{Collection, Database, bson};
 
@@ -114,7 +112,7 @@ impl HttpsScanTask {
             let result = self.scan(&client).await;
             match &result {
                 Ok(_) => log::info!("HTTPS is enabled at {}", self.addr),
-                Err(err) => (), //log::warn!("HTTPS scan failed at {}: {}", self.addr, err.msg),
+                Err(_err) => (), //log::warn!("HTTPS scan failed at {}: {}", self.addr, err.msg),
             }
             match self.save_result(client.proxy_addr, result).await {
                 Ok(_) => (),

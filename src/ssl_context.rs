@@ -1,5 +1,5 @@
 use lazy_static::lazy_static;
-use openssl::ssl::{self, SslContext, SslMethod};
+use openssl::ssl::{ SslContext, SslMethod};
 
 lazy_static!{
     pub static ref SSL_CONTEXT: SslContext = {
