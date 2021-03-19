@@ -1,5 +1,32 @@
 use std::fmt::{self, Debug, Display};
 
+
+macro_rules! impl_error_log {
+    () => {
+        fn log_consume(self, level: log::Level) {
+            self.log(level);
+        }
+        fn log_error(self: Self) -> Self {
+            self.log(log::Level::Error)
+        }
+        fn log_error_consume(self) {
+            self.log_error();
+        }
+        fn log_warn(self) -> Self {
+            self.log(log::Level::Warn)
+        }
+        fn log_warn_consume(self) {
+            self.log_warn();
+        }
+        fn log_info(self) -> Self {
+            self.log(log::Level::Info)
+        }
+        fn log_info_consume(self) {
+            self.log_info();
+        }
+    };
+}
+
 pub struct SimpleError{
     pub msg: String,
 }
@@ -18,12 +45,14 @@ impl SimpleError {
 }
 
 impl<T> LogError for Result<T, SimpleError> {
-    fn log_error(&self) {
-        match self {
-            Err(err) => log::error!("{}", err.msg),
-            _ => (),
+    fn log(self, level: log::Level) -> Self {
+        match &self {
+            Err(err) => log::log!(level, "{}", err.msg),
+            Ok(_) => (),
         }
+        self
     }
+    impl_error_log!();
 }
 
 impl<T> From<T> for SimpleError where T : Display {
@@ -40,15 +69,24 @@ impl Debug for SimpleError {
     }
 }
 
-pub trait LogError{
-    fn log_error(&self);
+pub trait LogError {
+    fn log(self, level: log::Level) -> Self;
+    fn log_consume(self, level: log::Level);
+    fn log_error(self: Self) -> Self;
+    fn log_error_consume(self);
+    fn log_warn(self) -> Self;
+    fn log_warn_consume(self);
+    fn log_info(self) -> Self;
+    fn log_info_consume(self);
 }
 
 impl<T, E> LogError for Result<T, E> where E: Display {
-    fn log_error(&self) {
-        match self {
-            Err(err) => log::error!("{}", err),
+    fn log(self, level: log::Level) -> Self {
+        match &self {
+            Err(err) => log::log!(level, "{}", err),
             _ => (),
         }
+        self
     }
+    impl_error_log!();
 }

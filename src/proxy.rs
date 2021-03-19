@@ -236,11 +236,11 @@ impl HttpProxyClient {
 
         log::info!("Proxy {} passed all tests.", self.proxy_addr);
 
-        let tunnel_proxy = TunnelProxyClient::new(&self.proxy_addr);
-        match tunnel_proxy.verify().await {
-            Ok(_) => (),
-            Err(err) => log::warn!("Proxy {} failed on tunnel verify: {}", self.proxy_addr, err.msg),
-        }
+        // let tunnel_proxy = TunnelProxyClient::new(&self.proxy_addr);
+        // match tunnel_proxy.verify().await {
+        //     Ok(_) => (),
+        //     Err(err) => log::warn!("Proxy {} failed on tunnel verify: {}", self.proxy_addr, err.msg),
+        // }
 
         Ok(true)
     }
@@ -259,7 +259,7 @@ impl TunnelProxyClient {
     }
     pub async fn establish(&self, addr: &str) -> Result<TcpStream, SimpleError> {
         match timeout(
-            tokio::time::Duration::from_secs(GLOBAL_CONFIG.scanner.https.timeout), 
+            tokio::time::Duration::from_secs(1), 
             self.try_establish(addr)
             ).await 
         {
@@ -290,13 +290,17 @@ impl TunnelProxyClient {
     }
 
     pub async fn verify(self) -> Result<Self, SimpleError> {
-        let stream = self.establish(&GLOBAL_CONFIG.proxy_pool.https_validate).await?;
+        let stream = self.establish(&GLOBAL_CONFIG.proxy_pool.https_validate).await.log_warn()?;
         log::info!("Proxy {} passed tunnel test.", self.proxy_addr);
 
         let ssl = ssl::Ssl::new(&SSL_CONTEXT)?;
-        let mut ssl_stream = async_ssl::SslStream::new(ssl, stream)?;
-        ssl_stream.connect().await?;
-        
+        let mut ssl_stream = async_ssl::SslStream::new(ssl, stream).log_warn()?;
+        match timeout(tokio::time::Duration::from_secs(1), ssl_stream.connect()).await {
+            Ok(Ok(_)) => (),
+            Ok(err) => err.log_warn()?,
+            Err(_) => Err("SSL Handshake timeout.").log_warn()?,
+        }
+        log::info!("Proxy {} ssl handshake successfully.", self.proxy_addr);
 
         match ssl_stream.sync_ssl().peer_certificate() {
             Some(cert) => {

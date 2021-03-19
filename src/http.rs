@@ -29,6 +29,13 @@ pub async fn parse_from_stream<'s>(response: &mut httparse::Response<'s, 's>, st
     let mut len = 0;
     loop {
         let recv_len: usize = stream.read(&mut buf[len..]).await?;
+        if recv_len == 0 {
+            if len == buf.len() {
+                return Err("Buffer overflow.")?;
+            } else {
+                return Err("Connection closed.")?;
+            }
+        }
         len += recv_len;
         if len >= 4 {
             if &buf[len-4..len] == b"\r\n\r\n" {

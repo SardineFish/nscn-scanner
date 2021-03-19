@@ -30,10 +30,10 @@ impl HttpsScanner {
     pub async fn start(self) -> Sender<Range<u32>> {
         let (sender, receiver) = channel::<Range<u32>>(256);
         task::spawn(async move {
-            self.dispatch_tasks().await.log_error();
+            self.dispatch_tasks().await.log_error_consume();
         });
         task::spawn(async move {
-            Self::enqueue_tasks(receiver).await.log_error();
+            Self::enqueue_tasks(receiver).await.log_error_consume();
         });
 
         sender
