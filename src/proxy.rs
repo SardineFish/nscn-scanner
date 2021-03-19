@@ -96,10 +96,10 @@ impl ProxyPoolUpdator {
 
     pub async fn update(&mut self) {
         loop {
+            sleep(tokio::time::Duration::from_secs(GLOBAL_CONFIG.proxy_pool.update_interval)).await;
             if let Err(err) = self.try_update().await {
                 log::warn!("Failed to update proxy pool: {}", err.msg);
             }
-            sleep(tokio::time::Duration::from_secs(GLOBAL_CONFIG.proxy_pool.update_interval)).await;
         }
     }
 
@@ -259,7 +259,7 @@ impl TunnelProxyClient {
     }
     pub async fn establish(&self, addr: &str) -> Result<TcpStream, SimpleError> {
         match timeout(
-            tokio::time::Duration::from_secs(1), 
+            tokio::time::Duration::from_secs(GLOBAL_CONFIG.scanner.https.timeout), 
             self.try_establish(addr)
             ).await 
         {
@@ -290,15 +290,15 @@ impl TunnelProxyClient {
     }
 
     pub async fn verify(self) -> Result<Self, SimpleError> {
-        let stream = self.establish(&GLOBAL_CONFIG.proxy_pool.https_validate).await.log_warn()?;
+        let stream = self.establish(&GLOBAL_CONFIG.proxy_pool.https_validate).await.log_warn("https_proxy_verify")?;
         log::info!("Proxy {} passed tunnel test.", self.proxy_addr);
 
         let ssl = ssl::Ssl::new(&SSL_CONTEXT)?;
-        let mut ssl_stream = async_ssl::SslStream::new(ssl, stream).log_warn()?;
-        match timeout(tokio::time::Duration::from_secs(1), ssl_stream.connect()).await {
+        let mut ssl_stream = async_ssl::SslStream::new(ssl, stream).log_warn("https_proxy_verify")?;
+        match timeout(tokio::time::Duration::from_secs(GLOBAL_CONFIG.scanner.https.timeout), ssl_stream.connect()).await {
             Ok(Ok(_)) => (),
-            Ok(err) => err.log_warn()?,
-            Err(_) => Err("SSL Handshake timeout.").log_warn()?,
+            Ok(err) => err.log_warn("https_proxy_verify")?,
+            Err(_) => Err("SSL Handshake timeout.").log_warn("https_proxy_verify")?,
         }
         log::info!("Proxy {} ssl handshake successfully.", self.proxy_addr);
 

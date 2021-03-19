@@ -3,26 +3,30 @@ use std::fmt::{self, Debug, Display};
 
 macro_rules! impl_error_log {
     () => {
-        fn log_consume(self, level: log::Level) {
-            self.log(level);
+        #[allow(unused_must_use)]
+        fn log_consume(self, level: log::Level, target: &str) {
+            self.log(level, target);
         }
-        fn log_error(self: Self) -> Self {
-            self.log(log::Level::Error)
+        fn log_error(self: Self, target: &str) -> Self {
+            self.log(log::Level::Error, target)
         }
-        fn log_error_consume(self) {
-            self.log_error();
+        #[allow(unused_must_use)]
+        fn log_error_consume(self, target: &str) {
+            self.log_error(target);
         }
-        fn log_warn(self) -> Self {
-            self.log(log::Level::Warn)
+        fn log_warn(self, target: &str) -> Self {
+            self.log(log::Level::Warn, target)
         }
-        fn log_warn_consume(self) {
-            self.log_warn();
+        #[allow(unused_must_use)]
+        fn log_warn_consume(self, target: &str) {
+            self.log_warn(target);
         }
-        fn log_info(self) -> Self {
-            self.log(log::Level::Info)
+        fn log_info(self, target: &str) -> Self {
+            self.log(log::Level::Info, target)
         }
-        fn log_info_consume(self) {
-            self.log_info();
+        #[allow(unused_must_use)]
+        fn log_info_consume(self, target: &str) {
+            self.log_info(target);
         }
     };
 }
@@ -45,9 +49,9 @@ impl SimpleError {
 }
 
 impl<T> LogError for Result<T, SimpleError> {
-    fn log(self, level: log::Level) -> Self {
+    fn log(self, level: log::Level, target: &str) -> Self {
         match &self {
-            Err(err) => log::log!(level, "{}", err.msg),
+            Err(err) => log::log!(target: target, level, "{}", err.msg),
             Ok(_) => (),
         }
         self
@@ -70,20 +74,20 @@ impl Debug for SimpleError {
 }
 
 pub trait LogError {
-    fn log(self, level: log::Level) -> Self;
-    fn log_consume(self, level: log::Level);
-    fn log_error(self: Self) -> Self;
-    fn log_error_consume(self);
-    fn log_warn(self) -> Self;
-    fn log_warn_consume(self);
-    fn log_info(self) -> Self;
-    fn log_info_consume(self);
+    fn log(self, level: log::Level, target: &str) -> Self;
+    fn log_consume(self, level: log::Level, target: &str);
+    fn log_error(self: Self, target: &str) -> Self;
+    fn log_error_consume(self, target: &str);
+    fn log_warn(self, target: &str) -> Self;
+    fn log_warn_consume(self, target: &str);
+    fn log_info(self, target: &str) -> Self;
+    fn log_info_consume(self, target: &str);
 }
 
 impl<T, E> LogError for Result<T, E> where E: Display {
-    fn log(self, level: log::Level) -> Self {
+    fn log(self, level: log::Level, target: &str) -> Self {
         match &self {
-            Err(err) => log::log!(level, "{}", err),
+            Err(err) => log::log!(target: target, level, "{}", err),
             _ => (),
         }
         self

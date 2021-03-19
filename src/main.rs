@@ -14,13 +14,16 @@ mod https_scanner;
 #[allow(dead_code)]
 mod redis_pool;
 
+use std::ops::Range;
+
 use address::{fetch_address_list};
 use config::Config;
 use http_scanner::HttpScanner;
+use https_scanner::HttpsScanner;
 use mongodb::Database;
 use proxy::ProxyPool;
 use config::GLOBAL_CONFIG;
-use tokio::{task, time::sleep};
+use tokio::{sync::mpsc::Sender, task, time::sleep};
 
 #[tokio::main]
 async fn main()
@@ -36,15 +39,17 @@ async fn main()
     // let conn = redis.get_multiplexed_tokio_connection().await.unwrap();
     let proxy_pool = ProxyPool::new();
     proxy_pool.start().await;
-    let http_scanner = HttpScanner::open(db.clone(), &config.redis, proxy_pool).await;
+    let http_scanner = HttpScanner::open(db.clone(), &config.redis, proxy_pool.clone()).await;
     let join = http_scanner.start();
+    let https_scanner = HttpsScanner::new(db.clone(), proxy_pool.clone()).await.unwrap();
+    let https_task_sender = https_scanner.start().await;
     
     // http_scanner.enqueue("47.102.198.236").await.unwrap();
     task::spawn(async move {
         qps(db.clone()).await
     });
 
-    try_dispatch_address(&http_scanner).await;
+    try_dispatch_address(&http_scanner, &https_task_sender).await;
 
     // let range = parse_ipv4_cidr("47.102.198.0/24").unwrap();
     // for ip in range {
@@ -58,14 +63,16 @@ async fn main()
 
 async fn qps(db: Database) {
     loop {
-        let count_start = db.collection("http").estimated_document_count(None).await.unwrap();
+        let http_start = db.collection("http").estimated_document_count(None).await.unwrap();
+        let https_start = db.collection("https").estimated_document_count(None).await.unwrap();
         sleep(tokio::time::Duration::from_secs(10)).await;
-        let count_end = db.collection("http").estimated_document_count(None).await.unwrap();
-        log::info!("{}/s", (count_end - count_start) / 10);
+        let http_end = db.collection("http").estimated_document_count(None).await.unwrap();
+        let https_end = db.collection("https").estimated_document_count(None).await.unwrap();
+        log::info!("HTTP: {}/s, HTTPS: {}/s", (http_end - http_start) / 10, (https_end - https_start) / 10);
     }
 }
 
-async fn try_dispatch_address(scanner: &HttpScanner) {
+async fn try_dispatch_address(scanner: &HttpScanner, https_task_sender: &Sender<Range<u32>>) {
     if !GLOBAL_CONFIG.scanner.task.dispatch {
         return;
     }
@@ -90,8 +97,11 @@ async fn try_dispatch_address(scanner: &HttpScanner) {
                     //         log::error!("Failed to enqueue http scan task: {}", err.msg);
                     //     }
                     // }
-                    if let Err(err) = scanner.enqueue_range(range).await {
+                    if let Err(err) = scanner.enqueue_range(range.clone()).await {
                         log::error!("Failed to enqueue http scan task: {}", err.msg);
+                    }
+                    if let Err(err) = https_task_sender.send(range).await {
+                        log::error!("Failed to enqueue https scan task: {}", err);
                     }
                 }
                 log::info!("Enqueue {} address", count);

@@ -5,7 +5,7 @@ use serde::{Serialize};
 use openssl::x509::X509;
 use openssl::ssl::Ssl;
 use redis::{AsyncCommands, Commands, RedisError, pipe};
-use tokio::{net::TcpStream, sync::mpsc::{Receiver, Sender, channel}, task::{self, JoinHandle}, time::timeout};
+use tokio::{net::TcpStream, sync::mpsc::{Receiver, Sender, channel}, task::{self, JoinHandle}, time::{sleep, timeout}};
 use mongodb::{Collection, Database, bson};
 
 use crate::{async_ssl, config::GLOBAL_CONFIG, http_scanner::ScanResult, proxy::{ProxyPool, TunnelProxyClient}};
@@ -21,7 +21,7 @@ pub struct HttpsScanner {
 }
 
 impl HttpsScanner {
-    async fn new(db: Database, proxy_pool: ProxyPool) -> Result<Self, SimpleError> {
+    pub async fn new(db: Database, proxy_pool: ProxyPool) -> Result<Self, SimpleError> {
         Ok(Self {
             db,
             proxy_pool,
@@ -30,10 +30,10 @@ impl HttpsScanner {
     pub async fn start(self) -> Sender<Range<u32>> {
         let (sender, receiver) = channel::<Range<u32>>(256);
         task::spawn(async move {
-            self.dispatch_tasks().await.log_error_consume();
+            self.dispatch_tasks().await.log_error_consume("https_scanner_spawn");
         });
         task::spawn(async move {
-            Self::enqueue_tasks(receiver).await.log_error_consume();
+            Self::enqueue_tasks(receiver).await.log_error_consume("https_scanner_spawn");
         });
 
         sender
@@ -45,13 +45,19 @@ impl HttpsScanner {
             channel::<bool>(GLOBAL_CONFIG.scanner.https.max_tasks);
         let mut active_tasks = 0;
         let collection = self.db.collection(COLLECTION_RESULT);
+        let mut startup = true;
 
         loop {
             if active_tasks >= GLOBAL_CONFIG.scanner.https.max_tasks {
-                match complete_receiver.recv().await {
+                startup = false;
+                match (&mut complete_receiver).recv().await {
                     Some(_) => active_tasks -= 1,
                     None => log::error!("Channel closed"),
                 }
+            }
+            if startup {
+                let interval = (GLOBAL_CONFIG.scanner.https.timeout as f64) / (GLOBAL_CONFIG.scanner.https.max_tasks as f64);
+                sleep(tokio::time::Duration::from_secs_f64(interval)).await;
             }
 
             let result: Result<(String, String), RedisError> = redis.brpop(KEY_TASK_QUEUE, 0).await;
@@ -77,7 +83,7 @@ impl HttpsScanner {
             .get_async_connection().await?;
 
         loop {
-            match receiver.recv().await {
+            match (&mut receiver).recv().await {
                 Some(range) => {
                     let mut pipe = pipe();
                     for ip in range {
@@ -106,15 +112,21 @@ impl HttpsScanTask {
         task::spawn(async move {
             let client = self.proxy_pool.get_tunnel_client().await;
             let result = self.scan(&client).await;
+            match &result {
+                Ok(_) => log::info!("HTTPS is enabled at {}", self.addr),
+                Err(err) => (), //log::warn!("HTTPS scan failed at {}: {}", self.addr, err.msg),
+            }
             match self.save_result(client.proxy_addr, result).await {
                 Ok(_) => (),
-                Err(err) => log::error!("Https scanning task failed: {}", err.msg),
+                Err(err) => log::error!("Saving https scanning task failed: {}", err.msg),
             }
-            
         })
     }
     async fn scan(&self, client: &TunnelProxyClient) -> Result<HttpsResponse, SimpleError> {
+        // log::info!("Scan HTTPS {} through {}", self.addr, client.proxy_addr);
+
         let stream = self.connect_ssl(client).await?;
+
 
         match stream.sync_ssl().peer_certificate() {
             None => Err("No certificate")?,
@@ -128,6 +140,7 @@ impl HttpsScanTask {
     }
     async fn connect_ssl(&self, client: &TunnelProxyClient) -> Result<async_ssl::SslStream<TcpStream>, SimpleError> {
         let stream = client.establish(&self.addr).await?;
+        log::info!("ESTABLISHED");
         let ssl = Ssl::new(&SSL_CONTEXT)?;
         let mut stream = async_ssl::SslStream::new(ssl, stream)?;
         match timeout(tokio::time::Duration::from_secs(GLOBAL_CONFIG.scanner.https.timeout), stream.connect()).await{
@@ -149,6 +162,7 @@ impl HttpsScanTask {
 
         self.collection.insert_one(bson::to_document(&record)?, None).await?;
 
+        self.complete.send(true).await?;
         Ok(())
     }
 }
