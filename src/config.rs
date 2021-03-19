@@ -3,20 +3,48 @@ use serde::{Deserialize};
 use tokio::fs::read_to_string;
 use crate::error::*;
 
+
+
 #[derive(Deserialize)]
 pub struct Config {
-    pub proxy_pool: String,
-    pub proxy_pool_retry: u64,
-    pub proxy_pool_verify: Vec<ProxyVerify>,
-    pub proxy_pool_verify_https: String,
     pub mongodb: String,
     pub redis: String,
+    pub proxy_pool: ProxyPoolConfig,
+    pub scanner: ScannerConfig,
+}
+
+#[derive(Deserialize)]
+pub struct ProxyPoolConfig {
+    pub fetch_addr: String,
+    pub update_interval: u64,
+    pub http_validate: Vec<ProxyVerify>,
+    pub https_validate: String,
+}
+
+#[derive(Deserialize)]
+pub struct ScannerConfig {
+    pub http: HttpScannerOptions,
+    pub https: HttpsScannerOptions,
+    pub task: TaskOptions,
+}
+
+#[derive(Deserialize)]
+pub struct HttpScannerOptions {
+    pub timeout: u64,
+    pub max_tasks: usize,
+}
+
+#[derive(Deserialize)]
+pub struct HttpsScannerOptions {
+    pub timeout: u64,
+    pub max_tasks: usize,
+}
+#[derive(Deserialize)]
+pub struct TaskOptions {
+    pub dispatch: bool,
+    pub clear_old_tasks: bool,
     pub addr_src: Vec<String>,
     pub proxy: Option<String>,
-    pub max_tasks: usize,
-    pub request_timeout: u64,
-    pub dispatch_task: bool,
-    pub reset_task_queue: bool,
 }
 
 #[derive(Deserialize)]

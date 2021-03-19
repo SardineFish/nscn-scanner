@@ -133,7 +133,7 @@ fn poll_fn_once<T, F: FnOnce(&mut Context<'_>) -> Poll<T>>(func: F) -> FnFuture<
     }
 }
 
-pub struct SslStream<S>(SyncSslStream<S>);
+pub struct SslStream<S>(SyncSslStream<StreamWrapper<S>>);
 
 impl<S> SslStream<S> {
     pub fn sync_ssl(&self) -> &SslRef {
@@ -141,7 +141,7 @@ impl<S> SslStream<S> {
     }
 }
 
-impl<S> SslStream<StreamWrapper<S>> where S: AsyncRead + AsyncWrite + Unpin {
+impl<S> SslStream<S> where S: AsyncRead + AsyncWrite + Unpin {
     pub fn new(ssl: SyncSsl, stream: S) -> SslResult<Self> {
         Ok(Self(SyncSslStream::new(ssl, StreamWrapper::new(stream))?))
     }

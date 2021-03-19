@@ -123,7 +123,7 @@ impl HttpScanner {
             log::info!("Start http scanner");
 
             loop {
-                while task_count < GLOBAL_CONFIG.max_tasks
+                while task_count < GLOBAL_CONFIG.scanner.http.max_tasks
                 {
                     let result: Result<(String, String), redis::RedisError> = conn.brpop(TASK_QUEUE, 0).await;
                     match result {

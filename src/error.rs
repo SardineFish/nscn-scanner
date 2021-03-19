@@ -1,7 +1,5 @@
 use std::fmt::{self, Debug, Display};
 
-use openssl::ssl::HandshakeError;
-
 pub struct SimpleError{
     pub msg: String,
 }
@@ -19,6 +17,15 @@ impl SimpleError {
     }
 }
 
+impl<T> LogError for Result<T, SimpleError> {
+    fn log_error(&self) {
+        match self {
+            Err(err) => log::error!("{}", err.msg),
+            _ => (),
+        }
+    }
+}
+
 impl<T> From<T> for SimpleError where T : Display {
     fn from(err: T) -> Self {
         Self {
@@ -30,5 +37,18 @@ impl<T> From<T> for SimpleError where T : Display {
 impl Debug for SimpleError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.msg)
+    }
+}
+
+pub trait LogError{
+    fn log_error(&self);
+}
+
+impl<T, E> LogError for Result<T, E> where E: Display {
+    fn log_error(&self) {
+        match self {
+            Err(err) => log::error!("{}", err),
+            _ => (),
+        }
     }
 }

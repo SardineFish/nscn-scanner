@@ -3,7 +3,7 @@ use futures::FutureExt;
 use rand::{RngCore, SeedableRng};
 use reqwest::{Proxy, StatusCode};
 use serde::{Deserialize};
-use tokio::{io::AsyncWriteExt, net::TcpStream, sync::Mutex, task::{self, JoinHandle}, time::sleep};
+use tokio::{io::AsyncWriteExt, net::TcpStream, sync::Mutex, task::{self, JoinHandle}, time::{sleep, timeout}};
 use std::{collections::HashMap, mem::{self}, sync::Arc};
 use openssl::{ssl, x509::X509, x509::X509Ref};
 use crate::ssl_context::SSL_CONTEXT;
@@ -56,8 +56,8 @@ impl ProxyPool {
                     return guard[idx as usize].clone();
                 }
             }
-            log::warn!("Proxy pool is empty, retry in {}s", GLOBAL_CONFIG.proxy_pool_retry);
-            sleep(tokio::time::Duration::from_secs(GLOBAL_CONFIG.proxy_pool_retry)).await;
+            log::warn!("Proxy pool is empty, retry in {}s", GLOBAL_CONFIG.proxy_pool.update_interval);
+            sleep(tokio::time::Duration::from_secs(GLOBAL_CONFIG.proxy_pool.update_interval)).await;
         }
     }
     pub async fn get_tunnel_client(&self) -> TunnelProxyClient {
@@ -70,8 +70,8 @@ impl ProxyPool {
                     return guard[idx as usize].clone();
                 }
             }
-            log::warn!("Proxy pool is empty, retry in {}s", GLOBAL_CONFIG.proxy_pool_retry);
-            sleep(tokio::time::Duration::from_secs(GLOBAL_CONFIG.proxy_pool_retry)).await;
+            log::warn!("Proxy pool is empty, retry in {}s", GLOBAL_CONFIG.proxy_pool.update_interval);
+            sleep(tokio::time::Duration::from_secs(GLOBAL_CONFIG.proxy_pool.update_interval)).await;
         }
     }
 }
@@ -99,13 +99,13 @@ impl ProxyPoolUpdator {
             if let Err(err) = self.try_update().await {
                 log::warn!("Failed to update proxy pool: {}", err.msg);
             }
-            sleep(tokio::time::Duration::from_secs(GLOBAL_CONFIG.proxy_pool_retry)).await;
+            sleep(tokio::time::Duration::from_secs(GLOBAL_CONFIG.proxy_pool.update_interval)).await;
         }
     }
 
     pub async fn try_update(&mut self) -> Result<(), SimpleError>
     {
-        let proxy_list: Vec<ProxyInfo> = reqwest::get(&GLOBAL_CONFIG.proxy_pool)
+        let proxy_list: Vec<ProxyInfo> = reqwest::get(&GLOBAL_CONFIG.proxy_pool.fetch_addr)
             .await?
             .json()
             .await?;
@@ -195,7 +195,7 @@ impl HttpProxyClient {
         let client = reqwest::Client::builder()
             .proxy(Proxy::http(&proxy_addr)?)
             .proxy(Proxy::https(&proxy_addr)?)
-            .timeout(std::time::Duration::from_secs(GLOBAL_CONFIG.request_timeout))
+            .timeout(std::time::Duration::from_secs(GLOBAL_CONFIG.scanner.http.timeout))
             .build()?;
         Ok(Self {
             proxy_addr: addr.to_owned(),
@@ -204,7 +204,7 @@ impl HttpProxyClient {
     }
 
     async fn verify(&self) -> Result<bool, SimpleError> {
-        for (idx, verify_method) in GLOBAL_CONFIG.proxy_pool_verify.iter().enumerate() {
+        for (idx, verify_method) in GLOBAL_CONFIG.proxy_pool.http_validate.iter().enumerate() {
             match verify_method {
                 ProxyVerify::Plain(url) => {
                     let response = self.client.get(url)
@@ -258,6 +258,16 @@ impl TunnelProxyClient {
         }
     }
     pub async fn establish(&self, addr: &str) -> Result<TcpStream, SimpleError> {
+        match timeout(
+            tokio::time::Duration::from_secs(GLOBAL_CONFIG.scanner.https.timeout), 
+            self.try_establish(addr)
+            ).await 
+        {
+            Ok(result) => result,
+            Err(_) => Err("Proxy tunnel establish timeout.")?,
+        }
+    }
+    pub async fn try_establish(&self, addr: &str) -> Result<TcpStream, SimpleError> {
         let mut tcp = TcpStream::connect(&self.proxy_addr).await?;
         let mut headers = [httparse::EMPTY_HEADER; 16];
         let mut request = httparse::Request::new(&mut headers);
@@ -280,7 +290,7 @@ impl TunnelProxyClient {
     }
 
     pub async fn verify(self) -> Result<Self, SimpleError> {
-        let stream = self.establish(&GLOBAL_CONFIG.proxy_pool_verify_https).await?;
+        let stream = self.establish(&GLOBAL_CONFIG.proxy_pool.https_validate).await?;
         log::info!("Proxy {} passed tunnel test.", self.proxy_addr);
 
         let ssl = ssl::Ssl::new(&SSL_CONTEXT)?;
