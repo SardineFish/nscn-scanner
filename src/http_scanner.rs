@@ -182,7 +182,7 @@ impl HttpScanTask {
         
         // log::info!("Http scan {} through {}", self.address, proxy_addr);
 
-        let client = self.proxy_pool.get_proxy_client().await;
+        let client = self.proxy_pool.get_http_client().await;
 
         let result = client.client.get(format!("http://{}", self.address))
             .send()

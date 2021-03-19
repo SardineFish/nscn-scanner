@@ -1,4 +1,5 @@
 use chrono::Utc;
+use futures::FutureExt;
 use rand::{RngCore, SeedableRng};
 use reqwest::{Proxy, StatusCode};
 use serde::{Deserialize};
@@ -18,46 +19,52 @@ struct ProxyInfo {
 
 #[derive(Clone)]
 pub struct ProxyPool {
-    client_pool: Arc<Mutex<Vec<HttpProxyClient>>>,
+    http_client_pool: Arc<Mutex<Vec<HttpProxyClient>>>,
+    tunnel_client_pool: Arc<Mutex<Vec<TunnelProxyClient>>>,
     rng: Arc<Mutex<rand::rngs::SmallRng>>,
 }
 
 impl ProxyPool {
     pub fn new() -> Self {
         Self {
-            client_pool: Arc::new(Mutex::new(Vec::new())),
+            http_client_pool: Arc::new(Mutex::new(Vec::new())),
+            tunnel_client_pool: Arc::new(Mutex::new(Vec::new())),
             rng: Arc::new(Mutex::new(rand::rngs::SmallRng::from_entropy())),
         }
     }
     pub async fn start(&self) -> JoinHandle<()> {
-        let mut updater = ProxyPoolUpdator::new();
-        let client_pool = self.client_pool.clone();
-        if let Err(err) = Self::update_pool(&mut updater, &client_pool).await {
+        let mut updater = ProxyPoolUpdator::new(self.http_client_pool.clone(), self.tunnel_client_pool.clone());
+        let client_pool = self.http_client_pool.clone();
+        if let Err(err) = updater.try_update().await {
             log::error!("Failed to initially update proxy pool: {}", err.msg);
         }
         task::spawn(async move {
-            loop {
-                if let Err(err) = Self::update_pool(&mut updater, &client_pool).await {
-                    log::warn!("Failed to update proxy pool: {}", err.msg);
-                }
-                sleep(tokio::time::Duration::from_secs(GLOBAL_CONFIG.proxy_pool_retry)).await;
-            }
+            updater.update().await;
         })
     }
-    async fn update_pool(updater: &mut ProxyPoolUpdator, client_pool: &Arc<Mutex<Vec<HttpProxyClient>>>) -> Result<(), SimpleError> {
-        let mut pool = updater.update().await?;
-        let mut guard = client_pool.lock().await;
-        mem::swap(&mut *guard, &mut pool);
-        Ok(())
-    }
+    
     pub async fn get_client(&self) -> reqwest::Client {
-        self.get_proxy_client().await.client
+        self.get_http_client().await.client
     }
-    pub async fn get_proxy_client(&self) -> HttpProxyClient {
+    pub async fn get_http_client(&self) -> HttpProxyClient {
         loop {
             let t = self.rng.lock().await.next_u32();
             {
-                let guard = self.client_pool.lock().await;
+                let guard = self.http_client_pool.lock().await;
+                if guard.len() > 0 {
+                    let idx = ((t as u64) * guard.len() as u64 / u32::MAX as u64) % (guard.len() as u64);
+                    return guard[idx as usize].clone();
+                }
+            }
+            log::warn!("Proxy pool is empty, retry in {}s", GLOBAL_CONFIG.proxy_pool_retry);
+            sleep(tokio::time::Duration::from_secs(GLOBAL_CONFIG.proxy_pool_retry)).await;
+        }
+    }
+    pub async fn get_tunnel_client(&self) -> TunnelProxyClient {
+        loop {
+            let t = self.rng.lock().await.next_u32();
+            {
+                let guard = self.tunnel_client_pool.lock().await;
                 if guard.len() > 0 {
                     let idx = ((t as u64) * guard.len() as u64 / u32::MAX as u64) % (guard.len() as u64);
                     return guard[idx as usize].clone();
@@ -71,16 +78,32 @@ impl ProxyPool {
 
 struct ProxyPoolUpdator {
     client_map: HashMap<String, HttpProxyClient>,
+    http_proxy_pool: Arc<Mutex<Vec<HttpProxyClient>>>,
+    https_proxy_pool: Arc<Mutex<Vec<TunnelProxyClient>>>,
 }
 
 impl ProxyPoolUpdator {
-    pub fn new() -> Self {
+    pub fn new(
+        http_proxy_pool: Arc<Mutex<Vec<HttpProxyClient>>>,
+        https_proxy_pool: Arc<Mutex<Vec<TunnelProxyClient>>>,
+    ) -> Self {
         Self {
             client_map: HashMap::new(),
+            http_proxy_pool,
+            https_proxy_pool,
         }
     }
 
-    pub async fn update(&mut self) -> Result<Vec<HttpProxyClient>, SimpleError>
+    pub async fn update(&mut self) {
+        loop {
+            if let Err(err) = self.try_update().await {
+                log::warn!("Failed to update proxy pool: {}", err.msg);
+            }
+            sleep(tokio::time::Duration::from_secs(GLOBAL_CONFIG.proxy_pool_retry)).await;
+        }
+    }
+
+    pub async fn try_update(&mut self) -> Result<(), SimpleError>
     {
         let proxy_list: Vec<ProxyInfo> = reqwest::get(&GLOBAL_CONFIG.proxy_pool)
             .await?
@@ -106,72 +129,57 @@ impl ProxyPoolUpdator {
             self.client_map.insert(proxy.proxy, client_list[i].clone());
         }
 
-        let mut verified_client = Vec::<HttpProxyClient>::new();
+        let mut verified_http_client = Vec::<HttpProxyClient>::new();
 
         let result = futures::future::join_all(client_list.iter().map(|client| Self::verify(client))).await;
 
         for (i, result) in result.into_iter().enumerate() {
             if result {
-                verified_client.push(client_list[i].clone());
+                verified_http_client.push(client_list[i].clone());
             }
         }
-        
-        log::info!("{} proxy servers available.", verified_client.len());
 
-        Ok(verified_client)
+        let mut verified_tunnel_client: Vec<TunnelProxyClient> = 
+            futures::future::join_all(
+                verified_http_client
+                .iter()
+                .map(|client| TunnelProxyClient::new(&client.proxy_addr).verify()))
+            .await
+            .into_iter()
+            .filter_map(|result| match result {
+                Ok(client) => Some(client),
+                Err(err) => {
+                    log::warn!("Tunnel verification failed: {}", err.msg);
+                    None
+                },
+            })
+            .collect();
+        
+        log::info!("{} http proxy servers available.", verified_http_client.len());
+        {
+            let mut guard = self.http_proxy_pool.lock().await;
+            std::mem::swap(&mut *guard, &mut verified_http_client);
+        }
+
+        log::info!("{} proxy servers available for tunnel proxy.", verified_tunnel_client.len());
+        {
+            let mut guard = self.https_proxy_pool.lock().await;
+            std::mem::swap(&mut *guard, &mut verified_tunnel_client);
+        }
+
+        Ok(())
     }
 
     async fn verify(client: &HttpProxyClient) -> bool {
-        match Self::try_verify(client).await {
+        match client.verify().await {
             Err(err)=> {
-                log::warn!("Failed to verify {}: {}", client.proxy_addr, err);
+                log::warn!("Failed to verify {}: {}", client.proxy_addr, err.msg);
                 false
             },
             Ok(result) => {
                 result
             }
         }
-    }
-    async fn try_verify(client: &HttpProxyClient) -> Result<bool, reqwest::Error> {
-        for (idx, verify_method) in GLOBAL_CONFIG.proxy_pool_verify.iter().enumerate() {
-            match verify_method {
-                ProxyVerify::Plain(url) => {
-                    let response = client.client.get(url)
-                        .send()
-                        .await?;
-                    if response.status() != StatusCode::OK {
-                        log::warn!("Verify {} stage {} failed {}", client.proxy_addr, idx, response.status());
-                        return Ok(false);
-                    }
-                },
-                ProxyVerify::Echo{base, pattern} => {
-                    let url = pattern.replace("{challenge}", Utc::now().timestamp_millis().to_string().as_str());
-                    let response = client.client.get(format!("{}{}", base, url))
-                        .send()
-                        .await?;
-
-                    if response.status() != StatusCode::OK {
-                        log::warn!("Verify {} stage {} failed {}", client.proxy_addr, idx, response.status());
-                        return Ok(false);
-                    }
-                    let body = response.text().await?;
-                    if body != url {
-                        log::warn!("Verify {} stage {} failed {} != {}", client.proxy_addr, idx, url, body);
-                        return Ok(false);
-                    } 
-                }
-            }
-        }
-
-        log::info!("Proxy {} passed all tests.", client.proxy_addr);
-
-        let tunnel_proxy = TunnelProxyClient::new(&client.proxy_addr);
-        match tunnel_proxy.verify().await {
-            Ok(_) => (),
-            Err(err) => log::warn!("Proxy {} failed on tunnel verify: {}", client.proxy_addr, err.msg),
-        }
-
-        Ok(true)
     }
 }
 
@@ -194,8 +202,51 @@ impl HttpProxyClient {
             client
         })
     }
+
+    async fn verify(&self) -> Result<bool, SimpleError> {
+        for (idx, verify_method) in GLOBAL_CONFIG.proxy_pool_verify.iter().enumerate() {
+            match verify_method {
+                ProxyVerify::Plain(url) => {
+                    let response = self.client.get(url)
+                        .send()
+                        .await?;
+                    if response.status() != StatusCode::OK {
+                        log::warn!("Verify {} stage {} failed {}", self.proxy_addr, idx, response.status());
+                        return Ok(false);
+                    }
+                },
+                ProxyVerify::Echo{base, pattern} => {
+                    let url = pattern.replace("{challenge}", Utc::now().timestamp_millis().to_string().as_str());
+                    let response = self.client.get(format!("{}{}", base, url))
+                        .send()
+                        .await?;
+
+                    if response.status() != StatusCode::OK {
+                        log::warn!("Verify {} stage {} failed {}", self.proxy_addr, idx, response.status());
+                        return Ok(false);
+                    }
+                    let body = response.text().await?;
+                    if body != url {
+                        log::warn!("Verify {} stage {} failed {} != {}", self.proxy_addr, idx, url, body);
+                        return Ok(false);
+                    } 
+                }
+            }
+        }
+
+        log::info!("Proxy {} passed all tests.", self.proxy_addr);
+
+        let tunnel_proxy = TunnelProxyClient::new(&self.proxy_addr);
+        match tunnel_proxy.verify().await {
+            Ok(_) => (),
+            Err(err) => log::warn!("Proxy {} failed on tunnel verify: {}", self.proxy_addr, err.msg),
+        }
+
+        Ok(true)
+    }
 }
 
+#[derive(Clone)]
 struct TunnelProxyClient {
     pub proxy_addr: String,
 }
@@ -228,7 +279,7 @@ impl TunnelProxyClient {
         }
     }
 
-    pub async fn verify(&self) -> Result<(), SimpleError> {
+    pub async fn verify(self) -> Result<Self, SimpleError> {
         let stream = self.establish(&GLOBAL_CONFIG.proxy_pool_verify_https).await?;
         log::info!("Proxy {} passed tunnel test.", self.proxy_addr);
 
@@ -240,7 +291,7 @@ impl TunnelProxyClient {
         match ssl_stream.sync_ssl().peer_certificate() {
             Some(cert) => {
                 log::info!("Get cert though {} - {:?}", self.proxy_addr, cert);
-                Ok(())
+                Ok(self)
             },
             None => Err(SimpleError::new("None certificate")),
         }
