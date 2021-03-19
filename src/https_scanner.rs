@@ -138,7 +138,7 @@ impl HttpsScanTask {
     }
     async fn connect_ssl(&self, client: &TunnelProxyClient) -> Result<async_ssl::SslStream<TcpStream>, SimpleError> {
         let stream = client.establish(&self.addr).await?;
-        log::info!("ESTABLISHED");
+        // log::info!("ESTABLISHED");
         let ssl = Ssl::new(&SSL_CONTEXT)?;
         let mut stream = async_ssl::SslStream::new(ssl, stream)?;
         match timeout(tokio::time::Duration::from_secs(GLOBAL_CONFIG.scanner.https.timeout), stream.connect()).await{
