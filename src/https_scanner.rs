@@ -83,6 +83,10 @@ impl HttpsScanner {
         loop {
             match (&mut receiver).recv().await {
                 Some(range) => {
+                    
+                    while redis.llen::<'_, _, i64>(KEY_TASK_QUEUE).await? > 5_000_000 {
+                        sleep(tokio::time::Duration::from_secs(60)).await;
+                    }
                     let mut pipe = pipe();
                     for ip in range {
                         let addr = std::net::Ipv4Addr::from(ip).to_string();

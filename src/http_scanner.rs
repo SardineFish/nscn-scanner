@@ -5,7 +5,7 @@ use mongodb::{Collection, Database, bson};
 use redis::{AsyncCommands, RedisError, aio::MultiplexedConnection};
 use reqwest::{ Response, header::HeaderMap};
 use serde::{Serialize, Deserialize};
-use tokio::{sync::mpsc::{Sender, channel}, task::{self, JoinHandle}};
+use tokio::{sync::mpsc::{Sender, channel}, task::{self, JoinHandle}, time::sleep};
 use crate::{error::{*}, proxy::ProxyPool};
 use crate::config::GLOBAL_CONFIG;
 
@@ -98,12 +98,15 @@ impl HttpScanner {
         Ok(())
     }
     pub async fn enqueue_range(&self, range: Range<u32>) -> Result<(), SimpleError> {
+        let mut conn = self.dispatcher_conn.clone();
+        while conn.llen::<'_, _, i64>(TASK_QUEUE).await? > 5_000_000 {
+            sleep(tokio::time::Duration::from_secs(60)).await;
+        }
         let mut pipe = redis::pipe();
         for ip in range {
             let addr = std::net::Ipv4Addr::from(ip).to_string();
             pipe.lpush(TASK_QUEUE, &addr).ignore();
         }
-        let mut conn = self.dispatcher_conn.clone();
         let result: Result<(), RedisError> = pipe.query_async(&mut conn).await;
         if let Err(err) = result {
             log::error!("Failed to enqueue http scan range: {}", err);
