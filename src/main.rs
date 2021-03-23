@@ -10,6 +10,7 @@ mod http;
 mod ssl_context;
 mod async_ssl;
 mod https_scanner;
+mod tcp_scanner;
 
 #[allow(dead_code)]
 mod redis_pool;

@@ -869,6 +869,7 @@ dependencies = [
 name = "nscn"
 version = "0.1.0"
 dependencies = [
+ "bytes",
  "chrono",
  "env_logger",
  "futures",
