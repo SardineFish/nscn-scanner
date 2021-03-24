@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use lazy_static::lazy_static;
 use serde::{Deserialize};
 use tokio::fs::read_to_string;
@@ -11,6 +13,7 @@ pub struct Config {
     pub redis: String,
     pub proxy_pool: ProxyPoolConfig,
     pub scanner: ScannerConfig,
+    pub test: Option<HashMap<String, String>>,
 }
 
 #[derive(Deserialize)]

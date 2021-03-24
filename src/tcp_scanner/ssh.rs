@@ -3,7 +3,7 @@ use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWrite
 use std::io::Read;
 
 use crate::error::{LogError, SimpleError};
-
+use crate::config::GLOBAL_CONFIG;
 use super::async_reader::AsyncBufReader;
 
 struct SSHScanTask {
@@ -27,11 +27,13 @@ impl SSHScanTask {
     }
 }
 
+#[derive(Debug)]
 struct SSHScannResult {
     protocol: ProtocolVersionMessage,
     algorithm: AlgorithmExchange,
 }
 
+#[derive(Debug)]
 struct ProtocolVersionMessage {
     version: String,
     software: String,
@@ -172,7 +174,19 @@ mod test {
     async fn test_algorithm_parse() {
         let kex_init = AlgorithmExchange::read(&mut &SSH_KEXINIT_DATA[..]).await.unwrap();
         println!("{:?}", kex_init);
-        panic!();
+    }
+
+    #[tokio::test]
+    async fn test_ssh_scanner() {
+        let kex_init = AlgorithmExchange::read(&mut &SSH_KEXINIT_DATA[..]).await.unwrap();
+        let addr = GLOBAL_CONFIG.test.as_ref().and_then(|m|m.get("test-ssh")).unwrap();
+        let task = SSHScanTask {
+            host: addr.to_owned(),
+            port: 22,
+        };
+        let result = task.scan().await.unwrap();
+        println!("{:?}", result);
+        assert_eq!(kex_init, result.algorithm);
     }
 
     const SSH_KEXINIT_DATA: &[u8; 1080] = b"\x00\x00\x04\x34\x06\x14\x5d\x44\xad\xae\x71\xd1\x9f\x37\xca\x0e\
