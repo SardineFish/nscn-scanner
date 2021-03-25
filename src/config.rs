@@ -22,29 +22,49 @@ pub struct ProxyPoolConfig {
     pub update_interval: u64,
     pub http_validate: Vec<ProxyVerify>,
     pub https_validate: String,
+    pub socks5_timeout: u64,
+    pub socks5_max_failure: usize,
 }
 
 #[derive(Deserialize)]
 pub struct ScannerConfig {
     pub http: HttpScannerOptions,
     pub https: HttpsScannerOptions,
+    pub ssh: SSHScannerOptions,
+    pub ftp: FTPScannerOptions,
     pub task: TaskOptions,
 }
 
 #[derive(Deserialize)]
-pub struct HttpScannerOptions {
+pub struct FTPScannerOptions {
+    pub enabled: bool,
+    pub use_proxy: bool,
     pub timeout: u64,
-    pub max_tasks: usize,
+}
+
+#[derive(Deserialize)]
+pub struct SSHScannerOptions {
+    pub enabled: bool,
+    pub use_proxy: bool,
+    pub timeout: u64,
+}
+
+#[derive(Deserialize)]
+pub struct HttpScannerOptions {
+    pub enabled: bool,
+    pub use_proxy: bool,
+    pub timeout: u64,
 }
 
 #[derive(Deserialize)]
 pub struct HttpsScannerOptions {
+    pub enabled: bool,
+    pub use_proxy: bool,
     pub timeout: u64,
-    pub max_tasks: usize,
 }
 #[derive(Deserialize)]
 pub struct TaskOptions {
-    pub dispatch: bool,
+    pub fetch: bool,
     pub clear_old_tasks: bool,
     pub addr_src: Vec<String>,
     pub proxy: Option<String>,

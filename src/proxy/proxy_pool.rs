@@ -1,3 +1,4 @@
+use chrono::Utc;
 use rand::{RngCore, SeedableRng};
 use serde::{Deserialize};
 use tokio::{ sync::Mutex, task::{self, JoinHandle}, time::{sleep}};
@@ -6,7 +7,7 @@ use std::{collections::{HashMap}, sync::Arc};
 use crate::{error::*};
 use crate::config::{GLOBAL_CONFIG};
 
-use super::http_proxy::HttpProxyClient;
+use super::{http_proxy::HttpProxyClient, socks5_proxy::Socks5ProxyInfo};
 use super::tunnel_proxy::TunnelProxyClient;
 use super::socks5_proxy::Socks5Proxy;
 
@@ -19,6 +20,7 @@ struct ProxyInfo {
 pub struct ProxyPool {
     http_client_pool: Arc<Mutex<Vec<HttpProxyClient>>>,
     tunnel_client_pool: Arc<Mutex<Vec<TunnelProxyClient>>>,
+    socks5_proxy_pool: Arc<Mutex<Vec<Socks5ProxyInfo>>>,
     rng: Arc<Mutex<rand::rngs::SmallRng>>,
 }
 
@@ -27,6 +29,7 @@ impl ProxyPool {
         Self {
             http_client_pool: Arc::new(Mutex::new(Vec::new())),
             tunnel_client_pool: Arc::new(Mutex::new(Vec::new())),
+            socks5_proxy_pool: Arc::new(Mutex::new(Vec::new())),
             rng: Arc::new(Mutex::new(rand::rngs::SmallRng::from_entropy())),
         }
     }
@@ -72,9 +75,45 @@ impl ProxyPool {
             sleep(tokio::time::Duration::from_secs(GLOBAL_CONFIG.proxy_pool.update_interval)).await;
         }
     }
-    pub async fn get_socks5_client(&self) -> Socks5Proxy {
-        Socks5Proxy {
-            addr: "".to_owned(),
+    pub async fn get_socks5_proxy(&self, target: &str) -> Socks5Proxy {
+        loop {
+            match self.try_get_socks5_proxy(target).await {
+                Ok(proxy) => return proxy,
+                Err(_) => (),
+            }
+        }
+    }
+    async fn try_get_socks5_proxy(&self, target: &str) -> Result<Socks5Proxy, SimpleError> {
+        let proxy = loop {
+            let t = self.rng.lock().await.next_u32();
+            {
+                let guard = self.socks5_proxy_pool.lock().await;
+                if guard.len() > 0 {
+                    let idx = ((t as u64) * guard.len() as u64 / u32::MAX as u64) % (guard.len() as u64);
+                    break guard[idx as usize].addr.clone();
+                }
+            }
+            // log::warn!("Proxy pool is empty, retry in {}s", GLOBAL_CONFIG.proxy_pool.update_interval);
+            sleep(tokio::time::Duration::from_secs(GLOBAL_CONFIG.proxy_pool.update_interval)).await;
+        };
+        match Socks5Proxy::connect(&proxy, target).await {
+            Ok(proxy) => Ok(proxy),
+            Err(err) => {
+                log::warn!("Failed to connect socks5 proxy: {}", err.msg);
+                self.report_socks5_proxy_failure(&proxy).await;
+                Err(err)
+            }
+        }
+    }
+    async fn report_socks5_proxy_failure(&self, addr: &str) {
+        let mut guard = self.socks5_proxy_pool.lock().await;
+        if let Some(idx) = guard.iter_mut().position(|p|p.addr == addr) {
+            let proxy_info = &mut guard[idx];
+            proxy_info.failure_count += 1;
+            if proxy_info.failure_count >= GLOBAL_CONFIG.proxy_pool.socks5_max_failure {
+                log::warn!("Socks5 proxy {} excceed max failure, lifetime {}", proxy_info.addr, Utc::now() - proxy_info.fetch_time);
+                guard.remove(idx);
+            }
         }
     }
 }

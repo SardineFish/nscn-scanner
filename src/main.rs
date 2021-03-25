@@ -75,7 +75,7 @@ async fn qps(db: Database) {
 }
 
 async fn try_dispatch_address(scanner: &HttpScanner, https_task_sender: &Sender<Range<u32>>) {
-    if !GLOBAL_CONFIG.scanner.task.dispatch {
+    if !GLOBAL_CONFIG.scanner.task.fetch {
         return;
     }
     log::info!("Start dispatching http scan address");
