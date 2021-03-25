@@ -178,6 +178,6 @@ struct HttpsScanRecord {
 }
 
 #[derive(Serialize)]
-struct HttpsResponse {
+pub struct HttpsResponse {
     cert: String,
 }

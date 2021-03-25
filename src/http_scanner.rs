@@ -15,7 +15,7 @@ struct HttpScanResult {
     address: String,
     proxy: String,
     time: bson::DateTime,
-    result: ScanResult<ResponseData>,
+    result: ScanResult<HttpResponseData>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -26,13 +26,13 @@ pub enum ScanResult<T> {
 }
 
 #[derive(Serialize, Deserialize)]
-struct ResponseData {
+pub struct HttpResponseData {
     status: i32,
     headers: HashMap<String, Vec<String>>,
     body: String,
 }
 
-impl ResponseData {
+impl HttpResponseData {
     async fn from_response(response: Response) -> Self {
         Self {
             headers: response.headers().serialize(),
@@ -198,7 +198,7 @@ impl HttpScanTask {
             result: match result {
                 Ok(response) => {
                     log::info!("GET {} - {}", self.address, response.status());
-                    ScanResult::Ok(ResponseData::from_response(response).await)
+                    ScanResult::Ok(HttpResponseData::from_response(response).await)
                 },
                 Err(err) => ScanResult::Err(err.to_string())
             },

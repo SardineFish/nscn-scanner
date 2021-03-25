@@ -1,6 +1,7 @@
 use bytes::Bytes;
 use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, BufReader, Result as IOResult};
 use std::io::Read;
+use serde::{Serialize};
 
 use crate::error::{LogError, SimpleError};
 use crate::config::GLOBAL_CONFIG;
@@ -27,13 +28,13 @@ impl SSHScanTask {
     }
 }
 
-#[derive(Debug)]
-struct SSHScannResult {
+#[derive(Debug, Serialize)]
+pub struct SSHScannResult {
     protocol: ProtocolVersionMessage,
     algorithm: AlgorithmExchange,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 struct ProtocolVersionMessage {
     version: String,
     software: String,
@@ -88,7 +89,7 @@ impl ProtocolVersionMessage {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Serialize, PartialEq)]
 struct AlgorithmExchange {
     kex: Vec<String>,
     host_key: Vec<String>,

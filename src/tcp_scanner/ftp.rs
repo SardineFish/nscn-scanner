@@ -1,16 +1,26 @@
-use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
+use tokio::{io::{AsyncRead, AsyncWrite, AsyncWriteExt}, sync::mpsc::Sender};
 use serde::{Serialize};
 
-use crate::error::*;
+use crate::{error::*, scanner::DispatchScanTask};
 
 use super::async_reader::AsyncBufReader;
 
 pub struct FTPScanTask {
     host: String,
     port: i16,
+    complete_sender: Sender<bool>,
+}
+
+impl DispatchScanTask for FTPScanTask {
+    fn dispatch(self) -> usize {
+        1
+    }
 }
 impl FTPScanTask {
-    pub async fn scan<S: AsyncRead + AsyncWrite + Unpin>(stream: &mut S) -> Result<FTPScanResult, SimpleError> {
+    async fn start(self) -> Result<(), SimpleError> {
+        Ok(())
+    }
+    async fn scan<S: AsyncRead + AsyncWrite + Unpin>(stream: &mut S) -> Result<FTPScanResult, SimpleError> {
         let mut stream = FTPStream(stream);
         let result = match stream.read_response().await? {
             (230, text) => FTPScanResult {
