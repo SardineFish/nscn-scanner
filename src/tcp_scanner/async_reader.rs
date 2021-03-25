@@ -21,7 +21,7 @@ impl<'r, R: AsyncRead + Unpin> AsyncBufReader<'r, R> {
     }
     pub async fn read_line_crlf(&mut self) -> Result<&[u8], SimpleError> {
         let mut scan_start = self.buf_offset;
-        println!("start at {}", scan_start);
+        // println!("start at {}", scan_start);
         loop {
             let limit = match self.buf.len() {
                 0 => 0,
@@ -36,7 +36,7 @@ impl<'r, R: AsyncRead + Unpin> AsyncBufReader<'r, R> {
                 scan_start = i;
             }
             let size = self.stream.read_buf(&mut self.buf).await?;
-            println!("read {}", size);
+            // println!("read {}", size);
             if size == 0 {
                 return Ok(&self.buf[0..0])
             }
