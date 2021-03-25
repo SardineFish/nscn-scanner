@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use mongodb::bson;
-use serde::{Serialize, Deserialize};
+use serde::{Serialize};
 
 use crate::{http_scanner::HttpResponseData, https_scanner::HttpsResponse, tcp_scanner::scanner::TCPScanResult};
 

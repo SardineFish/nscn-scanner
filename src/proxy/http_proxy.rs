@@ -1,15 +1,7 @@
 use chrono::Utc;
-use rand::{RngCore, SeedableRng};
 use reqwest::{Proxy, StatusCode};
-use serde::{Deserialize};
-use tokio::{io::AsyncWriteExt, net::TcpStream, sync::Mutex, task::{self, JoinHandle}, time::{sleep, timeout}};
-use tokio_socks::tcp::Socks5Stream;
-use std::{collections::{HashMap, HashSet}, sync::Arc};
-use openssl::{ssl};
-use crate::ssl_context::SSL_CONTEXT;
-use crate::async_ssl;
 
-use crate::{error::*, http::WriteRequest};
+use crate::{error::*};
 use crate::config::{GLOBAL_CONFIG, ProxyVerify};
 
 #[derive(Clone)]
