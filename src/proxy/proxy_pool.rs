@@ -65,7 +65,7 @@ impl ProxyPool {
                     return guard[idx as usize].clone();
                 }
             }
-            log::warn!("Proxy pool is empty, retry in {}s", GLOBAL_CONFIG.proxy_pool.update_interval);
+            // log::warn!("Proxy pool is empty, retry in {}s", GLOBAL_CONFIG.proxy_pool.update_interval);
             sleep(tokio::time::Duration::from_secs(GLOBAL_CONFIG.proxy_pool.update_interval)).await;
         }
     }
@@ -79,7 +79,7 @@ impl ProxyPool {
                     return guard[idx as usize].clone();
                 }
             }
-            log::warn!("Proxy pool is empty, retry in {}s", GLOBAL_CONFIG.proxy_pool.update_interval);
+            // log::warn!("Proxy pool is empty, retry in {}s", GLOBAL_CONFIG.proxy_pool.update_interval);
             sleep(tokio::time::Duration::from_secs(GLOBAL_CONFIG.proxy_pool.update_interval)).await;
         }
     }
@@ -96,7 +96,7 @@ impl ProxyPool {
                     }
                 }
             }
-            log::warn!("Proxy pool is empty, retry in {}s", GLOBAL_CONFIG.proxy_pool.update_interval);
+            // log::warn!("Proxy pool is empty, retry in {}s", GLOBAL_CONFIG.proxy_pool.update_interval);
             sleep(tokio::time::Duration::from_secs(3)).await;
         }
     }
@@ -110,7 +110,7 @@ impl ProxyPool {
                     break guard[idx as usize].addr.clone();
                 }
             }
-            log::warn!("Proxy pool is empty, retry in {}s", GLOBAL_CONFIG.proxy_pool.update_interval);
+            // log::warn!("Proxy pool is empty, retry in {}s", GLOBAL_CONFIG.proxy_pool.update_interval);
             sleep(tokio::time::Duration::from_secs(3)).await;
         };
         Socks5Proxy {
