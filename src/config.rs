@@ -18,6 +18,7 @@ pub struct Config {
 
 #[derive(Deserialize)]
 pub struct ProxyPoolConfig {
+    pub update_http_proxy: bool,
     pub fetch_addr: String,
     pub update_interval: u64,
     pub http_validate: Vec<ProxyVerify>,
@@ -66,6 +67,7 @@ pub struct TCPScannerOptions {
 pub struct UniversalScannerOption {
     pub enabled: bool,
     pub use_proxy: bool,
+    pub socks5: Option<bool>,
     pub timeout: u64,
 }
 #[derive(Deserialize)]

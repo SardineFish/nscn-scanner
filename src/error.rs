@@ -58,7 +58,7 @@ impl SimpleError {
 impl<T> LogError for Result<T, SimpleError> {
     fn log(self, level: log::Level, target: &str) -> Self {
         match &self {
-            Err(err) => log::log!(target: target, level, "{}", err.msg),
+            Err(err) => log::log!(level, "{} - {}", target, err.msg),
             Ok(_) => (),
         }
         self
@@ -96,7 +96,7 @@ pub trait LogError {
 impl<T, E> LogError for Result<T, E> where E: Display {
     fn log(self, level: log::Level, target: &str) -> Self {
         match &self {
-            Err(err) => log::log!(target: target, level, "{}", err),
+            Err(err) => log::log!(level, "[{}] {}", target, err),
             _ => (),
         }
         self

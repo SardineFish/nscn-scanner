@@ -1,7 +1,7 @@
 
 use rand::{RngCore, SeedableRng};
 use serde::{Deserialize};
-use tokio::{ sync::Mutex, task::{self, JoinHandle}, time::{sleep}};
+use tokio::{ sync::Mutex, task::{self}, time::{sleep}};
 use std::{collections::{HashMap}, sync::Arc};
 
 use crate::{error::*};
@@ -33,21 +33,23 @@ impl ProxyPool {
             rng: Arc::new(Mutex::new(rand::rngs::SmallRng::from_entropy())),
         }
     }
-    pub async fn start(&self) -> JoinHandle<()> {
+    pub async fn start(&self) {
         let mut updater = ProxyPoolUpdator::new(self.http_client_pool.clone(), self.tunnel_client_pool.clone());
         // let client_pool = self.http_client_pool.clone();
-        if let Err(err) = updater.try_update().await {
-            log::error!("Failed to initially update proxy pool: {}", err.msg);
-        }
         if GLOBAL_CONFIG.proxy_pool.socks5.enabled {
             let socks5_updater = Socks5ProxyUpdater {
                 pool: self.socks5_proxy_pool.clone(),
             };
             socks5_updater.start().await;
             }
-        task::spawn(async move {
-            updater.update().await;
-        })
+        if GLOBAL_CONFIG.proxy_pool.update_http_proxy {
+            if let Err(err) = updater.try_update().await {
+                log::error!("Failed to initially update proxy pool: {}", err.msg);
+            }
+            task::spawn(async move {
+                updater.update().await;
+            });
+        }
     }
     
     pub async fn get_client(&self) -> reqwest::Client {
@@ -63,7 +65,7 @@ impl ProxyPool {
                     return guard[idx as usize].clone();
                 }
             }
-            // log::warn!("Proxy pool is empty, retry in {}s", GLOBAL_CONFIG.proxy_pool.update_interval);
+            log::warn!("Proxy pool is empty, retry in {}s", GLOBAL_CONFIG.proxy_pool.update_interval);
             sleep(tokio::time::Duration::from_secs(GLOBAL_CONFIG.proxy_pool.update_interval)).await;
         }
     }
@@ -77,8 +79,25 @@ impl ProxyPool {
                     return guard[idx as usize].clone();
                 }
             }
-            // log::warn!("Proxy pool is empty, retry in {}s", GLOBAL_CONFIG.proxy_pool.update_interval);
+            log::warn!("Proxy pool is empty, retry in {}s", GLOBAL_CONFIG.proxy_pool.update_interval);
             sleep(tokio::time::Duration::from_secs(GLOBAL_CONFIG.proxy_pool.update_interval)).await;
+        }
+    }
+    pub async fn get_socks5_client(&self) -> HttpProxyClient {
+        loop {
+            let t = self.rng.lock().await.next_u32();
+            {
+                let guard = self.socks5_proxy_pool.lock().await;
+                if guard.len() > 0 {
+                    let idx = ((t as u64) * guard.len() as u64 / u32::MAX as u64) % (guard.len() as u64);
+                    break HttpProxyClient {
+                        client: guard[idx as usize].http_client.clone(),
+                        proxy_addr: guard[idx as usize].addr.to_owned(),
+                    }
+                }
+            }
+            log::warn!("Proxy pool is empty, retry in {}s", GLOBAL_CONFIG.proxy_pool.update_interval);
+            sleep(tokio::time::Duration::from_secs(3)).await;
         }
     }
     pub async fn get_socks5_proxy(&self) -> Socks5Proxy {
@@ -91,7 +110,7 @@ impl ProxyPool {
                     break guard[idx as usize].addr.clone();
                 }
             }
-            // log::warn!("Proxy pool is empty, retry in {}s", GLOBAL_CONFIG.proxy_pool.update_interval);
+            log::warn!("Proxy pool is empty, retry in {}s", GLOBAL_CONFIG.proxy_pool.update_interval);
             sleep(tokio::time::Duration::from_secs(3)).await;
         };
         Socks5Proxy {

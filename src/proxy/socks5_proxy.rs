@@ -13,6 +13,7 @@ pub(super) struct Socks5ProxyInfo {
     pub failure_count: usize,
     pub fetch_time: DateTime<Utc>,
     pub deadline: DateTime<Utc>,
+    pub http_client: reqwest::Client,
 }
 
 pub struct Socks5Proxy {
@@ -104,11 +105,19 @@ impl Socks5ProxyUpdater {
             .ok_or("Time converting failed")?
             .with_timezone(&Utc);
 
+        let proxy_addr = format!("{}:{}", data.data[0].ip, data.data[0].port);
+        let client = reqwest::Client::builder()
+            .proxy(reqwest::Proxy::http(format!("socks5://{}", proxy_addr))?)
+            .proxy(reqwest::Proxy::https(format!("socks5://{}", proxy_addr))?)
+            .timeout(std::time::Duration::from_secs(GLOBAL_CONFIG.scanner.http.timeout))
+            .build()?;
+
         Ok(Socks5ProxyInfo {
             addr: format!("{}:{}", data.data[0].ip, data.data[0].port),
             failure_count: 0,
             fetch_time: Utc::now(),
             deadline,
+            http_client: client,
         })
     }
 }

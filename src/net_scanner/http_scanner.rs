@@ -3,7 +3,7 @@ use std::{collections::HashMap};
 use reqwest::{ Response, header::HeaderMap};
 use serde::{Serialize, Deserialize};
 use crate::{proxy::{http_proxy::HttpProxyClient}, net_scanner::scanner::{ScanResult, ScannerResources, TaskPool}};
-
+use crate::config::GLOBAL_CONFIG;
 
 #[derive(Serialize, Deserialize)]
 pub struct HttpResponseData {
@@ -53,7 +53,10 @@ impl HttpScanTask {
         task_pool.spawn(task.run()).await;
     }
     async fn run(self) {
-        let mut client = self.resources.proxy_pool.get_http_client().await;
+        let mut client = match GLOBAL_CONFIG.scanner.http.socks5 {
+            Some(true) => self.resources.proxy_pool.get_socks5_client().await,
+            _ => self.resources.proxy_pool.get_http_client().await,
+        };
         let result = self.scan(&mut client).await;
         self.resources.result_handler.save("http", &self.address, &client.proxy_addr, result).await;
     }
