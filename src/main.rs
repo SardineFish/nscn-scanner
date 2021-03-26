@@ -19,11 +19,10 @@ use std::ops::Range;
 
 use address::{fetch_address_list};
 use config::Config;
-use http_scanner::HttpScanner;
-use https_scanner::HttpsScanner;
 use mongodb::Database;
 use proxy::ProxyPool;
 use config::GLOBAL_CONFIG;
+use scanner::{NetScanner, SchedulerController};
 use tokio::{sync::mpsc::Sender, task, time::sleep};
 
 #[tokio::main]
@@ -40,17 +39,15 @@ async fn main()
     // let conn = redis.get_multiplexed_tokio_connection().await.unwrap();
     let proxy_pool = ProxyPool::new();
     proxy_pool.start().await;
-    let http_scanner = HttpScanner::open(db.clone(), &config.redis, proxy_pool.clone()).await;
-    let join = http_scanner.start();
-    let https_scanner = HttpsScanner::new(db.clone(), proxy_pool.clone()).await.unwrap();
-    let https_task_sender = https_scanner.start().await;
+    let scanner = NetScanner::new(&config.redis, &db, &proxy_pool);
+    let scheduler = scanner.start().unwrap();
     
     // http_scanner.enqueue("47.102.198.236").await.unwrap();
     task::spawn(async move {
         qps(db.clone()).await
     });
 
-    try_dispatch_address(&http_scanner, &https_task_sender).await;
+    try_dispatch_address(&scheduler).await;
 
     // let range = parse_ipv4_cidr("47.102.198.0/24").unwrap();
     // for ip in range {
@@ -59,7 +56,7 @@ async fn main()
     // }
 
 
-    join.await.unwrap();
+    scheduler.join().await;
 }
 
 async fn qps(db: Database) {
@@ -73,13 +70,13 @@ async fn qps(db: Database) {
     }
 }
 
-async fn try_dispatch_address(scanner: &HttpScanner, https_task_sender: &Sender<Range<u32>>) {
+async fn try_dispatch_address(scheduler: &SchedulerController) {
     if !GLOBAL_CONFIG.scanner.task.fetch {
         return;
     }
     log::info!("Start dispatching http scan address");
     if GLOBAL_CONFIG.scanner.task.clear_old_tasks {
-        if let Err(err) = scanner.clear_task_queue().await {
+        if let Err(err) = scheduler.clear_tasks().await {
             log::error!("Failed to reset task queue: {}", err.msg);
         }
     }
@@ -98,11 +95,8 @@ async fn try_dispatch_address(scanner: &HttpScanner, https_task_sender: &Sender<
                     //         log::error!("Failed to enqueue http scan task: {}", err.msg);
                     //     }
                     // }
-                    if let Err(err) = scanner.enqueue_range(range.clone()).await {
+                    if let Err(err) = scheduler.enqueue_range(range).await {
                         log::error!("Failed to enqueue http scan task: {}", err.msg);
-                    }
-                    if let Err(err) = https_task_sender.send(range).await {
-                        log::error!("Failed to enqueue https scan task: {}", err);
                     }
                 }
                 log::info!("Enqueue {} address", count);

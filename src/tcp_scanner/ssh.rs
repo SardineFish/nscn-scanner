@@ -1,23 +1,34 @@
-use tokio::io::{ AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
+use tokio::{io::{ AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt}, net::TcpStream};
 use serde::{Serialize};
 
-use crate::{error::{LogError, SimpleError}, scanner::{DispatchScanTask, ScannerResources, Scheduler, TaskPool}};
+use crate::{error::{LogError, SimpleError}, scanner::{DispatchScanTask, ScanResult, ScannerResources, Scheduler, TaskPool}};
 use crate::config::GLOBAL_CONFIG;
 use super::async_reader::AsyncBufReader;
 
 pub struct SSHScanTask {
-    host: String,
-    port: u16,
-    resources: ScannerResources,
+    pub host: String,
+    pub port: u16,
+    pub resources: ScannerResources,
 }
 
 const SSH_PROTOCOL_VERSION: &[u8] = b"SSH-2.0-OpenSSH_for_Windows_7.7\r\n";
 
 impl SSHScanTask {
     pub async fn start(self) {
+        let proxy_addr;
+        let result = if GLOBAL_CONFIG.scanner.ssh.use_proxy {
+            let mut proxy = self.resources.proxy_pool.get_socks5_proxy(&format!("{}:{}", &self.host, self.port)).await;
+            
+            proxy_addr = proxy.addr.clone();
+            Self::scan(&mut proxy).await
+        } else {
+            panic!("Not implement");
+        };
 
+        let result = ScanResult::<SSHScannResult>::from(result);
+        self.resources.result_handler.save(&format!("tcp.{}.ftp", self.port), &self.host, &proxy_addr, result).await;
     }
-    async fn scan<S: AsyncRead + AsyncWrite + Unpin>(&self, stream: &mut S) -> Result<SSHScannResult, SimpleError> {
+    async fn scan<S: AsyncRead + AsyncWrite + Unpin>(stream: &mut S) -> Result<SSHScannResult, SimpleError> {
         // let mut stream = tokio::net::TcpStream::connect((self.host.as_str(), self.port)).await?;
         stream.write_all(SSH_PROTOCOL_VERSION).await?;
 
@@ -153,6 +164,8 @@ impl AlgorithmExchange {
 
 #[cfg(test)]
 mod test {
+    use tokio::net::TcpStream;
+
     use super::*;
     #[tokio::test]
     async fn test_protocol_version_with_comment() {
@@ -182,11 +195,8 @@ mod test {
     async fn test_ssh_scanner() {
         let kex_init = AlgorithmExchange::read(&mut &SSH_KEXINIT_DATA[..]).await.unwrap();
         let addr = GLOBAL_CONFIG.test.as_ref().and_then(|m|m.get("test-ssh")).unwrap();
-        let task = SSHScanTask {
-            host: addr.to_owned(),
-            port: 22,
-        };
-        let result = task.scan().await.unwrap();
+        let stream = TcpStream::connect((addr.as_str(), 22)).await.unwrap();
+        let result = SSHScanTask::scan(stream).await.unwrap();
         println!("{:?}", result);
         assert_eq!(kex_init, result.algorithm);
     }

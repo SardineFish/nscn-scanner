@@ -1,18 +1,30 @@
 use tokio::{io::{AsyncRead, AsyncWrite, AsyncWriteExt}, sync::mpsc::Sender};
 use serde::{Serialize};
 
-use crate::{error::*, scanner::{DispatchScanTask, ScannerResources, Scheduler, TaskPool}};
+use crate::{error::*, scanner::{ScanResult, ScannerResources, Scheduler, TaskPool}};
+use crate::config::GLOBAL_CONFIG;
 
 use super::async_reader::AsyncBufReader;
 
 pub struct FTPScanTask {
     pub host: String,
     pub port: u16,
-    resources: ScannerResources,
+    pub resources: ScannerResources,
 }
 impl FTPScanTask {
-    pub async fn start(self) -> Result<(), SimpleError> {
-        Ok(())
+    pub async fn start(self) {
+        let proxy_addr;
+        let result = if GLOBAL_CONFIG.scanner.ftp.use_proxy {
+            let mut proxy = self.resources.proxy_pool.get_socks5_proxy(&format!("{}:{}", &self.host, self.port)).await;
+            
+            proxy_addr = proxy.addr.clone();
+            Self::scan(&mut proxy).await
+        } else {
+            panic!("Not implement");
+        };
+
+        let result = ScanResult::<FTPScanResult>::from(result);
+        self.resources.result_handler.save(&format!("tcp.{}.ftp", self.port), &self.host, &proxy_addr, result).await;
     }
     async fn scan<S: AsyncRead + AsyncWrite + Unpin>(stream: &mut S) -> Result<FTPScanResult, SimpleError> {
         let mut stream = FTPStream(stream);

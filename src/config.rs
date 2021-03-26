@@ -53,7 +53,7 @@ pub struct ScannerConfig {
 #[derive(Deserialize)]
 pub struct TCPScannerOptions {
     pub enabled: bool,
-    pub ports: Vec<u16>,
+    pub ports: HashMap<u16, Vec<String>>,
 }
 
 #[derive(Deserialize)]

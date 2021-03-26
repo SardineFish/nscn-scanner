@@ -27,6 +27,15 @@ pub enum ScanResult<T> {
     Err(String),
 }
 
+impl<T: Serialize> From<Result<T, SimpleError>> for ScanResult<T> {
+    fn from(result: Result<T, SimpleError>) -> Self {
+        match result {
+            Ok(data) => Self::Ok(data),
+            Err(err) => Self::Err(err.msg),
+        }
+    }
+}
+
 #[derive(Serialize)]
 pub struct NetScanResult {
     pub http: Option<ScanResult<HttpResponseData>>,
@@ -139,27 +148,54 @@ impl TaskPool {
     }
 }
 
+enum ScanTask {
+    ClearTasks,
+    IPRange(Range<u32>),
+    IPAddr(String),
+}
+
 const KEY_TASK_QUEUE: &str = "task_queue";
 
 pub struct SchedulerController {
     join_scheduler: JoinHandle<()>,
     join_receiver: JoinHandle<()>,
-    task_sender: Sender<Range<u32>>,
+    task_sender: Sender<ScanTask>,
 }
 
 impl SchedulerController {
     pub async fn enqueue_range(&self, ip_range: Range<u32>) -> Result<(), SimpleError> {
-        self.task_sender.send(ip_range).await?;
+        self.task_sender.send(ScanTask::IPRange(ip_range)).await?;
+        Ok(())
+    }
+    pub async fn join(self) {
+        self.join_receiver.await;
+        self.join_scheduler.await;
+    }
+    pub async fn clear_tasks(&self) -> Result<(), SimpleError> {
+        self.task_sender.send(ScanTask::ClearTasks).await?;
         Ok(())
     }
 
-    async fn receive_task(redis: redis::Client, mut receiver: Receiver<Range<u32>>) {
+    async fn receive_task(redis: redis::Client, mut receiver: Receiver<ScanTask>) {
         let mut redis = redis.get_async_connection().await.unwrap();
-        while let Some(range) = receiver.recv().await {
-            match Self::try_enqueue_tasks(&mut redis, range).await {
-                Ok(_) => (),
-                err => err.log_error("task-receiver").unwrap(),
+        while let Some(task) = receiver.recv().await {
+            match task {
+                ScanTask::IPRange(range) => match Self::try_enqueue_tasks(&mut redis, range).await {
+                    Ok(_) => (),
+                    err => err.log_error("task-receiver").unwrap(),
+                },
+                ScanTask::IPAddr(addr) => 
+                    pipe().lpush(KEY_TASK_QUEUE, addr).ignore()
+                    .query_async::<_, ()>(&mut redis)
+                    .await
+                    .log_error_consume("task-receiver"),
+                ScanTask::ClearTasks => 
+                    pipe().del(KEY_TASK_QUEUE).ignore()
+                    .query_async::<_, ()>(&mut redis)
+                    .await
+                    .log_error_consume("task-receiver"),
             }
+            
         }
     }
     async fn try_enqueue_tasks(redis: &mut redis::aio::Connection, range: Range<u32>) -> Result<(), SimpleError> {
@@ -188,7 +224,10 @@ pub struct ResultHandler {
 }
 
 impl ResultHandler {
-    pub async fn save<T: Serialize>(&self, key: &str, ip_addr: &str, proxy: &str, result: T) -> Result<(), SimpleError> {
+    pub async fn save<T: Serialize>(&self, key: &str, ip_addr: &str, proxy: &str, result: T) {
+        self.try_save(key, ip_addr, proxy, result).await.log_error_consume("result-saving");
+    }
+    async fn try_save<T: Serialize>(&self, key: &str, ip_addr: &str, proxy: &str, result: T) -> Result<(), SimpleError> {
         let collection = match &GLOBAL_CONFIG.scanner.save {
             ResultSavingOption::SingleCollection(collection) => self.db.collection(&collection),
             _ => panic!("Not implement"),
