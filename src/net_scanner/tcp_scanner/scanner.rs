@@ -1,7 +1,7 @@
 
 use serde::{Serialize};
 
-use crate::{net_scanner::scanner::{ScanResult, ScannerResources, TaskPool}};
+use crate::{net_scanner::scanner::{ScanTaskInfo, ScannerResources, TaskPool}};
 use crate::config::GLOBAL_CONFIG;
 
 use super::{ftp::{FTPScanResult, FTPScanTask}, ssh::{SSHScanTask, SSHScannResult}};
@@ -41,6 +41,6 @@ impl TCPScanTask {
 
 #[derive(Serialize)]
 pub struct TCPScanResult {
-    ftp: Option<ScanResult<FTPScanResult>>,
-    ssh: Option<ScanResult<SSHScannResult>>,
+    ftp: Option<ScanTaskInfo<FTPScanResult>>,
+    ssh: Option<ScanTaskInfo<SSHScannResult>>,
 }

@@ -41,13 +41,15 @@ async fn main()
         qps(db.clone()).await
     });
 
-    try_dispatch_address(&scheduler).await;
+    // try_dispatch_address(&scheduler).await;
 
     // let range = parse_ipv4_cidr("47.102.198.0/24").unwrap();
     // for ip in range {
     //     let addr = std::net::Ipv4Addr::from(ip);
     //     http_scanner.enqueue(addr.to_string().as_str()).await;
     // }
+
+    scheduler.enqueue_addr("server-lw.sardinefish.com").await.unwrap();
 
 
     scheduler.join().await;

@@ -1,7 +1,8 @@
-use std::{pin::Pin, task::{Context, Poll}};
+use std::{sync::Arc, time};
+use serde::{Deserialize};
 
-use chrono::{DateTime, Utc};
-use tokio::{io::{self, AsyncRead, AsyncWrite, ReadBuf}, net::TcpStream, time::timeout};
+use chrono::{DateTime, NaiveDateTime, TimeZone, Utc};
+use tokio::{net::TcpStream, sync::{Mutex}, task, time::{sleep}};
 use tokio_socks::tcp::Socks5Stream;
 use tokio::time::Duration;
 use crate::error::*;
@@ -16,38 +17,99 @@ pub(super) struct Socks5ProxyInfo {
 
 pub struct Socks5Proxy {
     pub addr: String,
-    stream: Socks5Stream<TcpStream>,
 }
 impl Socks5Proxy {
-    pub async fn connect(proxy: &str, target: &str) -> Result<Self, SimpleError> {
-        let socket = timeout(Duration::from_secs(GLOBAL_CONFIG.proxy_pool.socks5_timeout), TcpStream::connect(proxy))
-            .await
-            .map_err(|_|"Socks5 connect timeout")??;
+    pub async fn connect(&self, target: &str, timeout: u64) -> Result<Socks5Stream<TcpStream>, SimpleError> {
+        let socket = tokio::time::timeout(
+            Duration::from_secs(timeout), 
+            TcpStream::connect(&self.addr)
+        ).await.map_err(|_|"Connect timeout")??;
 
         let stream = Socks5Stream::connect_with_socket(socket, target).await?;
-        Ok(Socks5Proxy {
-            addr: proxy.to_owned(),
-            stream,
+        Ok(stream)
+    }
+}
+
+#[derive(Deserialize)]
+struct ProxyServerData {
+    ip: String,
+    port: u16,
+    expire_time: String,
+}
+#[derive(Deserialize)]
+struct FetchResponse {
+    code: i32,
+    success: bool,
+    msg: String,
+    data: Vec<ProxyServerData>,
+}
+
+#[derive(Clone)]
+pub struct Socks5ProxyUpdater {
+    pub(super) pool: Arc<Mutex<Vec<Socks5ProxyInfo>>>,
+}
+impl Socks5ProxyUpdater {
+    pub async fn start(self) {
+        for _ in 0..GLOBAL_CONFIG.proxy_pool.socks5.pool_size {
+            self.fetch_new_proxy().await;
+        }
+    }
+    fn manage_expire(self, addr: String, deadline: DateTime<Utc>) {
+        task::spawn(async move {
+            let duration = deadline - Utc::now();
+            log::info!("{} will expire at {}", addr, deadline);
+            sleep(std::time::Duration::from_millis(duration.num_milliseconds() as u64)).await;
+            log::info!("{} expired", addr);
+
+            self.fetch_new_proxy().await;
+
+            let mut guard = self.pool.lock().await;
+            guard.iter().position(|proxy| proxy.addr == addr)
+                .map(|idx| guard.remove(idx))
+                .map(|proxy| log::info!("Proxy {} expired", proxy.addr));
+        });
+    }
+    async fn fetch_new_proxy(&self) {
+        loop {
+            match self.fecth_proxy().await {
+                Ok(proxy) => {
+                    log::info!("Fetched socks5 proxy {}", proxy.addr);
+                    self.clone().manage_expire(proxy.addr.clone(), proxy.deadline);
+                    let mut guard = self.pool.lock().await;
+                    guard.push(proxy);
+                    break;
+                },
+                err => err.log_error_consume("socks5-fetch"),
+            }
+            sleep(time::Duration::from_secs(1)).await;
+        }
+    }
+    async fn fecth_proxy(&self) -> Result<Socks5ProxyInfo, SimpleError> {
+        let data = reqwest::get(GLOBAL_CONFIG.proxy_pool.socks5.fetch.as_str())
+            .await?
+            .json::<FetchResponse>()
+            .await?;
+        
+        if !data.success {
+            Err(data.msg)?
+        }
+
+        if data.data.len() < 1 {
+            Err("Empty proxy")?
+        }
+        let time = NaiveDateTime::parse_from_str(&data.data[0].expire_time, "%Y-%m-%d %H:%M:%S")?;
+        let deadline = chrono_tz::Asia::Shanghai
+            .from_local_datetime(&time)
+            .single()
+            .ok_or("Time converting failed")?
+            .with_timezone(&Utc);
+
+        Ok(Socks5ProxyInfo {
+            addr: format!("{}:{}", data.data[0].ip, data.data[0].port),
+            failure_count: 0,
+            fetch_time: Utc::now(),
+            deadline,
         })
-    }
-}
-impl AsyncRead for Socks5Proxy {
-    fn poll_read(mut self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &mut ReadBuf<'_>) -> Poll<io::Result<()>> {
-        Pin::new(&mut self.stream).poll_read(cx, buf)
-    }
-}
-impl AsyncWrite for Socks5Proxy {
-    fn poll_write(mut self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &[u8]) -> Poll<Result<usize, io::Error>> {
-        Pin::new(&mut self.stream).poll_write(cx, buf)
-    }
-    fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), io::Error>> {
-        Pin::new(&mut self.stream).poll_flush(cx)
-    }
-    fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), io::Error>> {
-        Pin::new(&mut self.stream).poll_shutdown(cx)
-    }
-    fn poll_write_vectored(mut self: Pin<&mut Self>, cx: &mut Context<'_>, bufs: &[std::io::IoSlice<'_>]) -> Poll<Result<usize, io::Error>> {
-        Pin::new(&mut self.stream).poll_write_vectored(cx, bufs)
     }
 }
 

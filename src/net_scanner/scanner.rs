@@ -17,8 +17,7 @@ use crate::proxy::proxy_pool::ProxyPool;
 #[derive(Serialize)]
 pub struct NetScanRecord {
     pub addr: String,
-    pub proxy: String,
-    pub time: bson::DateTime,
+    pub last_update: bson::DateTime,
     pub scan: NetScanResult,
 }
 
@@ -40,14 +39,39 @@ impl<T: Serialize> From<Result<T, SimpleError>> for ScanResult<T> {
 
 #[derive(Serialize)]
 pub struct NetScanResult {
-    pub http: Option<ScanResult<HttpResponseData>>,
-    pub https: Option<ScanResult<HttpsResponse>>,
+    pub http: Option<ScanTaskInfo<HttpResponseData>>,
+    pub https: Option<ScanTaskInfo<HttpsResponse>>,
     pub tcp: Option<HashMap<u16, TCPScanResult>>,
 }
 
 #[async_trait]
 pub trait DispatchScanTask {
     async fn dispatch(addr: String, task_pool: &mut TaskPool);
+}
+
+#[derive(Serialize)]
+pub struct ScanTaskInfo<T> {
+    pub proxy: String,
+    pub time: bson::DateTime,
+    #[serde(flatten)]
+    pub result: ScanResult<T>,
+}
+
+impl<T> ScanTaskInfo<T> {
+    fn new(result: ScanResult<T>) -> Self {
+        Self {
+            proxy: "".to_owned(),
+            time: Utc::now().into(),
+            result,
+        }
+    }
+    fn with_proxy(proxy: &str, result: ScanResult<T>) -> Self {
+        Self {
+            proxy: proxy.to_owned(),
+            time: Utc::now().into(),
+            result,
+        }
+    }
 }
 
 pub struct NetScanner {
@@ -107,12 +131,15 @@ impl Scheduler {
     }
     async fn dispatch(&mut self, addr: &str) {
         if GLOBAL_CONFIG.scanner.http.enabled {
+            log::info!("Dispatch HTTP Scan");
             HttpScanTask::dispatch(addr, &self.resources, &mut self.task_pool).await;
         }
         if GLOBAL_CONFIG.scanner.https.enabled {
+            log::info!("Dispatch HTTPS Scan");
             HttpsScanTask::spawn(addr, &self.resources, &mut self.task_pool).await;
         }
         if GLOBAL_CONFIG.scanner.tcp.enabled {
+            log::info!("Dispatch TCP Scan");
             TCPScanTask::dispatch(addr, &self.resources, &mut self.task_pool).await;
         }
     }
@@ -140,13 +167,13 @@ impl TaskPool {
                 Some(_) => self.running_tasks -= 1,
                 None => panic!("Scheduler channel closed."),
             }
-            self.running_tasks += 1;
-            let complete_sender = self.complete_sender.clone();
-            task::spawn(async move {
-                future.await;
-                complete_sender.send(true).await.log_error_consume("result-saving");
-            });
         }
+        self.running_tasks += 1;
+        let complete_sender = self.complete_sender.clone();
+        task::spawn(async move {
+            future.await;
+            complete_sender.send(true).await.log_error_consume("result-saving");
+        });
     }
 }
 
@@ -165,6 +192,10 @@ pub struct SchedulerController {
 }
 
 impl SchedulerController {
+    pub async fn enqueue_addr(&self, addr: &str) -> Result<(), SimpleError> {
+        self.task_sender.send(ScanTask::IPAddr(addr.to_owned())).await?;
+        Ok(())
+    }
     pub async fn enqueue_range(&self, ip_range: Range<u32>) -> Result<(), SimpleError> {
         self.task_sender.send(ScanTask::IPRange(ip_range)).await?;
         Ok(())
@@ -226,21 +257,27 @@ pub struct ResultHandler {
 }
 
 impl ResultHandler {
-    pub async fn save<T: Serialize>(&self, key: &str, ip_addr: &str, proxy: &str, result: T) {
+    pub async fn save<T: Serialize>(&self, key: &str, ip_addr: &str, proxy: &str, result: ScanResult<T>) {
         self.try_save(key, ip_addr, proxy, result).await.log_error_consume("result-saving");
     }
-    async fn try_save<T: Serialize>(&self, key: &str, ip_addr: &str, proxy: &str, result: T) -> Result<(), SimpleError> {
+    async fn try_save<T: Serialize>(&self, key: &str, ip_addr: &str, proxy: &str, result: ScanResult<T>) -> Result<(), SimpleError> {
         let collection = match &GLOBAL_CONFIG.scanner.save {
             ResultSavingOption::SingleCollection(collection) => self.db.collection(&collection),
             _ => panic!("Not implement"),
         };
         let key = format!("scan.{}", key);
+        let info = ScanTaskInfo {
+            proxy: proxy.to_owned(),
+            time: Utc::now().into(),
+            result,
+        };
 
         let doc = bson::doc! {
-            "addr": ip_addr,
-            "proxy": proxy,
-            "time": bson::to_bson(&bson::DateTime::from(Utc::now()))?,
-            key: bson::to_bson(&result)?,
+            "$set": {
+                "addr": ip_addr,
+                "last_update": bson::to_bson(&bson::DateTime::from(Utc::now()))?,
+                key: bson::to_bson(&info)?,
+            }
         };
         let query = bson::doc! {
             "addr": ip_addr,

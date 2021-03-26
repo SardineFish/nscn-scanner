@@ -1,7 +1,9 @@
-use tokio::{io::{AsyncRead, AsyncWrite, AsyncWriteExt}};
+use std::time::Duration;
+
+use tokio::{io::{AsyncRead, AsyncWrite, AsyncWriteExt}, time::timeout};
 use serde::{Serialize};
 
-use crate::{error::*, net_scanner::scanner::{ScanResult, ScannerResources}};
+use crate::{error::*, net_scanner::scanner::{ScanResult, ScannerResources}, proxy::socks5_proxy::Socks5Proxy};
 use crate::config::GLOBAL_CONFIG;
 
 use super::async_reader::AsyncBufReader;
@@ -15,20 +17,33 @@ impl FTPScanTask {
     pub async fn start(self) {
         let proxy_addr;
         let result = if GLOBAL_CONFIG.scanner.ftp.use_proxy {
-            let mut proxy = self.resources.proxy_pool.get_socks5_proxy(&format!("{}:{}", &self.host, self.port)).await;
-            
+            let proxy = self.resources.proxy_pool.get_socks5_proxy().await;
             proxy_addr = proxy.addr.clone();
-            Self::scan(&mut proxy).await
+            self.scan_with_proxy(proxy).await
         } else {
             panic!("Not implement");
         };
 
-        let result = ScanResult::<FTPScanResult>::from(result);
+        let result =  match result {
+            Ok(result) => {
+                log::info!("FTP is opened at {}:{}", self.host, self.port);
+                ScanResult::Ok(result)
+            },
+            Err(err) => ScanResult::Err(err.msg),
+        };
         self.resources.result_handler.save(&format!("tcp.{}.ftp", self.port), &self.host, &proxy_addr, result).await;
+    }
+    async fn scan_with_proxy(&self, proxy: Socks5Proxy) -> Result<FTPScanResult, SimpleError> {
+        let mut stream = proxy.connect(&format!("{}:{}", self.host, self.port), GLOBAL_CONFIG.scanner.ssh.timeout).await?;
+        Self::scan(&mut stream).await
     }
     async fn scan<S: AsyncRead + AsyncWrite + Unpin>(stream: &mut S) -> Result<FTPScanResult, SimpleError> {
         let mut stream = FTPStream(stream);
-        let result = match stream.read_response().await? {
+        let handshake = timeout(
+                Duration::from_secs(GLOBAL_CONFIG.scanner.ftp.timeout), 
+                stream.read_response()
+            ).await.map_err(|_| "Handshake timeout")??;
+        let result = match handshake {
             (230, text) => FTPScanResult {
                 handshake_code: 230,
                 handshake_text: text,
@@ -37,7 +52,10 @@ impl FTPScanTask {
             (220, text) => FTPScanResult {
                 handshake_code: 220,
                 handshake_text: text,
-                access: Self::try_login_anonymouse(&mut stream).await?,
+                access: timeout(
+                        Duration::from_secs(GLOBAL_CONFIG.scanner.ftp.timeout), 
+                        Self::try_login_anonymouse(&mut stream)
+                    ).await.map_err(|_| "Scan timeout")??,
             },
             (code, text) => FTPScanResult {
                 handshake_code: code,

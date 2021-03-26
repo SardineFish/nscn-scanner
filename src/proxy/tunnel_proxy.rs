@@ -51,21 +51,21 @@ impl TunnelProxyClient {
     }
 
     pub async fn verify(self) -> Result<Self, SimpleError> {
-        let stream = self.establish(&GLOBAL_CONFIG.proxy_pool.https_validate).await.log_warn("https_proxy_verify")?;
-        log::info!("Proxy {} passed tunnel test.", self.proxy_addr);
+        let stream = self.establish(&GLOBAL_CONFIG.proxy_pool.https_validate).await.log_debug("https_proxy_verify")?;
+        log::debug!("Proxy {} passed tunnel test.", self.proxy_addr);
 
         let ssl = ssl::Ssl::new(&SSL_CONTEXT)?;
-        let mut ssl_stream = async_ssl::SslStream::new(ssl, stream).log_warn("https_proxy_verify")?;
+        let mut ssl_stream = async_ssl::SslStream::new(ssl, stream).log_debug("https_proxy_verify")?;
         match timeout(tokio::time::Duration::from_secs(GLOBAL_CONFIG.scanner.https.timeout), ssl_stream.connect()).await {
             Ok(Ok(_)) => (),
-            Ok(err) => err.log_warn("https_proxy_verify")?,
-            Err(_) => Err("SSL Handshake timeout.").log_warn("https_proxy_verify")?,
+            Ok(err) => err.log_debug("https_proxy_verify")?,
+            Err(_) => Err("SSL Handshake timeout.").log_debug("https_proxy_verify")?,
         }
-        log::info!("Proxy {} ssl handshake successfully.", self.proxy_addr);
+        log::debug!("Proxy {} ssl handshake successfully.", self.proxy_addr);
 
         match ssl_stream.sync_ssl().peer_certificate() {
             Some(cert) => {
-                log::info!("Get cert though {} - {:?}", self.proxy_addr, cert);
+                log::debug!("Get cert though {} - {:?}", self.proxy_addr, cert);
                 Ok(self)
             },
             None => Err(SimpleError::new("None certificate")),

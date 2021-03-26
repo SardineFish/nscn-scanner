@@ -1,7 +1,9 @@
-use tokio::{io::{ AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt}};
+use std::time::Duration;
+
+use tokio::{io::{ AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt}, time::timeout};
 use serde::{Serialize};
 
-use crate::{error::{LogError, SimpleError}, net_scanner::scanner::{ScanResult, ScannerResources}};
+use crate::{error::{LogError, SimpleError}, net_scanner::scanner::{ScanResult, ScanTaskInfo, ScannerResources}, proxy::socks5_proxy::Socks5Proxy};
 use crate::config::GLOBAL_CONFIG;
 use super::async_reader::AsyncBufReader;
 
@@ -15,26 +17,46 @@ const SSH_PROTOCOL_VERSION: &[u8] = b"SSH-2.0-OpenSSH_for_Windows_7.7\r\n";
 
 impl SSHScanTask {
     pub async fn start(self) {
+        // log::debug!("Scan SSH for {}:{}", self.host, self.port);
+        
         let proxy_addr;
         let result = if GLOBAL_CONFIG.scanner.ssh.use_proxy {
-            let mut proxy = self.resources.proxy_pool.get_socks5_proxy(&format!("{}:{}", &self.host, self.port)).await;
-            
+            let proxy = self.resources.proxy_pool.get_socks5_proxy().await;
             proxy_addr = proxy.addr.clone();
-            Self::scan(&mut proxy).await
+            // log::info!("SSH proxy {}", proxy.addr);
+            
+            self.scan_with_proxy(&proxy).await
         } else {
             panic!("Not implement");
         };
 
-        let result = ScanResult::<SSHScannResult>::from(result);
-        self.resources.result_handler.save(&format!("tcp.{}.ftp", self.port), &self.host, &proxy_addr, result).await;
+        let result = match result {
+            Ok(result) => {
+                log::info!("SSH is opened at {}:{}", self.host, self.port);
+                ScanResult::Ok(result)
+            },
+            Err(err) => ScanResult::Err(err.msg),
+        };
+        self.resources.result_handler.save(&format!("tcp.{}.ssh", self.port), &self.host, &proxy_addr, result).await;
+
+    }
+    async fn scan_with_proxy(&self, proxy: &Socks5Proxy) -> Result<SSHScannResult, SimpleError> {
+        let mut stream = proxy.connect(&format!("{}:{}", self.host, self.port), GLOBAL_CONFIG.scanner.ssh.timeout).await?;
+        Self::scan(&mut stream).await
     }
     async fn scan<S: AsyncRead + AsyncWrite + Unpin>(stream: &mut S) -> Result<SSHScannResult, SimpleError> {
+        let timeout_duration = Duration::from_secs(GLOBAL_CONFIG.scanner.ssh.timeout);
         // let mut stream = tokio::net::TcpStream::connect((self.host.as_str(), self.port)).await?;
-        stream.write_all(SSH_PROTOCOL_VERSION).await?;
+        timeout(
+            timeout_duration,
+            stream.write_all(SSH_PROTOCOL_VERSION)
+        ).await.map_err(|_| "Timeout")??;
 
         let result = SSHScannResult {
-            protocol: ProtocolVersionMessage::read(stream).await?,
-            algorithm: AlgorithmExchange::read(stream).await?,
+            protocol: timeout(timeout_duration, ProtocolVersionMessage::read(stream))
+                .await.map_err(|_| "Timeout")??,
+            algorithm: timeout(timeout_duration, AlgorithmExchange::read(stream))
+                .await.map_err(|_| "Timeout")??,
         };
         stream.shutdown().await.log_warn_consume("ssh-scan");
         Ok(result)

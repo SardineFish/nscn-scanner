@@ -32,7 +32,7 @@ impl HttpProxyClient {
                         .send()
                         .await?;
                     if response.status() != StatusCode::OK {
-                        log::warn!("Verify {} stage {} failed {}", self.proxy_addr, idx, response.status());
+                        log::debug!("Verify {} stage {} failed {}", self.proxy_addr, idx, response.status());
                         return Ok(false);
                     }
                 },
@@ -43,19 +43,19 @@ impl HttpProxyClient {
                         .await?;
 
                     if response.status() != StatusCode::OK {
-                        log::warn!("Verify {} stage {} failed {}", self.proxy_addr, idx, response.status());
+                        log::debug!("Verify {} stage {} failed {}", self.proxy_addr, idx, response.status());
                         return Ok(false);
                     }
                     let body = response.text().await?;
                     if body != url {
-                        log::warn!("Verify {} stage {} failed {} != {}", self.proxy_addr, idx, url, body);
+                        log::debug!("Verify {} stage {} failed {} != {}", self.proxy_addr, idx, url, body);
                         return Ok(false);
                     } 
                 }
             }
         }
 
-        log::info!("Proxy {} passed all tests.", self.proxy_addr);
+        log::debug!("Proxy {} passed all tests.", self.proxy_addr);
 
         // let tunnel_proxy = TunnelProxyClient::new(&self.proxy_addr);
         // match tunnel_proxy.verify().await {

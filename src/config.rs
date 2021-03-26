@@ -22,8 +22,13 @@ pub struct ProxyPoolConfig {
     pub update_interval: u64,
     pub http_validate: Vec<ProxyVerify>,
     pub https_validate: String,
-    pub socks5_timeout: u64,
-    pub socks5_max_failure: usize,
+    pub socks5: Socks5ProxyOptions,
+}
+
+#[derive(Deserialize)]
+pub struct Socks5ProxyOptions {
+    pub fetch: String,
+    pub pool_size: usize,
 }
 
 #[derive(Deserialize)]
