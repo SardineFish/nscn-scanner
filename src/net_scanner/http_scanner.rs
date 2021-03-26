@@ -6,7 +6,7 @@ use redis::{AsyncCommands, RedisError, aio::MultiplexedConnection};
 use reqwest::{ Response, header::HeaderMap};
 use serde::{Serialize, Deserialize};
 use tokio::{sync::mpsc::{Sender, channel}, task::{self, JoinHandle}, time::sleep};
-use crate::{error::{*}, proxy::{ProxyPool, http_proxy::HttpProxyClient}, scanner::{DispatchScanTask, ScanResult, ScannerResources, Scheduler, TaskPool}};
+use crate::{error::{*}, proxy::{ProxyPool, http_proxy::HttpProxyClient}, net_scanner::scanner::{DispatchScanTask, ScanResult, ScannerResources, Scheduler, TaskPool}};
 use crate::config::GLOBAL_CONFIG;
 
 

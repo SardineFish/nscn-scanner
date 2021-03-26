@@ -1,8 +1,8 @@
 
 use tokio::{io::AsyncWriteExt, net::TcpStream, time::{timeout}};
 use openssl::{ssl};
-use crate::ssl_context::SSL_CONTEXT;
-use crate::async_ssl;
+use crate::ssl::ssl_context::SSL_CONTEXT;
+use crate::ssl::async_ssl;
 
 use crate::{error::*, http::WriteRequest};
 use crate::config::{GLOBAL_CONFIG};

@@ -1,7 +1,7 @@
 use tokio::{io::{ AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt}, net::TcpStream};
 use serde::{Serialize};
 
-use crate::{error::{LogError, SimpleError}, scanner::{DispatchScanTask, ScanResult, ScannerResources, Scheduler, TaskPool}};
+use crate::{error::{LogError, SimpleError}, net_scanner::scanner::{DispatchScanTask, ScanResult, ScannerResources, Scheduler, TaskPool}};
 use crate::config::GLOBAL_CONFIG;
 use super::async_reader::AsyncBufReader;
 
@@ -195,8 +195,8 @@ mod test {
     async fn test_ssh_scanner() {
         let kex_init = AlgorithmExchange::read(&mut &SSH_KEXINIT_DATA[..]).await.unwrap();
         let addr = GLOBAL_CONFIG.test.as_ref().and_then(|m|m.get("test-ssh")).unwrap();
-        let stream = TcpStream::connect((addr.as_str(), 22)).await.unwrap();
-        let result = SSHScanTask::scan(stream).await.unwrap();
+        let mut stream = TcpStream::connect((addr.as_str(), 22)).await.unwrap();
+        let result = SSHScanTask::scan(&mut stream).await.unwrap();
         println!("{:?}", result);
         assert_eq!(kex_init, result.algorithm);
     }

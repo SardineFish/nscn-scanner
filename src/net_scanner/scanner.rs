@@ -8,9 +8,11 @@ use serde::{Serialize};
 use tokio::{sync::mpsc::{Receiver, Sender, channel}, task::{self, JoinHandle}, time::sleep};
 use async_trait::async_trait;
 
-use crate::{error::*, http_scanner::HttpScanTask, https_scanner::HttpsScanTask, tcp_scanner::scanner::TCPScanTask};
-use crate::{http_scanner::HttpResponseData, https_scanner::HttpsResponse, proxy::ProxyPool, tcp_scanner::scanner::TCPScanResult};
+use crate::error::*;
+use super::{http_scanner::HttpScanTask, https_scanner::HttpsScanTask, tcp_scanner::scanner::TCPScanTask};
+use super::{http_scanner::HttpResponseData, https_scanner::HttpsResponse, tcp_scanner::scanner::TCPScanResult};
 use crate::config::{GLOBAL_CONFIG, ResultSavingOption};
+use crate::proxy::proxy_pool::ProxyPool;
 
 #[derive(Serialize)]
 pub struct NetScanRecord {

@@ -6,9 +6,10 @@ use redis::{AsyncCommands, RedisError, pipe};
 use tokio::{net::TcpStream, sync::mpsc::{Receiver, Sender, channel}, task::{self, JoinHandle}, time::{sleep, timeout}};
 use mongodb::{Collection, Database, bson};
 
-use crate::{async_ssl, config::GLOBAL_CONFIG, proxy::{ProxyPool, tunnel_proxy::TunnelProxyClient}, scanner::{DispatchScanTask, ScanResult, ScannerResources, Scheduler, TaskPool}};
+use crate::{config::GLOBAL_CONFIG, proxy::{ProxyPool, tunnel_proxy::TunnelProxyClient}, net_scanner::scanner::{DispatchScanTask, ScanResult, ScannerResources, Scheduler, TaskPool}};
 use crate::error::*;
-use crate::ssl_context::SSL_CONTEXT;
+use crate::ssl::ssl_context::SSL_CONTEXT;
+use crate::ssl::async_ssl;
 
 pub struct HttpsScanTask {
     addr: String,

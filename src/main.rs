@@ -1,16 +1,12 @@
 #![allow(dead_code)]
 
-mod http_scanner;
 mod error;
 mod proxy;
 mod config;
 mod address;
 mod http;
-mod ssl_context;
-mod async_ssl;
-mod https_scanner;
-mod tcp_scanner;
-mod scanner;
+mod ssl;
+mod net_scanner;
 
 #[allow(dead_code)]
 mod redis_pool;
@@ -22,7 +18,7 @@ use config::Config;
 use mongodb::Database;
 use proxy::ProxyPool;
 use config::GLOBAL_CONFIG;
-use scanner::{NetScanner, SchedulerController};
+use net_scanner::scanner::{NetScanner, SchedulerController};
 use tokio::{sync::mpsc::Sender, task, time::sleep};
 
 #[tokio::main]
