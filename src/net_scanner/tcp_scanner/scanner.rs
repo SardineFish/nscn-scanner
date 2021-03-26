@@ -1,9 +1,7 @@
-use futures::Future;
-use tokio::{sync::mpsc::Sender};
-use tokio::io::{AsyncRead, AsyncWrite};
+
 use serde::{Serialize};
 
-use crate::{error::SimpleError, net_scanner::scanner::{DispatchScanTask, ScanResult, ScannerResources, Scheduler, TaskPool}};
+use crate::{net_scanner::scanner::{ScanResult, ScannerResources, TaskPool}};
 use crate::config::GLOBAL_CONFIG;
 
 use super::{ftp::{FTPScanResult, FTPScanTask}, ssh::{SSHScanTask, SSHScannResult}};

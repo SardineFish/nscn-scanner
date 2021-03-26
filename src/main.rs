@@ -11,15 +11,13 @@ mod net_scanner;
 #[allow(dead_code)]
 mod redis_pool;
 
-use std::ops::Range;
-
 use address::{fetch_address_list};
 use config::Config;
 use mongodb::Database;
 use proxy::ProxyPool;
 use config::GLOBAL_CONFIG;
 use net_scanner::scanner::{NetScanner, SchedulerController};
-use tokio::{sync::mpsc::Sender, task, time::sleep};
+use tokio::{task, time::sleep};
 
 #[tokio::main]
 async fn main()

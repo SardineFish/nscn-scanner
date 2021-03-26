@@ -1,7 +1,7 @@
-use tokio::{io::{ AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt}, net::TcpStream};
+use tokio::{io::{ AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt}};
 use serde::{Serialize};
 
-use crate::{error::{LogError, SimpleError}, net_scanner::scanner::{DispatchScanTask, ScanResult, ScannerResources, Scheduler, TaskPool}};
+use crate::{error::{LogError, SimpleError}, net_scanner::scanner::{ScanResult, ScannerResources}};
 use crate::config::GLOBAL_CONFIG;
 use super::async_reader::AsyncBufReader;
 

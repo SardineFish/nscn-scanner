@@ -1,13 +1,8 @@
-use std::{collections::HashMap, ops::Range};
+use std::{collections::HashMap};
 
-use chrono::Utc;
-use mongodb::{Collection, Database, bson};
-use redis::{AsyncCommands, RedisError, aio::MultiplexedConnection};
 use reqwest::{ Response, header::HeaderMap};
 use serde::{Serialize, Deserialize};
-use tokio::{sync::mpsc::{Sender, channel}, task::{self, JoinHandle}, time::sleep};
-use crate::{error::{*}, proxy::{ProxyPool, http_proxy::HttpProxyClient}, net_scanner::scanner::{DispatchScanTask, ScanResult, ScannerResources, Scheduler, TaskPool}};
-use crate::config::GLOBAL_CONFIG;
+use crate::{proxy::{http_proxy::HttpProxyClient}, net_scanner::scanner::{ScanResult, ScannerResources, TaskPool}};
 
 
 #[derive(Serialize, Deserialize)]

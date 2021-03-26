@@ -1,15 +1,13 @@
-use std::{ops::Range};
-use chrono::Utc;
 use serde::{Serialize};
 use openssl::ssl::Ssl;
-use redis::{AsyncCommands, RedisError, pipe};
-use tokio::{net::TcpStream, sync::mpsc::{Receiver, Sender, channel}, task::{self, JoinHandle}, time::{sleep, timeout}};
-use mongodb::{Collection, Database, bson};
+use tokio::{net::TcpStream, task::{self, JoinHandle}, time::{timeout}};
+use mongodb::{bson};
 
-use crate::{config::GLOBAL_CONFIG, proxy::{ProxyPool, tunnel_proxy::TunnelProxyClient}, net_scanner::scanner::{DispatchScanTask, ScanResult, ScannerResources, Scheduler, TaskPool}};
+use crate::{config::GLOBAL_CONFIG, proxy::{tunnel_proxy::TunnelProxyClient}, net_scanner::scanner::{ScannerResources, TaskPool}};
 use crate::error::*;
 use crate::ssl::ssl_context::SSL_CONTEXT;
 use crate::ssl::async_ssl;
+use super::scanner::ScanResult;
 
 pub struct HttpsScanTask {
     addr: String,

@@ -1,7 +1,7 @@
-use tokio::{io::{AsyncRead, AsyncWrite, AsyncWriteExt}, sync::mpsc::Sender};
+use tokio::{io::{AsyncRead, AsyncWrite, AsyncWriteExt}};
 use serde::{Serialize};
 
-use crate::{error::*, net_scanner::scanner::{ScanResult, ScannerResources, Scheduler, TaskPool}};
+use crate::{error::*, net_scanner::scanner::{ScanResult, ScannerResources}};
 use crate::config::GLOBAL_CONFIG;
 
 use super::async_reader::AsyncBufReader;

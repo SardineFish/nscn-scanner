@@ -2,7 +2,7 @@ use std::{collections::HashMap, ops::Range};
 
 use chrono::Utc;
 use futures::{Future};
-use mongodb::{Collection, Database, bson, options::{FindOneAndUpdateOptions, UpdateOptions}};
+use mongodb::{Database, bson, options::{UpdateOptions}};
 use redis::{AsyncCommands, RedisError, pipe};
 use serde::{Serialize};
 use tokio::{sync::mpsc::{Receiver, Sender, channel}, task::{self, JoinHandle}, time::sleep};
@@ -144,7 +144,7 @@ impl TaskPool {
             let complete_sender = self.complete_sender.clone();
             task::spawn(async move {
                 future.await;
-                complete_sender.send(true).await;
+                complete_sender.send(true).await.log_error_consume("result-saving");
             });
         }
     }
@@ -170,8 +170,8 @@ impl SchedulerController {
         Ok(())
     }
     pub async fn join(self) {
-        self.join_receiver.await;
-        self.join_scheduler.await;
+        self.join_receiver.await.log_error_consume("join-task-receiver");
+        self.join_scheduler.await.log_error_consume("join-scheduler");
     }
     pub async fn clear_tasks(&self) -> Result<(), SimpleError> {
         self.task_sender.send(ScanTask::ClearTasks).await?;
