@@ -1,4 +1,4 @@
-use std::{collections::HashMap, ops::Range};
+use std::{collections::HashMap, ops::Range, time::Duration};
 
 use chrono::Utc;
 use futures::{Future};
@@ -143,6 +143,7 @@ impl Scheduler {
 }
 
 pub struct TaskPool {
+    interval_jitter: bool,
     max_tasks: usize,
     running_tasks: usize,
     complete_sender: Sender<bool>,
@@ -153,6 +154,7 @@ impl TaskPool {
         let (sender, receiver) = channel(max_tasks);
         Self {
             max_tasks,
+            interval_jitter: true,
             running_tasks: 0,
             complete_sender: sender,
             complete_receiver: receiver,
@@ -160,10 +162,18 @@ impl TaskPool {
     }
     pub async fn spawn<T>(&mut self, future: T) where T : Future + Send + 'static, T::Output: Send + 'static {
         if self.running_tasks >= self.max_tasks {
+            if self.interval_jitter {
+                self.interval_jitter = false;
+            }
+
             match self.complete_receiver.recv().await {
                 Some(_) => self.running_tasks -= 1,
                 None => panic!("Scheduler channel closed."),
             }
+        }
+        if self.interval_jitter {
+            let interval = 5.0 / (GLOBAL_CONFIG.scanner.scheduler.max_tasks as f64);
+            sleep(Duration::from_secs_f64(interval)).await;
         }
         self.running_tasks += 1;
         let complete_sender = self.complete_sender.clone();
