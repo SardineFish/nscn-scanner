@@ -1,7 +1,6 @@
 #![allow(dead_code)]
 
 mod http_scanner;
-mod scheduler;
 mod error;
 mod proxy;
 mod config;

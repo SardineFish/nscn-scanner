@@ -6,7 +6,7 @@ use redis::{AsyncCommands, RedisError, aio::MultiplexedConnection};
 use reqwest::{ Response, header::HeaderMap};
 use serde::{Serialize, Deserialize};
 use tokio::{sync::mpsc::{Sender, channel}, task::{self, JoinHandle}, time::sleep};
-use crate::{error::{*}, proxy::ProxyPool};
+use crate::{error::{*}, proxy::ProxyPool, scanner::{DispatchScanTask, ScannerResources, Scheduler, TaskPool}};
 use crate::config::GLOBAL_CONFIG;
 
 
@@ -160,15 +160,20 @@ impl HttpScanner {
     }
 }
 
-struct HttpScanTask {
+pub struct HttpScanTask {
     address: String,
-    collection: Collection,
-    complete: Sender<()>,
-    proxy_pool: ProxyPool,
+    resources: ScannerResources,
 }
 
 impl HttpScanTask {
-    async fn run(&self) {
+    pub async fn dispatch(addr: &str, resources: &ScannerResources, task_pool: &mut TaskPool) {
+        let task = HttpScanTask {
+            address: addr.to_owned(),
+            resources: resources.clone(),
+        };
+        task_pool.spawn(task.run()).await;
+    }
+    async fn run(self) {
         let result = self.scan().await;
         match result {
             Ok(_) => (),

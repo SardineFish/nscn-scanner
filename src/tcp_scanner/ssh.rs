@@ -1,31 +1,34 @@
 use tokio::io::{ AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use serde::{Serialize};
 
-use crate::error::{LogError, SimpleError};
+use crate::{error::{LogError, SimpleError}, scanner::{DispatchScanTask, ScannerResources, Scheduler, TaskPool}};
 use crate::config::GLOBAL_CONFIG;
 use super::async_reader::AsyncBufReader;
 
-struct SSHScanTask {
+pub struct SSHScanTask {
     host: String,
     port: u16,
+    resources: ScannerResources,
 }
 
 const SSH_PROTOCOL_VERSION: &[u8] = b"SSH-2.0-OpenSSH_for_Windows_7.7\r\n";
 
 impl SSHScanTask {
-    async fn scan(&self) -> Result<SSHScannResult, SimpleError> {
-        let mut stream = tokio::net::TcpStream::connect((self.host.as_str(), self.port)).await?;
+    pub async fn start(self) {
+
+    }
+    async fn scan<S: AsyncRead + AsyncWrite + Unpin>(&self, stream: &mut S) -> Result<SSHScannResult, SimpleError> {
+        // let mut stream = tokio::net::TcpStream::connect((self.host.as_str(), self.port)).await?;
         stream.write_all(SSH_PROTOCOL_VERSION).await?;
 
         let result = SSHScannResult {
-            protocol: ProtocolVersionMessage::read(&mut stream).await?,
-            algorithm: AlgorithmExchange::read(&mut stream).await?,
+            protocol: ProtocolVersionMessage::read(stream).await?,
+            algorithm: AlgorithmExchange::read(stream).await?,
         };
         stream.shutdown().await.log_warn_consume("ssh-scan");
         Ok(result)
     }
 }
-
 #[derive(Debug, Serialize)]
 pub struct SSHScannResult {
     protocol: ProtocolVersionMessage,

@@ -27,37 +27,37 @@ pub struct ProxyPoolConfig {
 }
 
 #[derive(Deserialize)]
+pub struct SchedulerOptions {
+    pub max_tasks: usize,
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+pub enum ResultSavingOption {
+    SingleCollection(String),
+    Independent{http: String, https: String, tcp: String, },
+}
+
+#[derive(Deserialize)]
 pub struct ScannerConfig {
-    pub http: HttpScannerOptions,
-    pub https: HttpsScannerOptions,
-    pub ssh: SSHScannerOptions,
-    pub ftp: FTPScannerOptions,
+    pub http: UniversalScannerOption,
+    pub https: UniversalScannerOption,
+    pub ssh: UniversalScannerOption,
+    pub ftp: UniversalScannerOption,
+    pub tcp: TCPScannerOptions,
     pub task: TaskOptions,
+    pub scheduler: SchedulerOptions,
+    pub save: ResultSavingOption,
 }
 
 #[derive(Deserialize)]
-pub struct FTPScannerOptions {
+pub struct TCPScannerOptions {
     pub enabled: bool,
-    pub use_proxy: bool,
-    pub timeout: u64,
+    pub ports: Vec<u16>,
 }
 
 #[derive(Deserialize)]
-pub struct SSHScannerOptions {
-    pub enabled: bool,
-    pub use_proxy: bool,
-    pub timeout: u64,
-}
-
-#[derive(Deserialize)]
-pub struct HttpScannerOptions {
-    pub enabled: bool,
-    pub use_proxy: bool,
-    pub timeout: u64,
-}
-
-#[derive(Deserialize)]
-pub struct HttpsScannerOptions {
+pub struct UniversalScannerOption {
     pub enabled: bool,
     pub use_proxy: bool,
     pub timeout: u64,

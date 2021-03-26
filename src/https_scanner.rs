@@ -6,7 +6,7 @@ use redis::{AsyncCommands, RedisError, pipe};
 use tokio::{net::TcpStream, sync::mpsc::{Receiver, Sender, channel}, task::{self, JoinHandle}, time::{sleep, timeout}};
 use mongodb::{Collection, Database, bson};
 
-use crate::{async_ssl, config::GLOBAL_CONFIG, http_scanner::ScanResult, proxy::{ProxyPool, tunnel_proxy::TunnelProxyClient}};
+use crate::{async_ssl, config::GLOBAL_CONFIG, http_scanner::ScanResult, proxy::{ProxyPool, tunnel_proxy::TunnelProxyClient}, scanner::{DispatchScanTask, ScannerResources, Scheduler, TaskPool}};
 use crate::error::*;
 use crate::ssl_context::SSL_CONTEXT;
 
@@ -69,7 +69,7 @@ impl HttpsScanner {
                         complete: complete_sender.clone(),
                         proxy_pool: self.proxy_pool.clone(),
                     };
-                    task.dispatch();
+                    task.run();
                     active_tasks += 1;
                 }
             }
@@ -103,14 +103,19 @@ impl HttpsScanner {
     }
 }
 
-struct HttpsScanTask {
+pub struct HttpsScanTask {
     addr: String,
-    complete: Sender<bool>,
-    collection: Collection,
-    proxy_pool: ProxyPool,
+    resources: ScannerResources,
 }
 impl HttpsScanTask {
-    fn dispatch(self) -> JoinHandle<()> {
+    pub async fn spawn(addr: &str, resources: &ScannerResources, task_pool: &mut TaskPool) {
+        let task = HttpsScanTask {
+            addr: addr.to_owned(),
+            resources: resources.clone(),
+        };
+        task_pool.spawn(task.run()).await
+    }
+    fn run(self) -> JoinHandle<()> {
         task::spawn(async move {
             let client = self.proxy_pool.get_tunnel_client().await;
             let result = self.scan(&client).await;
