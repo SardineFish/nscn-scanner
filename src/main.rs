@@ -41,7 +41,7 @@ async fn main()
         qps(db.clone()).await
     });
 
-    // try_dispatch_address(&scheduler).await;
+    try_dispatch_address(&scheduler).await;
 
     // let range = parse_ipv4_cidr("47.102.198.0/24").unwrap();
     // for ip in range {
@@ -49,20 +49,16 @@ async fn main()
     //     http_scanner.enqueue(addr.to_string().as_str()).await;
     // }
 
-    scheduler.enqueue_addr("server-lw.sardinefish.com").await.unwrap();
-
 
     scheduler.join().await;
 }
 
 async fn qps(db: Database) {
     loop {
-        let http_start = db.collection("http").estimated_document_count(None).await.unwrap();
-        let https_start = db.collection("https").estimated_document_count(None).await.unwrap();
+        let start = db.collection("scan").estimated_document_count(None).await.unwrap();
         sleep(tokio::time::Duration::from_secs(10)).await;
-        let http_end = db.collection("http").estimated_document_count(None).await.unwrap();
-        let https_end = db.collection("https").estimated_document_count(None).await.unwrap();
-        log::info!("HTTP: {}/s, HTTPS: {}/s", (http_end - http_start) / 10, (https_end - https_start) / 10);
+        let end = db.collection("scan").estimated_document_count(None).await.unwrap();
+        log::info!("Scan speed: {}ip/s", (end - start) / 10);
     }
 }
 

@@ -131,15 +131,12 @@ impl Scheduler {
     }
     async fn dispatch(&mut self, addr: &str) {
         if GLOBAL_CONFIG.scanner.http.enabled {
-            log::info!("Dispatch HTTP Scan");
             HttpScanTask::dispatch(addr, &self.resources, &mut self.task_pool).await;
         }
         if GLOBAL_CONFIG.scanner.https.enabled {
-            log::info!("Dispatch HTTPS Scan");
             HttpsScanTask::spawn(addr, &self.resources, &mut self.task_pool).await;
         }
         if GLOBAL_CONFIG.scanner.tcp.enabled {
-            log::info!("Dispatch TCP Scan");
             TCPScanTask::dispatch(addr, &self.resources, &mut self.task_pool).await;
         }
     }
