@@ -61,7 +61,7 @@ impl Socks5ProxyUpdater {
         let proxy_pool = proxy_pool.clone();
         task::spawn(async move {
             loop {
-                sleep(std::time::Duration::from_secs(10)).await;
+                sleep(std::time::Duration::from_secs(3)).await;
                 Self::validate_proxy(&proxy_pool).await.log_warn_consume("socks5-mornitor");
             }
         });
