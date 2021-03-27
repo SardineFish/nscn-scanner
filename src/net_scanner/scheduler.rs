@@ -216,12 +216,14 @@ impl TaskPool {
             {
                 let mut guard = stats.lock().await;
                 guard.task_time += (end - start).as_secs_f64();
+                guard.active_tasks -= 1;
             }
         });
         let end = Instant::now();
         {
             let mut guard = self.stats.lock().await;
             guard.spawn_time += (end - start).as_secs_f64();
+            guard.active_tasks += 1;
         }
         {
             let mut guard = self.stats.lock().await;
@@ -277,6 +279,7 @@ impl SchedulerController {
         {
             let mut guard = self.scheduler_stats.lock().await;
             mem::swap(&mut stats, &mut guard);
+            guard.active_tasks = stats.active_tasks;
         }
         stats
     }
