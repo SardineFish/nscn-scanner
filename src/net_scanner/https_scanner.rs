@@ -16,7 +16,7 @@ pub struct HttpsScanTask {
 impl HttpsScanTask {
     pub async fn spawn(addr: &str, resources: &ScannerResources, task_pool: &mut TaskPool) {
         let task = HttpsScanTask {
-            addr: format!("{}:443", addr),
+            addr: addr.to_owned(),
             resources: resources.clone(),
         };
         task_pool.spawn(task.run()).await
@@ -35,16 +35,17 @@ impl HttpsScanTask {
         })
     }
     async fn try_scan(&self, proxy_addr: &mut String) -> Result<HttpsResponse, SimpleError> {
+        let target_addr = format!("{}:443", self.addr);
         match GLOBAL_CONFIG.scanner.https.socks5 {
             Some(true) => {
                 let proxy = self.resources.proxy_pool.get_socks5_proxy().await;
-                let mut stream = proxy.connect(&self.addr, GLOBAL_CONFIG.scanner.https.timeout).await?;
+                let mut stream = proxy.connect(&target_addr, GLOBAL_CONFIG.scanner.https.timeout).await?;
                 *proxy_addr = proxy.addr;
                 self.scan(&mut stream).await
             },
             _ => {
                 let client = self.resources.proxy_pool.get_tunnel_client().await;
-                let mut stream = client.establish(&self.addr).await?;
+                let mut stream = client.establish(&target_addr).await?;
                 *proxy_addr = client.proxy_addr;
                 self.scan(&mut stream).await
             }
