@@ -5,7 +5,7 @@ use futures::{Future};
 use mongodb::{Database, bson, options::{UpdateOptions}};
 use redis::{AsyncCommands, RedisError, pipe};
 use serde::{Serialize};
-use tokio::{sync::{Mutex, mpsc::{Receiver, Sender, channel}}, task::{self, JoinHandle}, time::sleep};
+use tokio::{sync::{Mutex, mpsc::{Receiver, Sender, channel}}, task::{self, JoinHandle}, time::{sleep, timeout}};
 use async_trait::async_trait;
 
 use crate::error::*;
@@ -219,7 +219,9 @@ impl TaskPool {
         let complete_sender = self.complete_sender.clone();
         let stats = self.stats.clone();
         task::spawn(async move {
-            future.await;
+            if let Err(_) = timeout(Duration::from_secs(60), future).await {
+                log::error!("Task suspedned over 60s");
+            }
             // sleep(Duration::from_secs(5)).await;
             complete_sender.send(Instant::now()).await.log_error_consume("result-saving");
 
