@@ -191,6 +191,7 @@ impl TaskPool {
     }
     pub async fn spawn<T>(&mut self, future: T) where T : Future + Send + 'static, T::Output: Send + 'static {
         let start = Instant::now();
+        let task_start = std::time::Instant::now();
         if self.running_tasks >= self.max_tasks {
             if self.interval_jitter {
                 self.interval_jitter = false;
@@ -209,13 +210,12 @@ impl TaskPool {
         let complete_sender = self.complete_sender.clone();
         let stats = self.stats.clone();
         task::spawn(async move {
-            let start = std::time::Instant::now();
             future.await;
             complete_sender.send(true).await.log_error_consume("result-saving");
             let end = std::time::Instant::now();
             {
                 let mut guard = stats.lock().await;
-                guard.task_time += (end - start).as_secs_f64();
+                guard.task_time += (end - task_start).as_secs_f64();
                 guard.active_tasks -= 1;
             }
         });
