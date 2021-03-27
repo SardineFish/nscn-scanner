@@ -3,7 +3,7 @@ use std::time::Duration;
 use tokio::{io::{ AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt}, time::timeout};
 use serde::{Serialize};
 
-use crate::{error::{LogError, SimpleError}, net_scanner::scanner::{ScanResult, ScanTaskInfo, ScannerResources}, proxy::socks5_proxy::Socks5Proxy};
+use crate::{error::{LogError, SimpleError}, net_scanner::scanner::{ScanResult, ScannerResources}, proxy::socks5_proxy::Socks5Proxy};
 use crate::config::GLOBAL_CONFIG;
 use super::async_reader::AsyncBufReader;
 
@@ -77,6 +77,7 @@ struct ProtocolVersionMessage {
 impl ProtocolVersionMessage {
     pub async fn read<R: AsyncRead + Unpin>(stream: &mut R) -> Result<Self, SimpleError> {
         let mut reader = AsyncBufReader::new(stream);
+        reader.limit(8192);
         let ignore_line = true;
         while ignore_line
         {
@@ -176,6 +177,10 @@ impl AlgorithmExchange {
         let packet_length = stream.read_u32().await? as usize;
         let padding_length = stream.read_u8().await? as usize;
         let payload_length = packet_length - padding_length - 1;
+        if packet_length > 35000 {
+            log::warn!("SSH packet size excceed limit");
+            Err("Packet size excceed limit")?
+        }
         let mut buf: Vec<u8> = vec![0; packet_length - 1];
         stream.read_exact(&mut buf).await?;
         buf.resize(payload_length, 0);

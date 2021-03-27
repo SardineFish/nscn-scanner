@@ -9,6 +9,7 @@ pub struct AsyncBufReader<'r, R> {
     stream: &'r mut R,
     buf: BytesMut,
     buf_offset: usize,
+    size_limit: usize,
 }
 
 impl<'r, R: AsyncRead + Unpin> AsyncBufReader<'r, R> {
@@ -17,7 +18,11 @@ impl<'r, R: AsyncRead + Unpin> AsyncBufReader<'r, R> {
             stream,
             buf: BytesMut::with_capacity(1024),
             buf_offset: 0,
+            size_limit: 0,
         }
+    }
+    pub fn limit(&mut self, size_limit: usize) {
+        self.size_limit = size_limit;
     }
     pub async fn read_line_crlf(&mut self) -> Result<&[u8], SimpleError> {
         let mut scan_start = self.buf_offset;
@@ -36,6 +41,9 @@ impl<'r, R: AsyncRead + Unpin> AsyncBufReader<'r, R> {
                 scan_start = i;
             }
             let size = self.stream.read_buf(&mut self.buf).await?;
+            if self.size_limit > 0 && self.buf.len() > self.size_limit {
+                Err("Buffer size excceed limit.")?
+            }
             // println!("read {}", size);
             if size == 0 {
                 return Ok(&self.buf[0..0])

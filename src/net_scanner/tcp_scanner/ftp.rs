@@ -97,6 +97,7 @@ impl<'s, S: AsyncRead + Unpin> FTPStream<'s, S> {
     
     async fn read_response(&mut self) -> Result<(i16, String), SimpleError> {
         let mut reader = AsyncBufReader::new(&mut self.0);
+        reader.limit(8192);
 
         let line = reader.read_line_crlf().await?;
         if line.len() < 6 {
