@@ -62,12 +62,14 @@ impl Socks5ProxyUpdater {
         task::spawn(async move {
             loop {
                 sleep(std::time::Duration::from_secs(3)).await;
-                Self::validate_proxy(&proxy_pool).await.log_warn_consume("socks5-mornitor");
+                let proxy = proxy_pool.get_socks5_proxy().await;
+                if let Err(err) = Self::validate_proxy(&proxy).await {
+                    log::warn!("Proxy {} validate failed: {}", proxy.addr, err.msg);
+                }
             }
         });
     }
-    async fn validate_proxy(proxy_pool: &ProxyPool) -> Result<(), SimpleError> {
-        let proxy = proxy_pool.get_socks5_proxy().await;
+    async fn validate_proxy(proxy: &Socks5Proxy) -> Result<(), SimpleError> {
         let mut stream = proxy.connect(&GLOBAL_CONFIG.proxy_pool.socks5.validate, 3).await?;
         stream.write_all(b"\r\n\r\n").await?;
         let mut buf = String::new();

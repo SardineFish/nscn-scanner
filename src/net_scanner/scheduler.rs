@@ -120,6 +120,8 @@ pub struct SchedulerStats {
     pub ftp_tasks: usize,
     pub ssh_time: f64,
     pub ssh_tasks: usize,
+    pub task_time: f64,
+    pub spawn_time: f64,
 }
 
 pub struct Scheduler {
@@ -203,9 +205,16 @@ impl TaskPool {
         }
         self.running_tasks += 1;
         let complete_sender = self.complete_sender.clone();
+        let stats = self.stats.clone();
         task::spawn(async move {
+            let start = std::time::Instant::now();
             future.await;
             complete_sender.send(true).await.log_error_consume("result-saving");
+            let end = std::time::Instant::now();
+            {
+                let mut guard = stats.lock().await;
+                guard.task_time += (end - start).as_secs_f64();
+            }
         });
         {
             let mut guard = self.stats.lock().await;
