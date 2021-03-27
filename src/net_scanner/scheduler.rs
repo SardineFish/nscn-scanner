@@ -1,4 +1,4 @@
-use std::{collections::HashMap, mem, ops::Range, sync::Arc, time::Duration};
+use std::{collections::HashMap, mem, ops::Range, sync::Arc, time::{Duration, Instant}};
 
 use chrono::Utc;
 use futures::{Future};
@@ -122,6 +122,7 @@ pub struct SchedulerStats {
     pub ssh_tasks: usize,
     pub task_time: f64,
     pub spawn_time: f64,
+    pub active_tasks: usize,
 }
 
 pub struct Scheduler {
@@ -189,6 +190,7 @@ impl TaskPool {
         }
     }
     pub async fn spawn<T>(&mut self, future: T) where T : Future + Send + 'static, T::Output: Send + 'static {
+        let start = Instant::now();
         if self.running_tasks >= self.max_tasks {
             if self.interval_jitter {
                 self.interval_jitter = false;
@@ -216,6 +218,11 @@ impl TaskPool {
                 guard.task_time += (end - start).as_secs_f64();
             }
         });
+        let end = Instant::now();
+        {
+            let mut guard = self.stats.lock().await;
+            guard.spawn_time += (end - start).as_secs_f64();
+        }
         {
             let mut guard = self.stats.lock().await;
             guard.dispatched_tasks += 1;
