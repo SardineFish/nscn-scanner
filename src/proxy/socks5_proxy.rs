@@ -24,12 +24,15 @@ pub struct Socks5Proxy {
 impl Socks5Proxy {
     pub async fn connect(&self, target: &str, timeout: u64) -> Result<Socks5Stream<TcpStream>, SimpleError> {
         let socket = tokio::time::timeout(
-            Duration::from_secs(timeout), 
-            TcpStream::connect(&self.addr)
+            Duration::from_secs(timeout),
+            self.try_connect(target)
         ).await.map_err(|_|"Connect timeout")??;
 
-        let stream = Socks5Stream::connect_with_socket(socket, target).await?;
-        Ok(stream)
+        Ok(socket)
+    }
+    async fn try_connect(&self, target: &str) -> Result<Socks5Stream<TcpStream>, SimpleError> {
+        let stream = TcpStream::connect(&self.addr).await?;
+        Ok(Socks5Stream::connect_with_socket(stream, target).await?)
     }
 }
 
