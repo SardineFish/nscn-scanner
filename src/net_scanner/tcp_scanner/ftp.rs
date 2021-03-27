@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use tokio::{io::{AsyncRead, AsyncWrite, AsyncWriteExt}, time::timeout};
 use serde::{Serialize};
@@ -15,6 +15,7 @@ pub struct FTPScanTask {
 }
 impl FTPScanTask {
     pub async fn start(self) {
+        let start = Instant::now();
         let proxy_addr;
         let result = if GLOBAL_CONFIG.scanner.ftp.use_proxy {
             let proxy = self.resources.proxy_pool.get_socks5_proxy().await;
@@ -31,6 +32,12 @@ impl FTPScanTask {
             },
             Err(err) => ScanResult::Err(err.msg),
         };
+        let end = Instant::now();
+        {
+            let mut guard = self.resources.stats.lock().await;
+            guard.ftp_time += (end - start).as_secs_f64();
+            guard.ftp_tasks += 1;
+        }
         self.resources.result_handler.save(&format!("tcp.{}.ftp", self.port), &self.host, &proxy_addr, result).await;
     }
     async fn scan_with_proxy(&self, proxy: Socks5Proxy) -> Result<FTPScanResult, SimpleError> {

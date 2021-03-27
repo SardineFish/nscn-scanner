@@ -1,4 +1,4 @@
-use std::{collections::HashMap};
+use std::{collections::HashMap, time::Instant};
 
 use reqwest::{ Response, header::HeaderMap};
 use serde::{Serialize, Deserialize};
@@ -53,11 +53,19 @@ impl HttpScanTask {
         task_pool.spawn(task.run()).await;
     }
     async fn run(self) {
+        let start = Instant::now();
         let mut client = match GLOBAL_CONFIG.scanner.http.socks5 {
             Some(true) => self.resources.proxy_pool.get_socks5_client().await,
             _ => self.resources.proxy_pool.get_http_client().await,
         };
         let result = self.scan(&mut client).await;
+        let end = Instant::now();
+        let duration = end - start;
+        {
+            let mut guard = self.resources.stats.lock().await;
+            guard.http_time += duration.as_secs_f64();
+            guard.http_tasks += 1;
+        }
         self.resources.result_handler.save("http", &self.address, &client.proxy_addr, result).await;
     }
     async fn scan(&self, client: &mut HttpProxyClient) -> ScanResult<HttpResponseData> {

@@ -7,6 +7,7 @@ mod address;
 mod http;
 mod ssl;
 mod net_scanner;
+mod utils;
 
 #[allow(dead_code)]
 mod redis_pool;
@@ -60,6 +61,14 @@ fn stats(scheduler: &SchedulerController) {
             sleep(tokio::time::Duration::from_secs_f64(interval)).await;
             let stats = scheduler.reset_stats().await;
             log::info!("Scan speed: {:.2} IP/s, {:.2} Tasks/s", stats.dispatched_addrs as f64 / interval, stats.dispatched_tasks as f64 / interval);
+            if stats.http_tasks > 0 {
+                log::info!("HTTP {}s, HTTPS {}s, FTP {}s, SSH {}s",
+                    stats.http_time / stats.http_tasks as f64, 
+                    stats.https_time / stats.https_tasks as f64, 
+                    stats.ftp_time / stats.ftp_tasks as f64, 
+                    stats.ssh_time / stats.ssh_tasks as f64, 
+                );
+            }
         }
     });
 }

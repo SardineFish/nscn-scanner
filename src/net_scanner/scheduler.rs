@@ -89,7 +89,8 @@ impl NetScanner {
                 proxy_pool: proxy_pool.clone(),
                 result_handler: ResultHandler {
                     db: db.clone(),
-                }
+                },
+                stats: Arc::new(Mutex::new(SchedulerStats::default())),
             }
         }
     }
@@ -98,7 +99,7 @@ impl NetScanner {
         let scheduler = Scheduler::new(&self.redis_url, &self.resources)?;
         let redis = redis::Client::open(self.redis_url.as_str())?;
         let controller = SchedulerController {
-            scheduler_stats: scheduler.stats.clone(),
+            scheduler_stats: scheduler.resources.stats.clone(),
             join_receiver: Some(task::spawn(SchedulerController::receive_task(redis, receiver))),
             join_scheduler: Some(task::spawn(scheduler.start())),
             task_sender: sender,
@@ -108,26 +109,31 @@ impl NetScanner {
 }
 
 #[derive(Clone, Default)]
-pub struct SchedulerStats {
+pub struct SchedulerStats { 
     pub dispatched_addrs: usize,
     pub dispatched_tasks: usize,
+    pub http_time: f64,
+    pub http_tasks: usize,
+    pub https_time: f64,
+    pub https_tasks: usize,
+    pub ftp_time: f64,
+    pub ftp_tasks: usize,
+    pub ssh_time: f64,
+    pub ssh_tasks: usize,
 }
 
 pub struct Scheduler {
     redis: redis::Client,
     task_pool: TaskPool,
     resources: ScannerResources,
-    stats: Arc<Mutex<SchedulerStats>>,
     // pub proxy_pool: ProxyPool,
 }
 impl Scheduler {
     fn new(redis_url: &str, resources: &ScannerResources) -> Result<Self, SimpleError> {
-        let stats = Arc::new(Mutex::new(SchedulerStats::default()));
         Ok(Self {
             redis: redis::Client::open(redis_url)?,
-            task_pool: TaskPool::new(GLOBAL_CONFIG.scanner.scheduler.max_tasks, &stats),
+            task_pool: TaskPool::new(GLOBAL_CONFIG.scanner.scheduler.max_tasks, &resources.stats),
             resources: resources.clone(),
-            stats: stats
         })
     }
     async fn start(mut self) {
@@ -154,7 +160,7 @@ impl Scheduler {
             TCPScanTask::dispatch(addr, &self.resources, &mut self.task_pool).await;
         }
         {
-            let mut guard = self.stats.lock().await;
+            let mut guard = self.resources.stats.lock().await;
             guard.dispatched_addrs += 1;
         }
     }
@@ -310,6 +316,7 @@ impl Clone for SchedulerController {
 pub struct ScannerResources {
     pub proxy_pool: ProxyPool,
     pub result_handler: ResultHandler,
+    pub stats: Arc<Mutex<SchedulerStats>>,
 }
 
 #[derive(Clone)]

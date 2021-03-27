@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use tokio::{io::{ AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt}, time::timeout};
 use serde::{Serialize};
@@ -18,7 +18,7 @@ const SSH_PROTOCOL_VERSION: &[u8] = b"SSH-2.0-OpenSSH_for_Windows_7.7\r\n";
 impl SSHScanTask {
     pub async fn start(self) {
         // log::debug!("Scan SSH for {}:{}", self.host, self.port);
-        
+        let start = Instant::now();
         let proxy_addr;
         let result = if GLOBAL_CONFIG.scanner.ssh.use_proxy {
             let proxy = self.resources.proxy_pool.get_socks5_proxy().await;
@@ -37,6 +37,14 @@ impl SSHScanTask {
             },
             Err(err) => ScanResult::Err(err.msg),
         };
+
+        let end = Instant::now();
+        {
+            let mut guard = self.resources.stats.lock().await;
+            guard.ssh_time += (end - start).as_secs_f64();
+            guard.ssh_tasks += 1;
+        }
+
         self.resources.result_handler.save(&format!("tcp.{}.ssh", self.port), &self.host, &proxy_addr, result).await;
 
     }

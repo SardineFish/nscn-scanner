@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use serde::{Serialize};
 use openssl::ssl::Ssl;
@@ -25,6 +25,7 @@ impl HttpsScanTask {
     }
     fn run(self) -> JoinHandle<()> {
         task::spawn(async move {
+            let start = Instant::now();
             let mut proxy_addr = String::new();
             let result = match self.try_scan(&mut proxy_addr).await {
                 Ok(data) => {
@@ -33,6 +34,12 @@ impl HttpsScanTask {
                 },
                 Err(err) => ScanResult::Err(err.msg), //log::warn!("HTTPS scan failed at {}: {}", self.addr, err.msg),
             };
+            let end = Instant::now();
+            {
+                let mut guard = self.resources.stats.lock().await;
+                guard.https_time += (end - start).as_secs_f64();
+                guard.https_tasks += 1;
+            }
             self.resources.result_handler.save("https", &self.addr, &proxy_addr, result).await;
         })
     }
