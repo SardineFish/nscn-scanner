@@ -23,25 +23,23 @@ impl HttpsScanTask {
         };
         task_pool.spawn(task.run()).await
     }
-    fn run(self) -> JoinHandle<()> {
-        task::spawn(async move {
-            let start = Instant::now();
-            let mut proxy_addr = String::new();
-            let result = match self.try_scan(&mut proxy_addr).await {
-                Ok(data) => {
-                    log::info!("HTTPS is enabled at {}", self.addr);
-                    ScanResult::Ok(data)
-                },
-                Err(err) => ScanResult::Err(err.msg), //log::warn!("HTTPS scan failed at {}: {}", self.addr, err.msg),
-            };
-            self.resources.result_handler.save("https", &self.addr, &proxy_addr, result).await;
-            let end = Instant::now();
-            {
-                let mut guard = self.resources.stats.lock().await;
-                guard.https_time += (end - start).as_secs_f64();
-                guard.https_tasks += 1;
-            }
-        })
+    async fn run(self) {
+        let start = Instant::now();
+        let mut proxy_addr = String::new();
+        let result = match self.try_scan(&mut proxy_addr).await {
+            Ok(data) => {
+                log::info!("HTTPS is enabled at {}", self.addr);
+                ScanResult::Ok(data)
+            },
+            Err(err) => ScanResult::Err(err.msg), //log::warn!("HTTPS scan failed at {}: {}", self.addr, err.msg),
+        };
+        self.resources.result_handler.save("https", &self.addr, &proxy_addr, result).await;
+        let end = Instant::now();
+        {
+            let mut guard = self.resources.stats.lock().await;
+            guard.https_time += (end - start).as_secs_f64();
+            guard.https_tasks += 1;
+        }
     }
     async fn try_scan(&self, proxy_addr: &mut String) -> Result<HttpsResponse, SimpleError> {
         let target_addr = format!("{}:443", self.addr);
