@@ -123,6 +123,7 @@ pub struct SchedulerStats {
     pub task_time: f64,
     pub spawn_time: f64,
     pub active_tasks: usize,
+    pub send_time: f64,
 }
 
 pub struct Scheduler {
@@ -173,8 +174,8 @@ pub struct TaskPool {
     interval_jitter: bool,
     max_tasks: usize,
     running_tasks: usize,
-    complete_sender: Sender<bool>,
-    complete_receiver: Receiver<bool>,
+    complete_sender: Sender<Instant>,
+    complete_receiver: Receiver<Instant>,
     stats: Arc<Mutex<SchedulerStats>>,
 }
 impl TaskPool {
@@ -198,7 +199,14 @@ impl TaskPool {
             }
 
             match self.complete_receiver.recv().await {
-                Some(_) => self.running_tasks -= 1,
+                Some(t) => {
+                    let end = Instant::now();
+                    {
+                        let mut guard = self.stats.lock().await;
+                        guard.send_time += (end - t).as_secs_f64();
+                    }
+                    self.running_tasks -= 1
+                },
                 None => panic!("Scheduler channel closed."),
             }
         }
@@ -211,7 +219,7 @@ impl TaskPool {
         let stats = self.stats.clone();
         task::spawn(async move {
             future.await;
-            complete_sender.send(true).await.log_error_consume("result-saving");
+            complete_sender.send(Instant::now()).await.log_error_consume("result-saving");
             let end = std::time::Instant::now();
             {
                 let mut guard = stats.lock().await;
