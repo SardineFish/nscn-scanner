@@ -62,11 +62,11 @@ fn stats(scheduler: &SchedulerController) {
             let stats = scheduler.reset_stats().await;
             log::info!("Scan speed: {:.2} IP/s, {:.2} Tasks/s", stats.dispatched_addrs as f64 / interval, stats.dispatched_tasks as f64 / interval);
             if stats.http_tasks > 0 {
-                log::info!("HTTP {}s, HTTPS {}s, FTP {}s, SSH {}s",
-                    stats.http_time / stats.http_tasks as f64, 
-                    stats.https_time / stats.https_tasks as f64, 
-                    stats.ftp_time / stats.ftp_tasks as f64, 
-                    stats.ssh_time / stats.ssh_tasks as f64, 
+                log::info!("HTTP {} avg. {}s, HTTPS {} avg. {}s, FTP {} avg. {}s, SSH {} avg. {}s",
+                    stats.http_tasks, stats.http_time / stats.http_tasks as f64, 
+                    stats.https_tasks, stats.https_time / stats.https_tasks as f64, 
+                    stats.ftp_tasks, stats.ftp_time / stats.ftp_tasks as f64, 
+                    stats.ssh_tasks, stats.ssh_time / stats.ssh_tasks as f64, 
                 );
             }
         }
