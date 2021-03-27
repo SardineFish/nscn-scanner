@@ -218,12 +218,16 @@ impl TaskPool {
         let complete_sender = self.complete_sender.clone();
         let stats = self.stats.clone();
         task::spawn(async move {
-            future.await;
-            complete_sender.send(Instant::now()).await.log_error_consume("result-saving");
             let end = std::time::Instant::now();
             {
                 let mut guard = stats.lock().await;
                 guard.task_time += (end - task_start).as_secs_f64();
+            }
+            future.await;
+            // sleep(Duration::from_secs(5)).await;
+            complete_sender.send(Instant::now()).await.log_error_consume("result-saving");
+            {
+                let mut guard = stats.lock().await;
                 guard.active_tasks -= 1;
             }
         });
