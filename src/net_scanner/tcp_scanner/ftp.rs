@@ -34,7 +34,7 @@ impl FTPScanTask {
         self.resources.result_handler.save(&format!("tcp.{}.ftp", self.port), &self.host, &proxy_addr, result).await;
     }
     async fn scan_with_proxy(&self, proxy: Socks5Proxy) -> Result<FTPScanResult, SimpleError> {
-        let mut stream = proxy.connect(&format!("{}:{}", self.host, self.port), GLOBAL_CONFIG.scanner.ssh.timeout).await?;
+        let mut stream = proxy.connect(&format!("{}:{}", self.host, self.port), GLOBAL_CONFIG.scanner.ftp.timeout).await?;
         Self::scan(&mut stream).await
     }
     async fn scan<S: AsyncRead + AsyncWrite + Unpin>(stream: &mut S) -> Result<FTPScanResult, SimpleError> {
@@ -52,10 +52,13 @@ impl FTPScanTask {
             (220, text) => FTPScanResult {
                 handshake_code: 220,
                 handshake_text: text,
-                access: timeout(
+                access: match timeout(
                         Duration::from_secs(GLOBAL_CONFIG.scanner.ftp.timeout), 
                         Self::try_login_anonymouse(&mut stream)
-                    ).await.map_err(|_| "Scan timeout")??,
+                    ).await {
+                        Ok(Ok(access)) => access,
+                        _ => FTPAccess::Login,
+                    }
             },
             (code, text) => FTPScanResult {
                 handshake_code: code,

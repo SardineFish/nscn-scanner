@@ -1,3 +1,6 @@
+use std::time::Duration;
+
+use futures::TryFutureExt;
 use serde::{Serialize};
 use openssl::ssl::Ssl;
 use tokio::{io::{AsyncRead, AsyncWrite}, task::{self, JoinHandle}, time::{timeout}};
@@ -53,18 +56,19 @@ impl HttpsScanTask {
     }
     async fn scan<S: AsyncRead + AsyncWrite + Unpin>(&self, stream: S) -> Result<HttpsResponse, SimpleError> {
         // log::info!("Scan HTTPS {} through {}", self.addr, client.proxy_addr);
-        
-        let stream = self.connect_ssl(stream).await?;
+        timeout(Duration::from_secs(GLOBAL_CONFIG.scanner.https.timeout), async move {
+            let stream = self.connect_ssl(stream).await?;
 
-        match stream.sync_ssl().peer_certificate() {
-            None => Err("No certificate")?,
-            Some(cert) => {
-                let pem = cert.to_pem()?;
-                Ok(HttpsResponse {
-                    cert: std::str::from_utf8(&pem[..])?.to_owned(),
-                })
+            match stream.sync_ssl().peer_certificate() {
+                None => Err("No certificate")?,
+                Some(cert) => {
+                    let pem = cert.to_pem()?;
+                    Ok(HttpsResponse {
+                        cert: std::str::from_utf8(&pem[..])?.to_owned(),
+                    })
+                }
             }
-        }
+        }).await.map_err(|_|"Timeout")?
     }
     async fn connect_ssl<S: AsyncRead + AsyncWrite + Unpin>(&self, stream: S) -> Result<async_ssl::SslStream<S>, SimpleError> {
         // log::info!("ESTABLISHED");
