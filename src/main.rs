@@ -13,10 +13,9 @@ mod redis_pool;
 
 use address::{fetch_address_list};
 use config::Config;
-use mongodb::Database;
 use proxy::ProxyPool;
 use config::GLOBAL_CONFIG;
-use net_scanner::scanner::{NetScanner, SchedulerController};
+use net_scanner::scheduler::{NetScanner, SchedulerController};
 use tokio::{task, time::sleep};
 
 #[tokio::main]
@@ -37,9 +36,8 @@ async fn main()
     let scheduler = scanner.start().unwrap();
     
     // http_scanner.enqueue("47.102.198.236").await.unwrap();
-    task::spawn(async move {
-        qps(db.clone()).await
-    });
+    
+    stats(&scheduler);
 
     try_dispatch_address(&scheduler).await;
 
@@ -49,20 +47,22 @@ async fn main()
     //     http_scanner.enqueue(addr.to_string().as_str()).await;
     // }
 
-
     scheduler.join().await;
 }
 
-async fn qps(db: Database) {
-    loop {
-        let start = db.collection("scan").estimated_document_count(None).await.unwrap();
-        sleep(tokio::time::Duration::from_secs(10)).await;
-        let end = db.collection("scan").estimated_document_count(None).await.unwrap();
-        log::info!("Scan speed: {}ip/s", (end - start) / 10);
-    }
+fn stats(scheduler: &SchedulerController) {
+    let scheduler = scheduler.clone();
+    task::spawn(async move {
+        loop {
+            sleep(tokio::time::Duration::from_secs(10)).await;
+            let stats = scheduler.reset_stats().await;
+            log::info!("Scan speed: {}ip/s", stats.dispatched_tasks / 10);
+        }
+    });
 }
 
 async fn try_dispatch_address(scheduler: &SchedulerController) {
+    let scheduler = scheduler.clone();
     if !GLOBAL_CONFIG.scanner.task.fetch {
         return;
     }

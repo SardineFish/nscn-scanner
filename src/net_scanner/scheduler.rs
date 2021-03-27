@@ -1,11 +1,11 @@
-use std::{collections::HashMap, ops::Range, time::Duration};
+use std::{collections::HashMap, mem, ops::Range, sync::Arc, time::Duration};
 
 use chrono::Utc;
 use futures::{Future};
 use mongodb::{Database, bson, options::{UpdateOptions}};
 use redis::{AsyncCommands, RedisError, pipe};
 use serde::{Serialize};
-use tokio::{sync::mpsc::{Receiver, Sender, channel}, task::{self, JoinHandle}, time::sleep};
+use tokio::{sync::{Mutex, mpsc::{Receiver, Sender, channel}}, task::{self, JoinHandle}, time::sleep};
 use async_trait::async_trait;
 
 use crate::error::*;
@@ -76,8 +76,8 @@ impl<T> ScanTaskInfo<T> {
 
 pub struct NetScanner {
     redis_url: String,
-    proxy_pool: ProxyPool,
-    db: Database
+    db: Database,
+    resources: ScannerResources,
 }
 
 impl NetScanner {
@@ -85,37 +85,52 @@ impl NetScanner {
         Self {
             redis_url: redis_url.to_owned(),
             db: db.clone(),
-            proxy_pool: proxy_pool.clone(),
+            resources: ScannerResources {
+                proxy_pool: proxy_pool.clone(),
+                result_handler: ResultHandler {
+                    db: db.clone(),
+                }
+            }
         }
     }
     pub fn start(&self) -> Result<SchedulerController, SimpleError> {
         let (sender, receiver) = channel(64);
-        let scheduler = Scheduler {
-            redis: redis::Client::open(self.redis_url.as_str())?,
-            task_pool: TaskPool::new(GLOBAL_CONFIG.scanner.scheduler.max_tasks),
-            resources: ScannerResources {
-                proxy_pool: self.proxy_pool.clone(),
-                result_handler: ResultHandler {
-                    db: self.db.clone(),
-                }
-            }
-        };
+        let scheduler = Scheduler::new(&self.redis_url, &self.resources)?;
+        let redis = redis::Client::open(self.redis_url.as_str())?;
         let controller = SchedulerController {
-            join_receiver: task::spawn(SchedulerController::receive_task(redis::Client::open(self.redis_url.as_str())?, receiver)),
-            join_scheduler: task::spawn(scheduler.start()),
-            task_sender: sender
+            scheduler_stats: scheduler.stats.clone(),
+            join_receiver: Some(task::spawn(SchedulerController::receive_task(redis, receiver))),
+            join_scheduler: Some(task::spawn(scheduler.start())),
+            task_sender: sender,
         };
         Ok(controller)
     }
+}
+
+#[derive(Clone, Default)]
+pub struct SchedulerStats {
+    pub dispatched_tasks: usize,
 }
 
 pub struct Scheduler {
     redis: redis::Client,
     task_pool: TaskPool,
     resources: ScannerResources,
+    stats: Arc<Mutex<SchedulerStats>>,
     // pub proxy_pool: ProxyPool,
 }
 impl Scheduler {
+    fn new(redis_url: &str, resources: &ScannerResources) -> Result<Self, SimpleError> {
+        let stats = Arc::new(Mutex::new(SchedulerStats {
+                dispatched_tasks: 0
+            }));
+        Ok(Self {
+            redis: redis::Client::open(redis_url)?,
+            task_pool: TaskPool::new(GLOBAL_CONFIG.scanner.scheduler.max_tasks, &stats),
+            resources: resources.clone(),
+            stats: stats
+        })
+    }
     async fn start(mut self) {
         let mut redis = self.redis.get_async_connection().await.unwrap();
         loop {
@@ -148,9 +163,10 @@ pub struct TaskPool {
     running_tasks: usize,
     complete_sender: Sender<bool>,
     complete_receiver: Receiver<bool>,
+    stats: Arc<Mutex<SchedulerStats>>,
 }
 impl TaskPool {
-    pub fn new(max_tasks: usize) -> Self {
+    pub fn new(max_tasks: usize, stats: &Arc<Mutex<SchedulerStats>>,) -> Self {
         let (sender, receiver) = channel(max_tasks);
         Self {
             max_tasks,
@@ -158,6 +174,7 @@ impl TaskPool {
             running_tasks: 0,
             complete_sender: sender,
             complete_receiver: receiver,
+            stats: stats.clone(),
         }
     }
     pub async fn spawn<T>(&mut self, future: T) where T : Future + Send + 'static, T::Output: Send + 'static {
@@ -181,8 +198,13 @@ impl TaskPool {
             future.await;
             complete_sender.send(true).await.log_error_consume("result-saving");
         });
+        {
+            let mut guard = self.stats.lock().await;
+            guard.dispatched_tasks += 1;
+        }
     }
 }
+
 
 enum ScanTask {
     ClearTasks,
@@ -193,9 +215,10 @@ enum ScanTask {
 const KEY_TASK_QUEUE: &str = "task_queue";
 
 pub struct SchedulerController {
-    join_scheduler: JoinHandle<()>,
-    join_receiver: JoinHandle<()>,
+    join_scheduler: Option<JoinHandle<()>>,
+    join_receiver: Option<JoinHandle<()>>,
     task_sender: Sender<ScanTask>,
+    scheduler_stats: Arc<Mutex<SchedulerStats>>,
 }
 
 impl SchedulerController {
@@ -208,12 +231,29 @@ impl SchedulerController {
         Ok(())
     }
     pub async fn join(self) {
-        self.join_receiver.await.log_error_consume("join-task-receiver");
-        self.join_scheduler.await.log_error_consume("join-scheduler");
+        match (self.join_receiver, self.join_scheduler) {
+            (Some(join_receiver), Some(join_scheduler)) => {
+                join_receiver.await.log_error_consume("join-task-receiver");
+                join_scheduler.await.log_error_consume("join-scheduler");
+            },
+            _ => log::warn!("Cannot join from copies of controller."),
+        }
     }
     pub async fn clear_tasks(&self) -> Result<(), SimpleError> {
         self.task_sender.send(ScanTask::ClearTasks).await?;
         Ok(())
+    }
+    pub async fn stats(&self) -> SchedulerStats {
+        let guard = self.scheduler_stats.lock().await;
+        guard.clone()
+    }
+    pub async fn reset_stats(&self) -> SchedulerStats {
+        let mut stats = SchedulerStats::default();
+        {
+            let mut guard = self.scheduler_stats.lock().await;
+            mem::swap(&mut stats, &mut guard);
+        }
+        stats
     }
 
     async fn receive_task(redis: redis::Client, mut receiver: Receiver<ScanTask>) {
@@ -249,6 +289,17 @@ impl SchedulerController {
         }
         pipe.query_async(redis).await?;
         Ok(())
+    }
+}
+
+impl Clone for SchedulerController {
+    fn clone(&self) -> Self {
+        Self {
+            join_receiver: None,
+            join_scheduler: None,
+            scheduler_stats: self.scheduler_stats.clone(),
+            task_sender: self.task_sender.clone(),
+        }
     }
 }
 

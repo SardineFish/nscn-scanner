@@ -2,7 +2,7 @@ use std::{collections::HashMap};
 
 use reqwest::{ Response, header::HeaderMap};
 use serde::{Serialize, Deserialize};
-use crate::{proxy::{http_proxy::HttpProxyClient}, net_scanner::scanner::{ScanResult, ScannerResources, TaskPool}};
+use crate::{proxy::{http_proxy::HttpProxyClient}, net_scanner::scheduler::{ScanResult, ScannerResources, TaskPool}};
 use crate::config::GLOBAL_CONFIG;
 
 #[derive(Serialize, Deserialize)]

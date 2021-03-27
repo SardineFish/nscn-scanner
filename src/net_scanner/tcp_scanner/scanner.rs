@@ -1,7 +1,7 @@
 
 use serde::{Serialize};
 
-use crate::{net_scanner::scanner::{ScanTaskInfo, ScannerResources, TaskPool}};
+use crate::{net_scanner::scheduler::{ScanTaskInfo, ScannerResources, TaskPool}};
 use crate::config::GLOBAL_CONFIG;
 
 use super::{ftp::{FTPScanResult, FTPScanTask}, ssh::{SSHScanTask, SSHScannResult}};

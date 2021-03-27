@@ -3,11 +3,11 @@ use openssl::ssl::Ssl;
 use tokio::{io::{AsyncRead, AsyncWrite}, task::{self, JoinHandle}, time::{timeout}};
 use mongodb::{bson};
 
-use crate::{config::GLOBAL_CONFIG, net_scanner::scanner::{ScannerResources, TaskPool}};
+use crate::{config::GLOBAL_CONFIG, net_scanner::scheduler::{ScannerResources, TaskPool}};
 use crate::error::*;
 use crate::ssl::ssl_context::SSL_CONTEXT;
 use crate::ssl::async_ssl;
-use super::scanner::ScanResult;
+use super::scheduler::ScanResult;
 
 pub struct HttpsScanTask {
     addr: String,
