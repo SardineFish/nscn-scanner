@@ -190,7 +190,7 @@ impl TaskPool {
             stats: stats.clone(),
         }
     }
-    pub async fn spawn<T>(&mut self, future: T) where T : Future + Send + 'static, T::Output: Send + 'static {
+    pub async fn spawn<T>(&mut self, name: &'static str, future: T) where T : Future + Send + 'static, T::Output: Send + 'static {
         let start = Instant::now();
         if self.running_tasks >= self.max_tasks {
             if self.interval_jitter {
@@ -220,7 +220,7 @@ impl TaskPool {
         let stats = self.stats.clone();
         task::spawn(async move {
             if let Err(_) = timeout(Duration::from_secs(60), future).await {
-                log::error!("Task suspedned over 60s");
+                log::error!("Task {} suspedned over 60s", name);
             }
             // sleep(Duration::from_secs(5)).await;
             complete_sender.send(Instant::now()).await.log_error_consume("result-saving");

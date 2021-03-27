@@ -50,7 +50,7 @@ impl HttpScanTask {
             address: addr.to_owned(),
             resources: resources.clone(),
         };
-        task_pool.spawn(task.run()).await;
+        task_pool.spawn("http", task.run()).await;
     }
     async fn run(self) {
         let start = Instant::now();

@@ -21,7 +21,7 @@ impl HttpsScanTask {
             addr: addr.to_owned(),
             resources: resources.clone(),
         };
-        task_pool.spawn(task.run()).await
+        task_pool.spawn("https", task.run()).await
     }
     async fn run(self) {
         let start = Instant::now();

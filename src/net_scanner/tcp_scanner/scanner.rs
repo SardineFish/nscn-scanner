@@ -22,7 +22,7 @@ impl TCPScanTask {
                             port: *port,
                             resources: resources.clone()
                         };
-                        task_pool.spawn(task.start()).await;
+                        task_pool.spawn("ftp", task.start()).await;
                     },
                     "ssh" if GLOBAL_CONFIG.scanner.ssh.enabled => {
                         let task = SSHScanTask {
@@ -30,7 +30,7 @@ impl TCPScanTask {
                             port: *port,
                             resources: resources.clone()
                         };
-                        task_pool.spawn(task.start()).await;
+                        task_pool.spawn("ssh", task.start()).await;
                     },
                     _ => (),
                 }
