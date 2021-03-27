@@ -1,6 +1,5 @@
 use std::time::Duration;
 
-use futures::TryFutureExt;
 use serde::{Serialize};
 use openssl::ssl::Ssl;
 use tokio::{io::{AsyncRead, AsyncWrite}, task::{self, JoinHandle}, time::{timeout}};

@@ -11,6 +11,8 @@ mod net_scanner;
 #[allow(dead_code)]
 mod redis_pool;
 
+use std::time::Duration;
+
 use address::{fetch_address_list};
 use config::Config;
 use proxy::ProxyPool;
@@ -74,26 +76,31 @@ async fn try_dispatch_address(scheduler: &SchedulerController) {
         }
     }
     for url in &GLOBAL_CONFIG.scanner.task.addr_src {
-        match fetch_address_list(&url).await {
-            Err(err) => log::error!("Failed to fetch address list from '{}': {}", url, err.msg),
-            Ok(list) => {
-                let mut count = 0;
-                log::info!("Get {} address range from {}", list.len(), url);
-                for range in list {
-                    count += range.len();
-                    // for ip in range {
-                    //     let addr = std::net::Ipv4Addr::from(ip);
-                    //     // log::info!("{}", addr.to_string());
-                    //     if let Err(err) = scanner.enqueue(addr.to_string().as_str()).await {
-                    //         log::error!("Failed to enqueue http scan task: {}", err.msg);
-                    //     }
-                    // }
-                    if let Err(err) = scheduler.enqueue_range(range).await {
-                        log::error!("Failed to enqueue http scan task: {}", err.msg);
-                    }
+        let list = loop {
+            match fetch_address_list(&url).await {
+                Err(err) => log::error!("Failed to fetch address list from '{}': {}", url, err.msg),
+                Ok(list) => {
+                    break list
                 }
-                log::info!("Enqueue {} address", count);
+            };
+            sleep(Duration::from_secs(1)).await;
+        };
+        
+        let mut count = 0;
+        log::info!("Get {} address range from {}", list.len(), url);
+        for range in list {
+            count += range.len();
+            // for ip in range {
+            //     let addr = std::net::Ipv4Addr::from(ip);
+            //     // log::info!("{}", addr.to_string());
+            //     if let Err(err) = scanner.enqueue(addr.to_string().as_str()).await {
+            //         log::error!("Failed to enqueue http scan task: {}", err.msg);
+            //     }
+            // }
+            if let Err(err) = scheduler.enqueue_range(range).await {
+                log::error!("Failed to enqueue http scan task: {}", err.msg);
             }
         }
+        log::info!("Enqueue {} address", count);
     }
 }

@@ -1,4 +1,4 @@
-use std::{ops::Range, str::FromStr};
+use std::{ops::Range, str::FromStr, time::Duration};
 
 use reqwest::Proxy;
 
@@ -27,6 +27,7 @@ pub async fn fetch_address_list(url: &str) -> Result<Vec<Range<u32>>, SimpleErro
         builder = builder.proxy(Proxy::http(proxy_addr)?)
             .proxy(Proxy::https(proxy_addr)?);
     }
+    builder = builder.timeout(Duration::from_secs(3));
 
     let client = builder.build()?;
     let body = client.get(url).send().await?.text().await?;
