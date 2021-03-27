@@ -2,11 +2,13 @@ use std::{sync::Arc, time};
 use serde::{Deserialize};
 
 use chrono::{DateTime, NaiveDateTime, TimeZone, Utc};
-use tokio::{net::TcpStream, sync::{Mutex}, task, time::{sleep}};
+use tokio::{io::{AsyncReadExt, AsyncWriteExt}, net::TcpStream, sync::{Mutex}, task, time::{sleep}};
 use tokio_socks::tcp::Socks5Stream;
 use tokio::time::Duration;
 use crate::error::*;
 use crate::config::GLOBAL_CONFIG;
+
+use super::ProxyPool;
 
 pub(super) struct Socks5ProxyInfo {
     pub addr: String,
@@ -54,6 +56,23 @@ impl Socks5ProxyUpdater {
         for _ in 0..GLOBAL_CONFIG.proxy_pool.socks5.pool_size {
             self.fetch_new_proxy().await;
         }
+    }
+    pub fn start_monitor(proxy_pool: &ProxyPool) {
+        let proxy_pool = proxy_pool.clone();
+        task::spawn(async move {
+            loop {
+                sleep(std::time::Duration::from_secs(10)).await;
+                Self::validate_proxy(&proxy_pool).await.log_warn_consume("socks5-mornitor");
+            }
+        });
+    }
+    async fn validate_proxy(proxy_pool: &ProxyPool) -> Result<(), SimpleError> {
+        let proxy = proxy_pool.get_socks5_proxy().await;
+        let mut stream = proxy.connect(&GLOBAL_CONFIG.proxy_pool.socks5.validate, 3).await?;
+        stream.write_all(b"\r\n\r\n").await?;
+        let mut buf = String::new();
+        stream.read_to_string(&mut buf).await?;
+        Ok(())
     }
     fn manage_expire(self, addr: String, deadline: DateTime<Utc>) {
         task::spawn(async move {

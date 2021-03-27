@@ -59,6 +59,9 @@ impl HttpScanTask {
             _ => self.resources.proxy_pool.get_http_client().await,
         };
         let result = self.scan(&mut client).await;
+        self.resources.result_handler.save("http", &self.address, &client.proxy_addr, result).await;
+
+        
         let end = Instant::now();
         let duration = end - start;
         {
@@ -66,7 +69,6 @@ impl HttpScanTask {
             guard.http_time += duration.as_secs_f64();
             guard.http_tasks += 1;
         }
-        self.resources.result_handler.save("http", &self.address, &client.proxy_addr, result).await;
     }
     async fn scan(&self, client: &mut HttpProxyClient) -> ScanResult<HttpResponseData> {
         // let proxy_addr = self.proxy_pool.get().await;

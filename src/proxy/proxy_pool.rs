@@ -41,7 +41,8 @@ impl ProxyPool {
                 pool: self.socks5_proxy_pool.clone(),
             };
             socks5_updater.start().await;
-            }
+            Socks5ProxyUpdater::start_monitor(self);
+        }
         if GLOBAL_CONFIG.proxy_pool.update_http_proxy {
             if let Err(err) = updater.try_update().await {
                 log::error!("Failed to initially update proxy pool: {}", err.msg);

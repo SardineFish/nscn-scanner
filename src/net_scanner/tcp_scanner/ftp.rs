@@ -32,13 +32,14 @@ impl FTPScanTask {
             },
             Err(err) => ScanResult::Err(err.msg),
         };
+        self.resources.result_handler.save(&format!("tcp.{}.ftp", self.port), &self.host, &proxy_addr, result).await;
+        
         let end = Instant::now();
         {
             let mut guard = self.resources.stats.lock().await;
             guard.ftp_time += (end - start).as_secs_f64();
             guard.ftp_tasks += 1;
         }
-        self.resources.result_handler.save(&format!("tcp.{}.ftp", self.port), &self.host, &proxy_addr, result).await;
     }
     async fn scan_with_proxy(&self, proxy: Socks5Proxy) -> Result<FTPScanResult, SimpleError> {
         let mut stream = proxy.connect(&format!("{}:{}", self.host, self.port), GLOBAL_CONFIG.scanner.ftp.timeout).await?;

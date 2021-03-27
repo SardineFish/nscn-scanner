@@ -1,4 +1,4 @@
-use std::{collections::HashMap, mem, ops::Range, sync::Arc, time::Duration};
+use std::{collections::HashMap, mem, ops::Range, sync::Arc, task::Poll, time::Duration};
 
 use chrono::Utc;
 use futures::{Future};
@@ -176,7 +176,7 @@ pub struct TaskPool {
 }
 impl TaskPool {
     pub fn new(max_tasks: usize, stats: &Arc<Mutex<SchedulerStats>>,) -> Self {
-        let (sender, receiver) = channel(max_tasks);
+        let (sender, receiver) = channel(max_tasks * 2);
         Self {
             max_tasks,
             interval_jitter: true,

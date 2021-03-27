@@ -38,15 +38,16 @@ impl SSHScanTask {
             Err(err) => ScanResult::Err(err.msg),
         };
 
+        self.resources.result_handler.save(&format!("tcp.{}.ssh", self.port), &self.host, &proxy_addr, result).await;
+
+        
+
         let end = Instant::now();
         {
             let mut guard = self.resources.stats.lock().await;
             guard.ssh_time += (end - start).as_secs_f64();
             guard.ssh_tasks += 1;
         }
-
-        self.resources.result_handler.save(&format!("tcp.{}.ssh", self.port), &self.host, &proxy_addr, result).await;
-
     }
     async fn scan_with_proxy(&self, proxy: &Socks5Proxy) -> Result<SSHScannResult, SimpleError> {
         let mut stream = proxy.connect(&format!("{}:{}", self.host, self.port), GLOBAL_CONFIG.scanner.ssh.timeout).await?;
