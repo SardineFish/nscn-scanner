@@ -176,7 +176,7 @@ impl AlgorithmExchange {
         let packet_length = stream.read_u32().await? as usize;
         let padding_length = stream.read_u8().await? as usize;
         let payload_length = packet_length - padding_length - 1;
-        if packet_length > 35000 {
+        if packet_length > 35000 || payload_length > 35000 {
             log::warn!("SSH packet size excceed limit");
             Err("Packet size excceed limit")?
         }
