@@ -1,8 +1,8 @@
-use std::time::{Duration, Instant};
+use std::time::{Duration};
 
 use serde::{Serialize};
 use openssl::ssl::Ssl;
-use tokio::{io::{AsyncRead, AsyncWrite}, task::{self, JoinHandle}, time::{timeout}};
+use tokio::{io::{AsyncRead, AsyncWrite}, time::{timeout}};
 use mongodb::{bson};
 
 use crate::{config::GLOBAL_CONFIG, net_scanner::scheduler::{ScannerResources, TaskPool}};
@@ -24,7 +24,6 @@ impl HttpsScanTask {
         task_pool.spawn("https", task.run()).await
     }
     async fn run(self) {
-        let start = Instant::now();
         let mut proxy_addr = String::new();
         let result = match self.try_scan(&mut proxy_addr).await {
             Ok(data) => {
@@ -34,12 +33,6 @@ impl HttpsScanTask {
             Err(err) => ScanResult::Err(err.msg), //log::warn!("HTTPS scan failed at {}: {}", self.addr, err.msg),
         };
         self.resources.result_handler.save("https", &self.addr, &proxy_addr, result).await;
-        let end = Instant::now();
-        {
-            let mut guard = self.resources.stats.lock().await;
-            guard.https_time += (end - start).as_secs_f64();
-            guard.https_tasks += 1;
-        }
     }
     async fn try_scan(&self, proxy_addr: &mut String) -> Result<HttpsResponse, SimpleError> {
         let target_addr = format!("{}:443", self.addr);

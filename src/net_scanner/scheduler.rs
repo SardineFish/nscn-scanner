@@ -1,4 +1,4 @@
-use std::{collections::HashMap, mem, ops::Range, sync::Arc, time::{Duration, Instant}};
+use std::{collections::HashMap, mem, ops::Range, sync::Arc, time::{Duration}};
 
 use chrono::Utc;
 use futures::{Future};
@@ -112,18 +112,18 @@ impl NetScanner {
 pub struct SchedulerStats { 
     pub dispatched_addrs: usize,
     pub dispatched_tasks: usize,
-    pub http_time: f64,
-    pub http_tasks: usize,
-    pub https_time: f64,
-    pub https_tasks: usize,
-    pub ftp_time: f64,
-    pub ftp_tasks: usize,
-    pub ssh_time: f64,
-    pub ssh_tasks: usize,
-    pub task_time: f64,
-    pub spawn_time: f64,
-    pub active_tasks: usize,
-    pub send_time: f64,
+    // pub http_time: f64,
+    // pub http_tasks: usize,
+    // pub https_time: f64,
+    // pub https_tasks: usize,
+    // pub ftp_time: f64,
+    // pub ftp_tasks: usize,
+    // pub ssh_time: f64,
+    // pub ssh_tasks: usize,
+    // pub task_time: f64,
+    // pub spawn_time: f64,
+    // pub active_tasks: usize,
+    // pub send_time: f64,
 }
 
 pub struct Scheduler {
@@ -174,8 +174,8 @@ pub struct TaskPool {
     interval_jitter: bool,
     max_tasks: usize,
     running_tasks: usize,
-    complete_sender: Sender<Instant>,
-    complete_receiver: Receiver<Instant>,
+    complete_sender: Sender<()>,
+    complete_receiver: Receiver<()>,
     stats: Arc<Mutex<SchedulerStats>>,
 }
 impl TaskPool {
@@ -191,19 +191,13 @@ impl TaskPool {
         }
     }
     pub async fn spawn<T>(&mut self, name: &'static str, future: T) where T : Future + Send + 'static, T::Output: Send + 'static {
-        let start = Instant::now();
         if self.running_tasks >= self.max_tasks {
             if self.interval_jitter {
                 self.interval_jitter = false;
             }
 
             match self.complete_receiver.recv().await {
-                Some(t) => {
-                    let end = Instant::now();
-                    {
-                        let mut guard = self.stats.lock().await;
-                        guard.send_time += (end - t).as_secs_f64();
-                    }
+                Some(_) => {
                     self.running_tasks -= 1
                 },
                 None => panic!("Scheduler channel closed."),
@@ -214,31 +208,15 @@ impl TaskPool {
             sleep(Duration::from_secs_f64(interval)).await;
         }
         
-        let task_start = std::time::Instant::now();
         self.running_tasks += 1;
         let complete_sender = self.complete_sender.clone();
-        let stats = self.stats.clone();
         task::spawn(async move {
             if let Err(_) = timeout(Duration::from_secs(60), future).await {
                 log::error!("Task {} suspedned over 60s", name);
             }
             // sleep(Duration::from_secs(5)).await;
-            complete_sender.send(Instant::now()).await.log_error_consume("result-saving");
-
-
-            let end = std::time::Instant::now();
-            {
-                let mut guard = stats.lock().await;
-                guard.active_tasks -= 1;
-                guard.task_time += (end - task_start).as_secs_f64();
-            }
+            complete_sender.send(()).await.log_error_consume("result-saving");
         });
-        let end = Instant::now();
-        {
-            let mut guard = self.stats.lock().await;
-            guard.spawn_time += (end - start).as_secs_f64();
-            guard.active_tasks += 1;
-        }
         {
             let mut guard = self.stats.lock().await;
             guard.dispatched_tasks += 1;
@@ -293,7 +271,6 @@ impl SchedulerController {
         {
             let mut guard = self.scheduler_stats.lock().await;
             mem::swap(&mut stats, &mut guard);
-            guard.active_tasks = stats.active_tasks;
         }
         stats
     }
