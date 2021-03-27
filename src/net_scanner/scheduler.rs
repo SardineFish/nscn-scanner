@@ -192,7 +192,6 @@ impl TaskPool {
     }
     pub async fn spawn<T>(&mut self, future: T) where T : Future + Send + 'static, T::Output: Send + 'static {
         let start = Instant::now();
-        let task_start = std::time::Instant::now();
         if self.running_tasks >= self.max_tasks {
             if self.interval_jitter {
                 self.interval_jitter = false;
@@ -214,6 +213,8 @@ impl TaskPool {
             let interval = 5.0 / (GLOBAL_CONFIG.scanner.scheduler.max_tasks as f64);
             sleep(Duration::from_secs_f64(interval)).await;
         }
+        
+        let task_start = std::time::Instant::now();
         self.running_tasks += 1;
         let complete_sender = self.complete_sender.clone();
         let stats = self.stats.clone();
