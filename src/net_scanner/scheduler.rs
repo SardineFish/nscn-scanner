@@ -109,6 +109,7 @@ impl NetScanner {
 
 #[derive(Clone, Default)]
 pub struct SchedulerStats {
+    pub dispatched_addrs: usize,
     pub dispatched_tasks: usize,
 }
 
@@ -121,9 +122,7 @@ pub struct Scheduler {
 }
 impl Scheduler {
     fn new(redis_url: &str, resources: &ScannerResources) -> Result<Self, SimpleError> {
-        let stats = Arc::new(Mutex::new(SchedulerStats {
-                dispatched_tasks: 0
-            }));
+        let stats = Arc::new(Mutex::new(SchedulerStats::default()));
         Ok(Self {
             redis: redis::Client::open(redis_url)?,
             task_pool: TaskPool::new(GLOBAL_CONFIG.scanner.scheduler.max_tasks, &stats),
@@ -153,6 +152,10 @@ impl Scheduler {
         }
         if GLOBAL_CONFIG.scanner.tcp.enabled {
             TCPScanTask::dispatch(addr, &self.resources, &mut self.task_pool).await;
+        }
+        {
+            let mut guard = self.stats.lock().await;
+            guard.dispatched_addrs += 1;
         }
     }
 }

@@ -52,11 +52,12 @@ async fn main()
 
 fn stats(scheduler: &SchedulerController) {
     let scheduler = scheduler.clone();
+    let interval = 10.0;
     task::spawn(async move {
         loop {
-            sleep(tokio::time::Duration::from_secs(10)).await;
+            sleep(tokio::time::Duration::from_secs_f64(interval)).await;
             let stats = scheduler.reset_stats().await;
-            log::info!("Scan speed: {}ip/s", stats.dispatched_tasks / 10);
+            log::info!("Scan speed: {:.2} IP/s, {:.2} Tasks/s", stats.dispatched_addrs as f64 / interval, stats.dispatched_tasks as f64 / interval);
         }
     });
 }
