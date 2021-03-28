@@ -100,16 +100,16 @@ async fn try_dispatch_address(scheduler: &SchedulerController) {
         
         let mut count = 0;
         log::info!("Get {} address range from {}", list.len(), url);
-        for range in list {
+        for ip_cidr in list {
+            let range = match address::parse_ipv4_cidr(&ip_cidr) {
+                Err(err) => {
+                    log::error!("{}", err.msg);
+                    continue;
+                },
+                Ok(range) => range,
+            };
             count += range.len();
-            // for ip in range {
-            //     let addr = std::net::Ipv4Addr::from(ip);
-            //     // log::info!("{}", addr.to_string());
-            //     if let Err(err) = scanner.enqueue(addr.to_string().as_str()).await {
-            //         log::error!("Failed to enqueue http scan task: {}", err.msg);
-            //     }
-            // }
-            if let Err(err) = scheduler.enqueue_range(range).await {
+            if let Err(err) = scheduler.enqueue_addr_range(&ip_cidr).await {
                 log::error!("Failed to enqueue http scan task: {}", err.msg);
             }
         }

@@ -1,4 +1,4 @@
-use std::{collections::HashMap, mem, ops::Range, sync::Arc, time::{Duration}};
+use std::{collections::HashMap, mem, net::Ipv4Addr, sync::Arc, time::{Duration}};
 
 use chrono::Utc;
 use futures::{Future};
@@ -142,14 +142,51 @@ impl Scheduler {
     }
     async fn start(mut self) {
         let mut redis = self.redis.get_async_connection().await.unwrap();
+        self.recover_tasks().await;
         loop {
-            let result: Result<(String, String), RedisError> = redis.brpop(KEY_TASK_QUEUE, 0).await;
+            let result: Result<String, RedisError> = redis.brpoplpush(KEY_TASK_QUEUE, KEY_RUNNING_TASKS, 0).await;
+            let ip_cidr = match result {
+                Err(err) => {
+                    log::error!("Failed to pop https scanning task: {}", err);
+                    sleep(Duration::from_secs(3)).await;
+                    continue;
+                },
+                Ok(ip_cidr) => ip_cidr,
+            };
+            self.dispatch_addrs(&ip_cidr).await;
+            let result: Result<usize, RedisError> = redis.lrem(KEY_RUNNING_TASKS, 1, &ip_cidr).await;
             match result {
-                Err(err) if err.is_timeout() => (),
-                Err(err) => log::error!("Failed to pop https scanning task: {}", err),
-                Ok((_, addr)) => {
-                    self.dispatch(&addr).await
+                Ok(1) => (),
+                Ok(n) => log::error!("Failed to remove running tasks: Unexpected return {}", n),
+                Err(err) => log::error!("Failed to remove running task: {}", err),
+            };
+            
+        }
+    }
+    async fn recover_tasks(&mut self) {
+        let mut redis = self.redis.get_async_connection().await.unwrap();
+        loop {
+            let result: Result<Option<String>, RedisError> = redis.rpoplpush(KEY_RUNNING_TASKS, KEY_TASK_QUEUE).await;
+            match result {
+                Ok(Some(addr_cidr)) => log::warn!("Recovered unfinished task {}", addr_cidr),
+                Ok(None) => break,
+                Err(err) => {
+                    log::error!("Failed to fetch task from redis: {}", err);
+                    sleep(Duration::from_secs(3)).await;
                 }
+            }
+        }
+    }
+    async fn dispatch_addrs(&mut self, cidr: &str) {
+        match crate::address::parse_ipv4_cidr(cidr) {
+            Err(err) => log::error!("Failed to parse CIDR ip range: {}", err.msg),
+            Ok(range) => {
+                // log::info!("Scanning {} with {} IPs", cidr, range.len());
+                for ip_32 in range {
+                    let addr = Ipv4Addr::from(ip_32).to_string();
+                    self.dispatch(&addr).await;
+                }
+                // log::info!("Address {} completed.", ip_cidr);
             }
         }
     }
@@ -227,11 +264,12 @@ impl TaskPool {
 
 enum ScanTask {
     ClearTasks,
-    IPRange(Range<u32>),
-    IPAddr(String),
+    // IPRange(Range<u32>),
+    IPCIDR(String),
 }
 
 const KEY_TASK_QUEUE: &str = "task_queue";
+const KEY_RUNNING_TASKS: &str = "running_tasks";
 
 pub struct SchedulerController {
     join_scheduler: Option<JoinHandle<()>>,
@@ -241,12 +279,16 @@ pub struct SchedulerController {
 }
 
 impl SchedulerController {
-    pub async fn enqueue_addr(&self, addr: &str) -> Result<(), SimpleError> {
-        self.task_sender.send(ScanTask::IPAddr(addr.to_owned())).await?;
-        Ok(())
-    }
-    pub async fn enqueue_range(&self, ip_range: Range<u32>) -> Result<(), SimpleError> {
-        self.task_sender.send(ScanTask::IPRange(ip_range)).await?;
+    // pub async fn enqueue_addr(&self, addr: &str) -> Result<(), SimpleError> {
+    //     self.task_sender.send(ScanTask::IPCIDR(addr.to_owned())).await?;
+    //     Ok(())
+    // }
+    // pub async fn enqueue_range(&self, ip_range: Range<u32>) -> Result<(), SimpleError> {
+    //     self.task_sender.send(ScanTask::IPRange(ip_range)).await?;
+    //     Ok(())
+    // }
+    pub async fn enqueue_addr_range(&self, cidr_addr: &str) -> Result<(), SimpleError> {
+        self.task_sender.send(ScanTask::IPCIDR(cidr_addr.to_owned())).await?;
         Ok(())
     }
     pub async fn join(self) {
@@ -279,11 +321,7 @@ impl SchedulerController {
         let mut redis = redis.get_async_connection().await.unwrap();
         while let Some(task) = receiver.recv().await {
             match task {
-                ScanTask::IPRange(range) => match Self::try_enqueue_tasks(&mut redis, range).await {
-                    Ok(_) => (),
-                    err => err.log_error("task-receiver").unwrap(),
-                },
-                ScanTask::IPAddr(addr) => 
+                ScanTask::IPCIDR(addr) => 
                     pipe().lpush(KEY_TASK_QUEUE, addr).ignore()
                     .query_async::<_, ()>(&mut redis)
                     .await
@@ -296,18 +334,6 @@ impl SchedulerController {
             }
             
         }
-    }
-    async fn try_enqueue_tasks(redis: &mut redis::aio::Connection, range: Range<u32>) -> Result<(), SimpleError> {
-        while redis.llen::<'_, _, i64>(KEY_TASK_QUEUE).await? > 5_000_000 {
-            sleep(tokio::time::Duration::from_secs(60)).await;
-        }
-        let mut pipe = pipe();
-        for ip in range {
-            let addr = std::net::Ipv4Addr::from(ip).to_string();
-            pipe.lpush(KEY_TASK_QUEUE, &addr).ignore();
-        }
-        pipe.query_async(redis).await?;
-        Ok(())
     }
 }
 
