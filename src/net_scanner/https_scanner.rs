@@ -9,7 +9,7 @@ use crate::{config::GLOBAL_CONFIG, net_scanner::scheduler::{ScannerResources, Ta
 use crate::error::*;
 use crate::ssl::ssl_context::SSL_CONTEXT;
 use crate::ssl::async_ssl;
-use super::scheduler::ScanResult;
+use super::result_handler::ScanResult;
 
 pub struct HttpsScanTask {
     addr: String,

@@ -3,8 +3,9 @@ use std::time::{Duration};
 use tokio::{io::{ AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt}, time::timeout};
 use serde::{Serialize};
 
-use crate::{error::{LogError, SimpleError}, net_scanner::scheduler::{ScanResult, ScannerResources}, proxy::socks5_proxy::Socks5Proxy};
+use crate::{error::{LogError, SimpleError}, net_scanner::scheduler::{ScannerResources}, proxy::socks5_proxy::Socks5Proxy};
 use crate::config::GLOBAL_CONFIG;
+use super::super::result_handler::ScanResult;
 use super::async_reader::AsyncBufReader;
 
 pub struct SSHScanTask {
