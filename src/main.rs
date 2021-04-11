@@ -22,7 +22,7 @@ use mongodb::{Database, bson::doc};
 use proxy::ProxyPool;
 use config::GLOBAL_CONFIG;
 use net_scanner::scheduler::{NetScanner, SchedulerController};
-use service_analyse::{scheduler::ServiceAnalyseScheduler, web::WebServiceAnalyser};
+use service_analyse::{scheduler::ServiceAnalyseScheduler};
 use tokio::{task, time::sleep};
 use futures::stream::StreamExt;
 

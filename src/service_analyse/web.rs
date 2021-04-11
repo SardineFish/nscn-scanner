@@ -1,13 +1,9 @@
 use std::{collections::HashMap, sync::Arc};
 
-use either::Either;
-use redis::acl::Rule;
 use regex::Regex;
 use serde::{Deserialize};
-use crate::{config::GLOBAL_CONFIG, net_scanner::{http_scanner::HttpResponseData, result_handler::{NetScanResultSet, ScanResult}}};
+use crate::{net_scanner::{http_scanner::HttpResponseData, result_handler::{NetScanResultSet, ScanResult}}};
 use crate::error::*;
-
-use super::ServiceInfo;
 
 #[derive(Deserialize)]
 struct WebServicePattern {
@@ -87,7 +83,7 @@ impl WappanalyserPattern {
     fn analyse(&self, data: &str) -> Option<String> {
         match (self.version, self.regex.captures(data)) {
             (Some(version_cap), Some(cap)) => cap.get(version_cap as usize).map(|m| m.as_str().to_owned()),
-            (None, Some(cap)) => Some("".to_owned()),
+            (None, Some(_)) => Some("".to_owned()),
             _ => None,
         }
     }

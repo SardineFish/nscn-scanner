@@ -1,8 +1,7 @@
 use std::{collections::HashMap, sync::Arc};
 use bson::doc;
 use serde::{Serialize, Deserialize};
-use mongodb::{Collection, Database, bson};
-use redis::AsyncCommands;
+use mongodb::{Database, bson};
 use tokio::{sync::Mutex, task::{self, JoinHandle}};
 use chrono::Utc;
 
