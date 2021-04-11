@@ -13,6 +13,7 @@ pub struct Config {
     pub redis: String,
     pub proxy_pool: ProxyPoolConfig,
     pub scanner: ScannerConfig,
+    pub analyser: ServiceAnalyserOptions,
     pub test: Option<HashMap<String, String>>,
 }
 
@@ -77,6 +78,18 @@ pub struct TaskOptions {
     pub clear_old_tasks: bool,
     pub addr_src: Vec<String>,
     pub proxy: Option<String>,
+}
+
+#[derive(Deserialize)]
+pub struct ServiceAnalyserOptions {
+    pub rules: ServiceAnalyserRules,
+    pub scheduler: SchedulerOptions,
+    pub save: String,
+}
+
+#[derive(Deserialize)]
+pub struct ServiceAnalyserRules {
+    pub wappanalyser: String,
 }
 
 #[derive(Deserialize)]

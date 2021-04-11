@@ -9,9 +9,9 @@ use super::result_handler::ScanResult;
 
 #[derive(Serialize, Deserialize)]
 pub struct HttpResponseData {
-    status: i32,
-    headers: HashMap<String, Vec<String>>,
-    body: String,
+    pub status: i32,
+    pub headers: HashMap<String, Vec<String>>,
+    pub body: String,
 }
 
 impl HttpResponseData {

@@ -1,6 +1,6 @@
 use std::time::{Duration};
 
-use serde::{Serialize};
+use serde::{Serialize, Deserialize};
 use openssl::ssl::Ssl;
 use tokio::{io::{AsyncRead, AsyncWrite}, time::{timeout}};
 use mongodb::{bson};
@@ -79,7 +79,7 @@ impl HttpsScanTask {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 struct HttpsScanRecord {
     address: String,
     proxy: String,
@@ -87,7 +87,7 @@ struct HttpsScanRecord {
     result: ScanResult<HttpsResponse>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct HttpsResponse {
     cert: String,
 }

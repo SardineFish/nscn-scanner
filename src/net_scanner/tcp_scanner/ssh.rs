@@ -1,7 +1,7 @@
 use std::time::{Duration};
 
 use tokio::{io::{ AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt}, time::timeout};
-use serde::{Serialize};
+use serde::{Serialize, Deserialize};
 
 use crate::{error::{LogError, SimpleError}, net_scanner::scheduler::{ScannerResources}, proxy::socks5_proxy::Socks5Proxy};
 use crate::config::GLOBAL_CONFIG;
@@ -62,13 +62,13 @@ impl SSHScanTask {
         Ok(result)
     }
 }
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct SSHScannResult {
     protocol: ProtocolVersionMessage,
     algorithm: AlgorithmExchange,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 struct ProtocolVersionMessage {
     version: String,
     software: String,
@@ -124,7 +124,7 @@ impl ProtocolVersionMessage {
     }
 }
 
-#[derive(Debug, Serialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
 struct AlgorithmExchange {
     kex: Vec<String>,
     host_key: Vec<String>,

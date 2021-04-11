@@ -1,7 +1,7 @@
 use std::time::{Duration};
 
 use tokio::{io::{AsyncRead, AsyncWrite, AsyncWriteExt}, time::timeout};
-use serde::{Serialize};
+use serde::{Serialize, Deserialize};
 
 use crate::{error::*, net_scanner::scheduler::{ScannerResources}, proxy::socks5_proxy::Socks5Proxy};
 use crate::config::GLOBAL_CONFIG;
@@ -142,14 +142,14 @@ impl<'s, S: AsyncRead + AsyncWrite + Unpin> FTPStream<'s, S> {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct FTPScanResult {
     pub handshake_code: i16,
     pub handshake_text: String,
     pub access: FTPAccess,
 }
 
-#[derive(Serialize, PartialEq, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Debug)]
 pub enum FTPAccess {
     Failed,
     Login,

@@ -8,6 +8,8 @@ mod http;
 mod ssl;
 mod net_scanner;
 mod utils;
+mod service_analyse;
+mod scheduler;
 
 #[allow(dead_code)]
 mod redis_pool;

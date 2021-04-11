@@ -2,21 +2,21 @@ use std::collections::HashMap;
 
 use chrono::Utc;
 use mongodb::{Database, bson, options::UpdateOptions};
-use serde::Serialize;
+use serde::{Serialize, Deserialize};
 
 use crate::config::{GLOBAL_CONFIG, ResultSavingOption};
 use crate::error::*;
 
 use super::{http_scanner::HttpResponseData, https_scanner::HttpsResponse, tcp_scanner::scanner::TCPScanResult};
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct NetScanRecord {
     pub addr: String,
     pub last_update: bson::DateTime,
     pub scan: NetScanResult,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 #[serde(tag="result", content="data")]
 pub enum ScanResult<T> {
     Ok(T),
@@ -34,7 +34,7 @@ impl<T: Serialize> From<Result<T, SimpleError>> for ScanResult<T> {
 
 
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct ScanTaskInfo<T> {
     pub proxy: String,
     pub time: bson::DateTime,
@@ -59,11 +59,17 @@ impl<T> ScanTaskInfo<T> {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct NetScanResult {
-    pub http: Option<ScanTaskInfo<HttpResponseData>>,
-    pub https: Option<ScanTaskInfo<HttpsResponse>>,
+    pub http: Option<NetScanResultSet<HttpResponseData>>,
+    pub https: Option<NetScanResultSet<HttpsResponse>>,
     pub tcp: Option<HashMap<u16, TCPScanResult>>,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct NetScanResultSet<T> {
+    pub success: i32,
+    pub results: Vec<ScanTaskInfo<T>>,
 }
 
 #[derive(Clone)]
