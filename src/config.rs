@@ -37,6 +37,7 @@ pub struct Socks5ProxyOptions {
 
 #[derive(Deserialize)]
 pub struct SchedulerOptions {
+    pub enabled: bool,
     pub max_tasks: usize,
 }
 

@@ -66,11 +66,13 @@ impl WappanalyserPattern {
     fn from_str(pattern: &str) -> Result<Self, SimpleError> {
         let mut slices = pattern.split("\\;");
         let regex = slices.next().ok_or("Invalid pattern string")?;
-        let regex = Regex::new(regex)?;
+        let regex = Regex::new(&regex.replace("\\/", "/")
+            .replace("\\'", "'")
+            .replace("\\\"", "\""))?;
         let mut version_pos = None;
         for slice in slices {
             if slice.starts_with("version:") {
-                match (&slice[10..]).parse::<i32>() {
+                match (&slice[9..]).parse::<i32>() {
                     Ok(idx) => version_pos = Some(idx),
                     Err(_) => (),
                 }
@@ -92,7 +94,7 @@ impl WappanalyserPattern {
 }
 
 impl WappanalyserRuleParsed {
-    fn try_parse(rule: WappanalyserRule) -> Result<Self, SimpleError> {
+    fn try_parse(name: &str, rule: WappanalyserRule) -> Result<Self, SimpleError> {
         let mut result = Self {
             ..Default::default()
         };
@@ -101,7 +103,7 @@ impl WappanalyserRuleParsed {
             let mut rules = HashMap::<String, WappanalyserPattern>::new();
             for (name, pattern) in cookie_pattern {
                 match WappanalyserPattern::from_str(&pattern) {
-                    Err(err) => log::warn!("Failed to parse cookie pattern: {}", err.msg),
+                    Err(err) => log::warn!("Failed to parse {} cookie pattern: {}", name, err.msg),
                     Ok(pattern) => {
                         rules.insert(name, pattern);
                     }
@@ -113,7 +115,7 @@ impl WappanalyserRuleParsed {
             let mut rules = HashMap::<String, WappanalyserPattern>::new();
             for (name, pattern) in header_pattern {
                 match WappanalyserPattern::from_str(&pattern) {
-                    Err(err) => log::warn!("Failed to parse header pattern: {}", err.msg),
+                    Err(err) => log::warn!("Failed to parse {} header pattern: {}", name, err.msg),
                     Ok(pattern) => {
                         rules.insert(name, pattern);
                     }
@@ -126,14 +128,14 @@ impl WappanalyserRuleParsed {
             let mut rules = Vec::<WappanalyserPattern>::new();
             match body_pattern {
                 StringOrArray::String(pattern) => match WappanalyserPattern::from_str(&pattern) {
-                    Err(err) => log::warn!("Failed to parse header pattern: {}", err.msg),
+                    Err(err) => log::warn!("Failed to parse {} header pattern: {}", name, err.msg),
                     Ok(pattern) => {
                         rules.push(pattern);
                     }
                 },
                 StringOrArray::Array(pattern_list) => for pattern in pattern_list {
                     match WappanalyserPattern::from_str(&pattern) {
-                        Err(err) => log::warn!("Failed to parse header pattern: {}", err.msg),
+                        Err(err) => log::warn!("Failed to parse {} header pattern: {}", name, err.msg),
                         Ok(pattern) => {
                             rules.push(pattern);
                         }
@@ -174,17 +176,17 @@ impl WappanalyserRuleParsed {
 }
 
 
-impl From<WappanalyserRule> for WappanalyserRuleParsed {
-    fn from(rule: WappanalyserRule) -> Self {
-        match Self::try_parse(rule) {
-            Ok(rule) => rule,
-            Err(err) => {
-                log::warn!("Failed to parse wappanalyser rule: {}", err.msg);
-                Self::default()
-            }
-        }
-    }
-}
+// impl From<WappanalyserRule> for WappanalyserRuleParsed {
+//     fn from(rule: WappanalyserRule) -> Self {
+//         match Self::try_parse(rule) {
+//             Ok(rule) => rule,
+//             Err(err) => {
+//                 log::warn!("Failed to parse wappanalyser rule: {}", err.msg);
+//                 Self::default()
+//             }
+//         }
+//     }
+// }
 
 impl WebServiceAnalyser {
     pub fn init_from_json(wappanalyser_rules: &str)-> Result<Self, SimpleError> {
@@ -192,7 +194,7 @@ impl WebServiceAnalyser {
         let rules = serde_json::from_str::<WappanalyserTechnologies>(&json_text)?;
         let mut parsed_rules = HashMap::<String, WappanalyserRuleParsed>::new();
         for (name, rule) in rules.technologies {
-            match WappanalyserRuleParsed::try_parse(rule) {
+            match WappanalyserRuleParsed::try_parse(&name, rule) {
                 Ok(rule) => { parsed_rules.insert(name, rule); },
                 Err(err) => log::error!("Failed to parse {} rules: {}", name, err.msg),
             }

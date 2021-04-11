@@ -18,10 +18,13 @@ use std::time::Duration;
 
 use address::{fetch_address_list};
 use config::Config;
+use mongodb::{Database, bson::doc};
 use proxy::ProxyPool;
 use config::GLOBAL_CONFIG;
 use net_scanner::scheduler::{NetScanner, SchedulerController};
+use service_analyse::{scheduler::ServiceAnalyseScheduler, web::WebServiceAnalyser};
 use tokio::{task, time::sleep};
+use futures::stream::StreamExt;
 
 #[tokio::main]
 async fn main()
@@ -43,7 +46,6 @@ async fn main()
     // http_scanner.enqueue("47.102.198.236").await.unwrap();
     
     stats(&scheduler);
-
     try_dispatch_address(&scheduler).await;
 
     // let range = parse_ipv4_cidr("47.102.198.0/24").unwrap();
@@ -52,6 +54,12 @@ async fn main()
     //     http_scanner.enqueue(addr.to_string().as_str()).await;
     // }
 
+    let analyser_scheduler = ServiceAnalyseScheduler::new(&db, &GLOBAL_CONFIG.redis).await.unwrap();
+    let analyser_join = analyser_scheduler.run().await.unwrap();
+    task::spawn(try_dispatch_analysing(db.clone(), analyser_scheduler));
+    
+
+    analyser_join.await.unwrap();
     scheduler.join().await;
 }
 
@@ -116,5 +124,16 @@ async fn try_dispatch_address(scheduler: &SchedulerController) {
             }
         }
         log::info!("Enqueue {} address", count);
+    }
+}
+
+async fn try_dispatch_analysing(db: Database, mut scheduler: ServiceAnalyseScheduler) {
+    let query = doc! {
+        "scan.http.success": 1,
+    };
+    let mut cursor = db.collection("scan").find(query, None).await.unwrap();
+    while let Some(Ok(doc)) = cursor.next().await {
+        let addr = doc.get_str("addr").unwrap();
+        scheduler.enqueue_task_addr(addr).await.unwrap();
     }
 }

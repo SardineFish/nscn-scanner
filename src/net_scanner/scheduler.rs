@@ -85,6 +85,9 @@ impl Scheduler {
         })
     }
     async fn start(mut self) {
+        if !GLOBAL_CONFIG.scanner.scheduler.enabled {
+            return ;
+        }
         let mut redis = self.redis.get_async_connection().await.unwrap();
         self.recover_tasks().await;
         loop {

@@ -64,7 +64,7 @@ impl ServiceAnalyseScheduler {
         Ok(())
     }
 
-    async fn enqueue_task_addr(&mut self, addr: &str) -> Result<(), SimpleError> {
+    pub async fn enqueue_task_addr(&mut self, addr: &str) -> Result<(), SimpleError> {
         self.scheduler.enqueue_task(addr).await
     }
 
@@ -96,6 +96,7 @@ impl ServiceAnalyseTask {
     }
 
     async fn analyse(self) -> Result<(), SimpleError> {
+        log::info!("Analyse {}", self.addr);
 
         let mut web_services = HashMap::<String, String>::new();
 
@@ -113,9 +114,10 @@ impl ServiceAnalyseTask {
 
                 if let Some(http_scan) = record.scan.http {
                     let services = self.resource.web_analyser.analyse(&http_scan)?;
-                    for (name, version) in services {
-                        web_services.insert(format!("web.{}", name), version);
-                    }
+                    // for (name, version) in services {
+                    //     web_services.insert(format!("web.{}", name), version);
+                    // }
+                    web_services = services;
                 }
             },
             _ => panic!("Unimplement"),

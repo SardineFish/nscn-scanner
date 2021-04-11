@@ -63,7 +63,7 @@ impl<T> ScanTaskInfo<T> {
 pub struct NetScanResult {
     pub http: Option<NetScanResultSet<HttpResponseData>>,
     pub https: Option<NetScanResultSet<HttpsResponse>>,
-    pub tcp: Option<HashMap<u16, TCPScanResult>>,
+    pub tcp: Option<HashMap<String, TCPScanResult>>,
 }
 
 #[derive(Serialize, Deserialize)]
