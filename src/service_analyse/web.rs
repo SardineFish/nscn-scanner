@@ -151,7 +151,8 @@ impl WappanalyserRuleParsed {
     fn try_match(&self, data: &HttpResponseData) -> Result<Option<String>, SimpleError> {
         if let Some(header_rules) = &self.headers {
             for (name, pattern) in header_rules {
-                if let Some(header_values) = data.headers.get(name) {
+                let header = name.to_lowercase();
+                if let Some(header_values) = data.headers.get(&header) {
                     for header_value in header_values {
                         match pattern.analyse(header_value) {
                             Some (version) => return Ok(Some(version)),
