@@ -64,15 +64,15 @@ impl SSHScanTask {
 }
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SSHScannResult {
-    protocol: ProtocolVersionMessage,
-    algorithm: AlgorithmExchange,
+    pub protocol: ProtocolVersionMessage,
+    pub algorithm: AlgorithmExchange,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-struct ProtocolVersionMessage {
-    version: String,
-    software: String,
-    comments: String,
+pub struct ProtocolVersionMessage {
+    pub version: String,
+    pub software: String,
+    pub comments: String,
 }
 impl ProtocolVersionMessage {
     pub async fn read<R: AsyncRead + Unpin>(stream: &mut R) -> Result<Self, SimpleError> {
@@ -125,17 +125,17 @@ impl ProtocolVersionMessage {
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
-struct AlgorithmExchange {
-    kex: Vec<String>,
-    host_key: Vec<String>,
-    encryption_client_to_server: Vec<String>,
-    encryption_server_to_client: Vec<String>,
-    mac_client_to_server: Vec<String>,
-    mac_server_to_client: Vec<String>,
-    compression_client_to_server: Vec<String>,
-    compression_server_to_client: Vec<String>,
-    languages_client_to_server: Vec<String>,
-    languages_server_to_client: Vec<String>,
+pub struct AlgorithmExchange {
+    pub kex: Vec<String>,
+    pub host_key: Vec<String>,
+    pub encryption_client_to_server: Vec<String>,
+    pub encryption_server_to_client: Vec<String>,
+    pub mac_client_to_server: Vec<String>,
+    pub mac_server_to_client: Vec<String>,
+    pub compression_client_to_server: Vec<String>,
+    pub compression_server_to_client: Vec<String>,
+    pub languages_client_to_server: Vec<String>,
+    pub languages_server_to_client: Vec<String>,
 }
 
 impl AlgorithmExchange {

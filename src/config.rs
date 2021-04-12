@@ -92,6 +92,7 @@ pub struct ServiceAnalyserOptions {
 pub struct ServiceAnalyserRules {
     pub wappanalyser: String,
     pub ftp: String,
+    pub ssh: String,
 }
 
 #[derive(Deserialize)]

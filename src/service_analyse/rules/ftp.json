@@ -15,7 +15,8 @@
         "version": 1
     },
     "DiskStation": {
-        "pattern": "DiskStation"
+        "pattern": "DiskStation|(DS\\S+) FTP server",
+        "version": 1
     },
     "ProFTPD": {
         "pattern": "(?:([\\d.a-z]+) Server.*\\()?ProFTPD",

@@ -1,0 +1,22 @@
+{
+    "OpenSSH": {
+        "pattern": "OpenSSH(?:_([\\d.]+))?",
+        "version": 1
+    },
+    "Debian": {
+        "pattern": "Debian(?:-(\\S+))?",
+        "version": 1
+    },
+    "Ubuntu": {
+        "pattern": "Ubuntu(?:-(\\S+))?",
+        "version": 1
+    },
+    "Raspbian": {
+        "pattern": "Raspbian(?:-(\\S+))?",
+        "version": 1
+    },
+    "FreeBSD": {
+        "pattern": "FreeBSD(?:-(\\S+))?",
+        "version": 1
+    }
+}

@@ -4,25 +4,25 @@ use std::{collections::HashMap, fs, sync::Arc};
 use regex::Regex;
 use crate::{error::*, net_scanner::{result_handler::{NetScanResultSet, ScanResult}, tcp_scanner::ftp::FTPScanResult}};
 #[derive(Deserialize)]
-pub struct FTPServiceRule {
+pub struct UniversalServiceRule {
     pattern: String,
     version: Option<usize>,
 }
-pub struct FTPServiceRuleParsed {
-    name: String,
+pub struct UniversalServiceRuleParsed {
+    pub name: String,
     pattern: Regex,
     version_capture: Option<usize>,
 }
-impl FTPServiceRuleParsed {
-    fn try_parse(name: &str, rule: FTPServiceRule) -> Result<Self, SimpleError> {
+impl UniversalServiceRuleParsed {
+    pub fn try_parse(name: &str, rule: UniversalServiceRule) -> Result<Self, SimpleError> {
         Ok(Self {
             name: name.to_owned(),
             pattern: Regex::new(&rule.pattern)?,
             version_capture: rule.version
         })
     }
-    fn try_match<'s>(&self, banner: &'s str) -> Option<&'s str> {
-        match (self.version_capture, self.pattern.captures(banner)) {
+    pub fn try_match<'s>(&self, text: &'s str) -> Option<&'s str> {
+        match (self.version_capture, self.pattern.captures(text)) {
             (Some(version_cap), Some(captures)) => Some(captures.get(version_cap).map(|m|m.as_str()).unwrap_or("")),
             (_, Some(_)) => Some(""),
             _ => None,
@@ -32,16 +32,16 @@ impl FTPServiceRuleParsed {
 
 #[derive(Clone)]
 pub struct FTPServiceAnalyser {
-    rules: Arc<Vec<FTPServiceRuleParsed>>,
+    rules: Arc<Vec<UniversalServiceRuleParsed>>,
 }
 
 impl FTPServiceAnalyser {
     pub fn from_json(json_file: &str) -> Result<Self, SimpleError> {
         let json_text = fs::read_to_string(json_file)?;
-        let rules = serde_json::from_str::<HashMap<String, FTPServiceRule>>(&json_text)?;
+        let rules = serde_json::from_str::<HashMap<String, UniversalServiceRule>>(&json_text)?;
         let mut rule_list = Vec::new();
         for (name, rule) in rules {
-            match FTPServiceRuleParsed::try_parse(&name, rule) {
+            match UniversalServiceRuleParsed::try_parse(&name, rule) {
                 Ok(rule) => rule_list.push(rule),
                 Err(err) => log::warn!("Failed to parse FTP rule {}: {}", name, err.msg),
             }

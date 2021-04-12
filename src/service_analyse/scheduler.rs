@@ -9,7 +9,7 @@ use crate::{config::ResultSavingOption, error::*, net_scanner::scheduler::{Sched
 use crate::config::GLOBAL_CONFIG;
 use crate::net_scanner::result_handler::NetScanRecord;
 
-use super::{ftp::FTPServiceAnalyser, web::WebServiceAnalyser};
+use super::{ftp::FTPServiceAnalyser, ssh::SSHServiceAnalyser, web::WebServiceAnalyser};
 
 const KEY_ANALYSE_TASKQUEUE: &str = "analyse_taskqueue";
 const KEY_ANALYSE_RUNNING: &str = "analyse_running";
@@ -27,6 +27,7 @@ impl ServiceAnalyseScheduler {
                 db: db.clone(),
                 web_analyser: WebServiceAnalyser::init_from_json(&GLOBAL_CONFIG.analyser.rules.wappanalyser)?,
                 ftp_analyser: FTPServiceAnalyser::from_json(&GLOBAL_CONFIG.analyser.rules.ftp)?,
+                ssh_analyser: SSHServiceAnalyser::from_json(&GLOBAL_CONFIG.analyser.rules.ssh)?,
             }
         })
     }
@@ -80,6 +81,7 @@ impl ServiceAnalyseScheduler {
 struct TaskResources {
     web_analyser: WebServiceAnalyser,
     ftp_analyser: FTPServiceAnalyser,
+    ssh_analyser: SSHServiceAnalyser,
     db: Database,
 }
 
@@ -101,6 +103,7 @@ impl ServiceAnalyseTask {
 
         let mut web_services: Option<HashMap::<String, String>> = None;
         let mut ftp_services: Option<HashMap::<String, String>> = None;
+        let ssh_services: Option<HashMap::<String, String>>;
 
         match &GLOBAL_CONFIG.scanner.save {
             ResultSavingOption::SingleCollection(name) => {
@@ -127,6 +130,11 @@ impl ServiceAnalyseTask {
                 if let Some(ftp_result) = ftp_scan_result {
                     ftp_services = Some(self.resource.ftp_analyser.analyse(&ftp_result));
                 }
+
+                ssh_services = record.scan.tcp.as_ref()
+                    .and_then(|tcp_result| tcp_result.get("22"))
+                    .and_then(|result| result.ssh.as_ref())
+                    .and_then(|ssh_result| self.resource.ssh_analyser.analyse(ssh_result));
             },
             _ => panic!("Unimplement"),
         }
@@ -142,6 +150,7 @@ impl ServiceAnalyseTask {
                 "last_update": bson::to_bson(&time)?,
                 "web": bson::to_bson(&web_services)?,
                 "ftp": bson::to_bson(&ftp_services)?,
+                "ssh": bson::to_bson(&ssh_services)?,
             }
         };
         let mut opts = mongodb::options::UpdateOptions::default();
