@@ -18,7 +18,7 @@
         "pattern": "DiskStation"
     },
     "ProFTPD": {
-        "pattern": "([\\d.a-z]+) Server.*\\(ProFTPD",
+        "pattern": "(?:([\\d.a-z]+) Server.*\\()?ProFTPD",
         "version": 1
     },
     "vsftpd": {
@@ -38,6 +38,39 @@
     "MikroTik": {
         "pattern": "MikroTik(?:\\s+(?:v|(?:version\\s+))?([\\d.]+))?",
         "version": 1
+    },
+    "SmbFTPD": {
+        "pattern": "SmbFTPD(?:\\s+(?:v|(?:\\S+\\s+))?([\\d.]+))?",
+        "version": 1
+    },
+    "ucftpd": {
+        "pattern": "ucftpd"
+    },
+    "TYPSoft": {
+        "pattern": "TYPSoft FTP Server(?:\\s+(?:v|(?:version\\s+))?([\\d.]+))?",
+        "version": 1
+    },
+    "Wing FTP": {
+        "pattern": "Wing FTP"
+    },
+    "Gene6 FTP": {
+        "pattern": "Gene6 FTP Server(?:\\s+(?:v|(?:version\\s+))?([\\d.]+))?",
+        "version": 1
+    },
+    "Xlight FTP": {
+        "pattern": "Xlight FTP Server(?:\\s+(?:v|(?:version\\s+))?([\\d.]+))?",
+        "version": 1
+    },
+    "EasyFZS": {
+        "pattern": "EasyFZS Server(?:\\s+(?:v|(?:version\\s+))?([\\d.]+))?",
+        "version": 1
+    },
+    "freeFTPd": {
+        "pattern": "freeFTPd(?:\\s+(?:v|(?:version\\s+))?([\\d.]+))?",
+        "version": 1
+    },
+    "ASUS": {
+        "pattern": "Welcome to ASUS (\\s+) FTP service",
+        "version": 1
     }
-
 }
