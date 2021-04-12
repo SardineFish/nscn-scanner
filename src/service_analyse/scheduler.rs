@@ -99,7 +99,7 @@ impl ServiceAnalyseTask {
     }
 
     async fn analyse(self) -> Result<(), SimpleError> {
-        // log::info!("Analyse {}", self.addr);
+        log::info!("Analyse {}", self.addr);
 
         let mut web_services: Option<HashMap::<String, String>> = None;
         let mut ftp_services: Option<HashMap::<String, String>> = None;

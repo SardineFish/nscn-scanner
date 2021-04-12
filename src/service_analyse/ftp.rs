@@ -56,13 +56,13 @@ impl FTPServiceAnalyser {
             return result;
         }
 
-        let mut banner = "";
+        let mut _banner = "";
         for scan_result in &result_set.results {
             let scan_result = match &scan_result.result {
                 ScanResult::Ok(result) => result,
                 _ => continue,
             };
-            banner = &scan_result.handshake_text;
+            _banner = &scan_result.handshake_text;
             for rule in self.rules.as_ref() {
                 match rule.try_match(&scan_result.handshake_text) {
                     Some(version) => { result.insert(rule.name.to_owned(), version.to_owned()); },
@@ -71,9 +71,9 @@ impl FTPServiceAnalyser {
             }
         }
 
-        if result.len() <= 0 {
-            log::warn!("Unknown FTP banner: {}", banner);
-        }
+        // if result.len() <= 0 {
+        //     log::warn!("Unknown FTP banner: {}", banner);
+        // }
 
         result
     }
