@@ -1,0 +1,43 @@
+{
+    "bftpd": {
+        "pattern": "bftpd(?:\\s+([\\d.]+))?",
+        "version": 1
+    },
+    "Microsoft FTP": {
+        "pattern": "Microsoft FTP"
+    },
+    "WFTPD": {
+        "pattern": "WFTPD(?:\\s+([\\d.]+))?",
+        "version": 1
+    },
+    "FileZilla": {
+        "pattern": "FileZilla Server(?:\\s+(?:v|(?:\\S+\\s+))?([\\d.]+))?",
+        "version": 1
+    },
+    "DiskStation": {
+        "pattern": "DiskStation"
+    },
+    "ProFTPD": {
+        "pattern": "([\\d.a-z]+) Server.*\\(ProFTPD",
+        "version": 1
+    },
+    "vsftpd": {
+        "pattern": "vsFTPd(?:\\s+(?:v|(?:version\\s+))?([\\d.]+))?",
+        "version": 1
+    },
+    "Pure-FTPd": {
+        "pattern": "Pure-FTPd"
+    },
+    "Serv-U": {
+        "pattern": "Serv-U FTP Server(?:\\s+(?:v|(?:version\\s+))?([\\d.]+))?",
+        "version": 1
+    },
+    "Windows FTP": {
+        "pattern": "Windows ftp server"
+    },
+    "MikroTik": {
+        "pattern": "MikroTik(?:\\s+(?:v|(?:version\\s+))?([\\d.]+))?",
+        "version": 1
+    }
+
+}

@@ -82,7 +82,7 @@ impl WappanalyserPattern {
     }
     fn analyse(&self, data: &str) -> Option<String> {
         match (self.version, self.regex.captures(data)) {
-            (Some(version_cap), Some(cap)) => cap.get(version_cap as usize).map(|m| m.as_str().to_owned()),
+            (Some(version_cap), Some(cap)) => Some(cap.get(version_cap as usize).map(|m| m.as_str()).unwrap_or("").to_owned()),
             (None, Some(_)) => Some("".to_owned()),
             _ => None,
         }

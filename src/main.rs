@@ -129,7 +129,7 @@ async fn try_dispatch_address(scheduler: &SchedulerController) {
 
 async fn try_dispatch_analysing(db: Database, mut scheduler: ServiceAnalyseScheduler) {
     let query = doc! {
-        "scan.http.success": 1,
+        "scan.tcp.21.ftp.success": { "$gt": 0},
     };
     let mut cursor = db.collection("scan").find(query, None).await.unwrap();
     while let Some(Ok(doc)) = cursor.next().await {

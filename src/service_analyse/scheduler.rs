@@ -9,7 +9,7 @@ use crate::{config::ResultSavingOption, error::*, net_scanner::scheduler::{Sched
 use crate::config::GLOBAL_CONFIG;
 use crate::net_scanner::result_handler::NetScanRecord;
 
-use super::web::WebServiceAnalyser;
+use super::{ftp::FTPServiceAnalyser, web::WebServiceAnalyser};
 
 const KEY_ANALYSE_TASKQUEUE: &str = "analyse_taskqueue";
 const KEY_ANALYSE_RUNNING: &str = "analyse_running";
@@ -26,6 +26,7 @@ impl ServiceAnalyseScheduler {
             resources: TaskResources {
                 db: db.clone(),
                 web_analyser: WebServiceAnalyser::init_from_json(&GLOBAL_CONFIG.analyser.rules.wappanalyser)?,
+                ftp_analyser: FTPServiceAnalyser::from_json(&GLOBAL_CONFIG.analyser.rules.ftp)?,
             }
         })
     }
@@ -78,6 +79,7 @@ impl ServiceAnalyseScheduler {
 #[derive(Clone)]
 struct TaskResources {
     web_analyser: WebServiceAnalyser,
+    ftp_analyser: FTPServiceAnalyser,
     db: Database,
 }
 
@@ -95,9 +97,10 @@ impl ServiceAnalyseTask {
     }
 
     async fn analyse(self) -> Result<(), SimpleError> {
-        log::info!("Analyse {}", self.addr);
+        // log::info!("Analyse {}", self.addr);
 
-        let mut web_services = HashMap::<String, String>::new();
+        let mut web_services: Option<HashMap::<String, String>> = None;
+        let mut ftp_services: Option<HashMap::<String, String>> = None;
 
         match &GLOBAL_CONFIG.scanner.save {
             ResultSavingOption::SingleCollection(name) => {
@@ -116,7 +119,13 @@ impl ServiceAnalyseTask {
                     // for (name, version) in services {
                     //     web_services.insert(format!("web.{}", name), version);
                     // }
-                    web_services = services;
+                    web_services = Some(services);
+                }
+                let ftp_scan_result = record.scan.tcp.as_ref()
+                    .and_then(|tcp|tcp.get("21"))
+                    .and_then(|result|result.ftp.as_ref());
+                if let Some(ftp_result) = ftp_scan_result {
+                    ftp_services = Some(self.resource.ftp_analyser.analyse(&ftp_result));
                 }
             },
             _ => panic!("Unimplement"),
@@ -132,6 +141,7 @@ impl ServiceAnalyseTask {
                 "addr": &self.addr,
                 "last_update": bson::to_bson(&time)?,
                 "web": bson::to_bson(&web_services)?,
+                "ftp": bson::to_bson(&ftp_services)?,
             }
         };
         let mut opts = mongodb::options::UpdateOptions::default();
