@@ -70,7 +70,7 @@
         "version": 1
     },
     "ASUS": {
-        "pattern": "Welcome to ASUS (\\s+) FTP service",
+        "pattern": "Welcome to ASUS (\\S+) FTP service",
         "version": 1
     }
 }
