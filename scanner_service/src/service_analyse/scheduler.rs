@@ -1,5 +1,5 @@
 use std::{collections::HashMap, sync::Arc};
-use bson::doc;
+use bson::{Document, doc};
 use serde::{Serialize, Deserialize};
 use mongodb::{Database, bson};
 use tokio::{sync::Mutex, task::{self, JoinHandle}};
@@ -143,7 +143,7 @@ impl ServiceAnalyseTask {
         }
 
         let time: bson::DateTime = Utc::now().into();
-        let collection = self.resource.db.collection(&GLOBAL_CONFIG.analyser.save);
+        let collection = self.resource.db.collection::<Document>(&GLOBAL_CONFIG.analyser.save);
         let query = doc! {
             "addr": &self.addr,
         };
