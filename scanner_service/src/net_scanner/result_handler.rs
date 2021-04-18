@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use chrono::Utc;
-use mongodb::{Database, bson, options::UpdateOptions};
+use mongodb::{Database, bson::{self, Document}, options::UpdateOptions};
 use serde::{Serialize, Deserialize};
 
 use crate::config::{GLOBAL_CONFIG, ResultSavingOption};
@@ -83,7 +83,7 @@ impl ResultHandler {
     }
     async fn try_save<T: Serialize>(&self, key: &str, ip_addr: &str, proxy: &str, result: ScanResult<T>) -> Result<(), SimpleError> {
         let collection = match &GLOBAL_CONFIG.scanner.save {
-            ResultSavingOption::SingleCollection(collection) => self.db.collection(&collection),
+            ResultSavingOption::SingleCollection(collection) => self.db.collection::<Document>(&collection),
             _ => panic!("Not implement"),
         };
         let result_key = format!("scan.{}.results", key);

@@ -9,7 +9,7 @@ edition = "2018"
 [dependencies]
 reqwest = { version = "0.11", features = ["json", "socks"] }
 tokio = { version = "1", features = ["full", "sync"] }
-mongodb = "2.0.0-alpha"
+mongodb = "2.0.0-alpha.1"
 redis = { version = "0.20.0", features = ["tokio-comp"] }
 serde = "1.0.124"
 serde_json = "1.0.64"

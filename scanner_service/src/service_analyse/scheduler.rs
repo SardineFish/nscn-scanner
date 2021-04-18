@@ -15,6 +15,7 @@ use super::ServiceAnalyseResult;
 const KEY_ANALYSE_TASKQUEUE: &str = "analyse_taskqueue";
 const KEY_ANALYSE_RUNNING: &str = "analyse_running";
 
+#[derive(Clone)]
 pub struct ServiceAnalyseScheduler {
     scheduler: Scheduler,
     resources: TaskResources,
@@ -33,7 +34,7 @@ impl ServiceAnalyseScheduler {
         })
     }
     pub async fn run(&self) -> Result<JoinHandle<()>, SimpleError> {
-        let dispatcher = self.clone().await?;
+        let dispatcher = self.clone();
         Ok(task::spawn(dispatcher.dispatch_tasks()))
     }
 
@@ -68,13 +69,6 @@ impl ServiceAnalyseScheduler {
 
     pub async fn enqueue_task_addr(&mut self, addr: &str) -> Result<(), SimpleError> {
         self.scheduler.enqueue_task(addr).await
-    }
-
-    async fn clone(&self) -> Result<Self, SimpleError> {
-        Ok(Self {
-            resources: self.resources.clone(),
-            scheduler: self.scheduler.clone().await?,
-        })
     }
 }
 

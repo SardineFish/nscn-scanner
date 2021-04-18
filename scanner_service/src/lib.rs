@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-mod error;
+pub mod error;
 mod proxy;
 mod config;
 mod address;
@@ -15,64 +15,84 @@ mod vul_search;
 #[allow(dead_code)]
 mod redis_pool;
 
-use std::time::Duration;
-
-use address::{fetch_address_list};
-use config::Config;
-use mongodb::{Database, bson::doc};
+use address::fetch_address_list;
 use proxy::ProxyPool;
 use config::GLOBAL_CONFIG;
-use net_scanner::scheduler::{NetScanner, SchedulerController};
-use service_analyse::{scheduler::ServiceAnalyseScheduler};
+use net_scanner::scheduler::{NetScanner};
 use tokio::{task, time::sleep};
-use futures::stream::StreamExt;
 
+use error::*;
+
+pub use net_scanner::scheduler::SchedulerController;
+pub use service_analyse::{scheduler::ServiceAnalyseScheduler};
+pub use config::Config;
+
+#[derive(Clone)]
 pub struct ScannerService {
-    
+    scheduler: SchedulerController,
+    analyser: ServiceAnalyseScheduler,
 }
 
 impl ScannerService {
-    pub fn new()
+    pub async fn start() -> Result<Self, SimpleError>
     {
+        let mongodb = mongodb::Client::with_uri_str(&GLOBAL_CONFIG.mongodb).await.unwrap();
+        let db = mongodb.database("nscn");
+        // let redis_pool = Arc::new(RedisPool::open(&config.redis));
+        // let redis = redis::Client::open(config.redis.as_str()).unwrap();
+        // let conn = redis.get_multiplexed_tokio_connection().await.unwrap();
+        let proxy_pool = ProxyPool::new();
+        proxy_pool.start().await;
+        let scanner = NetScanner::new(&GLOBAL_CONFIG.redis, &db, &proxy_pool);
+        let scheduler = scanner.start().unwrap();
         
+        // http_scanner.enqueue("47.102.198.236").await.unwrap();
+        
+        stats(&scheduler);
+        // try_dispatch_address(&scheduler).await;
+
+        // let range = parse_ipv4_cidr("47.102.198.0/24").unwrap();
+        // for ip in range {
+        //     let addr = std::net::Ipv4Addr::from(ip);
+        //     http_scanner.enqueue(addr.to_string().as_str()).await;
+        // }
+
+        let analyser_scheduler = ServiceAnalyseScheduler::new(&db, &GLOBAL_CONFIG.redis).await.unwrap();
+        let _ = analyser_scheduler.run().await.unwrap();
+        // task::spawn(try_dispatch_analysing(db.clone(), analyser_scheduler));
+        
+
+        // analyser_join.await.unwrap();
+        // scheduler.join().await;
+
+        // panic!();
+
+        Ok(Self {
+            scheduler: scheduler,
+            analyser: analyser_scheduler
+        })
     }
-}
 
-#[tokio::main]
-async fn main()
-{
-    env_logger::init();
+    pub fn scheculer(&self) -> SchedulerController {
+        self.scheduler.clone()
+    }
 
-    let config = Config::from_file("config.json").await.unwrap();
+    pub fn analyser(&self) -> ServiceAnalyseScheduler {
+        self.analyser.clone()
+    }
 
-    let mongodb = mongodb::Client::with_uri_str(&config.mongodb).await.unwrap();
-    let db = mongodb.database("nscn");
-    // let redis_pool = Arc::new(RedisPool::open(&config.redis));
-    // let redis = redis::Client::open(config.redis.as_str()).unwrap();
-    // let conn = redis.get_multiplexed_tokio_connection().await.unwrap();
-    let proxy_pool = ProxyPool::new();
-    proxy_pool.start().await;
-    let scanner = NetScanner::new(&config.redis, &db, &proxy_pool);
-    let scheduler = scanner.start().unwrap();
-    
-    // http_scanner.enqueue("47.102.198.236").await.unwrap();
-    
-    stats(&scheduler);
-    try_dispatch_address(&scheduler).await;
+    pub fn config(&self) -> &'static Config{
+        &GLOBAL_CONFIG
+    }
 
-    // let range = parse_ipv4_cidr("47.102.198.0/24").unwrap();
-    // for ip in range {
-    //     let addr = std::net::Ipv4Addr::from(ip);
-    //     http_scanner.enqueue(addr.to_string().as_str()).await;
-    // }
+    pub async fn fetch_address_list(&self, url: &str) -> Result<Vec<String>, SimpleError> {
+        Ok(fetch_address_list(url).await?)
+    }
 
-    let analyser_scheduler = ServiceAnalyseScheduler::new(&db, &GLOBAL_CONFIG.redis).await.unwrap();
-    let analyser_join = analyser_scheduler.run().await.unwrap();
-    task::spawn(try_dispatch_analysing(db.clone(), analyser_scheduler));
-    
-
-    analyser_join.await.unwrap();
-    scheduler.join().await;
+    pub async fn join(self)
+    {
+        self.scheduler.join().await
+    }
 }
 
 fn stats(scheduler: &SchedulerController) {
@@ -96,61 +116,4 @@ fn stats(scheduler: &SchedulerController) {
             
         }
     });
-}
-
-async fn try_dispatch_address(scheduler: &SchedulerController) {
-    let scheduler = scheduler.clone();
-    if !GLOBAL_CONFIG.scanner.task.fetch {
-        return;
-    }
-    log::info!("Start dispatching http scan address");
-    if GLOBAL_CONFIG.scanner.task.clear_old_tasks {
-        if let Err(err) = scheduler.clear_tasks().await {
-            log::error!("Failed to reset task queue: {}", err.msg);
-        }
-    }
-    for url in &GLOBAL_CONFIG.scanner.task.addr_src {
-        let list = loop {
-            match fetch_address_list(&url).await {
-                Err(err) => log::error!("Failed to fetch address list from '{}': {}", url, err.msg),
-                Ok(list) => {
-                    break list
-                }
-            };
-            sleep(Duration::from_secs(1)).await;
-        };
-        
-        let mut count = 0;
-        log::info!("Get {} address range from {}", list.len(), url);
-        for ip_cidr in list {
-            let range = match address::parse_ipv4_cidr(&ip_cidr) {
-                Err(err) => {
-                    log::error!("{}", err.msg);
-                    continue;
-                },
-                Ok(range) => range,
-            };
-            count += range.len();
-            if let Err(err) = scheduler.enqueue_addr_range(&ip_cidr).await {
-                log::error!("Failed to enqueue http scan task: {}", err.msg);
-            }
-        }
-        log::info!("Enqueue {} address", count);
-    }
-}
-
-async fn try_dispatch_analysing(db: Database, mut scheduler: ServiceAnalyseScheduler) {
-    let query = doc! {
-        // "addr": "58.48.0.190",
-        "$or": [
-            {"scan.http.success": { "$gt": 0}},
-            {"scan.tcp.21.ftp.success": { "$gt": 0}},
-            {"scan.tcp.22.ssh.success": { "$gt": 0}},
-        ],
-    };
-    let mut cursor = db.collection("scan").find(query, None).await.unwrap();
-    while let Some(Ok(doc)) = cursor.next().await {
-        let addr = doc.get_str("addr").unwrap();
-        scheduler.enqueue_task_addr(addr).await.unwrap();
-    }
 }
