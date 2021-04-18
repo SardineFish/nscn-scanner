@@ -2,7 +2,9 @@ use serde::{Deserialize};
 use std::{collections::HashMap, fs, sync::Arc};
 
 use regex::Regex;
-use crate::{error::*, net_scanner::{result_handler::{NetScanResultSet, ScanResult}, tcp_scanner::ftp::FTPScanResult}};
+use crate::{error::*, net_scanner::{result_handler::{NetScanResultSet, ScanResult}, tcp_scanner::ftp::FTPScanResult}, vul_search::VulnerabilitiesSearch};
+
+use super::ServiceAnalyseResult;
 #[derive(Deserialize)]
 pub struct UniversalServiceRule {
     pattern: String,
@@ -33,6 +35,7 @@ impl UniversalServiceRuleParsed {
 #[derive(Clone)]
 pub struct FTPServiceAnalyser {
     rules: Arc<Vec<UniversalServiceRuleParsed>>,
+    vuln_searcher: VulnerabilitiesSearch,
 }
 
 impl FTPServiceAnalyser {
@@ -47,10 +50,11 @@ impl FTPServiceAnalyser {
             }
         }
         Ok(Self {
-            rules: Arc::new(rule_list)
+            rules: Arc::new(rule_list),
+            vuln_searcher: VulnerabilitiesSearch::new(),
         })
     }
-    pub fn analyse(&self, result_set: &NetScanResultSet<FTPScanResult>) -> HashMap<String, String> {
+    pub async fn analyse(&self, result_set: &NetScanResultSet<FTPScanResult>) -> HashMap<String, ServiceAnalyseResult> {
         let mut result = HashMap::new();
         if result_set.success <= 0 {
             return result;
@@ -65,15 +69,22 @@ impl FTPServiceAnalyser {
             _banner = &scan_result.handshake_text;
             for rule in self.rules.as_ref() {
                 match rule.try_match(&scan_result.handshake_text) {
-                    Some(version) => { result.insert(rule.name.to_owned(), version.to_owned()); },
+                    Some(version) => { 
+                        result.insert(
+                            rule.name.to_owned(), 
+                            ServiceAnalyseResult::new(rule.name.to_owned(), version.to_owned())); 
+                    },
                     _ => (),
                 }
             }
         }
 
-        // if result.len() <= 0 {
-        //     log::warn!("Unknown FTP banner: {}", banner);
-        // }
+        for (_, result) in &mut result {
+            match self.vuln_searcher.exploitdb().search(&result.name, &result.version).await {
+                Ok(vulns) => result.vulns = vulns,
+                Err(err) => log::error!("Failed to search exploitdb: {}", err.msg),
+            }
+        }
 
         result
     }

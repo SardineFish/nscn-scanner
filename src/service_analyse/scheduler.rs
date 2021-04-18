@@ -10,6 +10,7 @@ use crate::config::GLOBAL_CONFIG;
 use crate::net_scanner::result_handler::NetScanRecord;
 
 use super::{ftp::FTPServiceAnalyser, ssh::SSHServiceAnalyser, web::WebServiceAnalyser};
+use super::ServiceAnalyseResult;
 
 const KEY_ANALYSE_TASKQUEUE: &str = "analyse_taskqueue";
 const KEY_ANALYSE_RUNNING: &str = "analyse_running";
@@ -101,9 +102,9 @@ impl ServiceAnalyseTask {
     async fn analyse(self) -> Result<(), SimpleError> {
         log::info!("Analyse {}", self.addr);
 
-        let mut web_services: Option<HashMap::<String, String>> = None;
-        let mut ftp_services: Option<HashMap::<String, String>> = None;
-        let ssh_services: Option<HashMap::<String, String>>;
+        let mut web_services: Option<HashMap::<String, ServiceAnalyseResult>> = None;
+        let mut ftp_services: Option<HashMap::<String, ServiceAnalyseResult>> = None;
+        let mut ssh_services: Option<HashMap::<String, ServiceAnalyseResult>> = None;
 
         match &GLOBAL_CONFIG.scanner.save {
             ResultSavingOption::SingleCollection(name) => {
@@ -118,7 +119,7 @@ impl ServiceAnalyseTask {
                 let record: NetScanRecord = bson::from_document(doc)?;
 
                 if let Some(http_scan) = record.scan.http {
-                    let services = self.resource.web_analyser.analyse(&http_scan)?;
+                    let services = self.resource.web_analyser.analyse(&http_scan).await?;
                     // for (name, version) in services {
                     //     web_services.insert(format!("web.{}", name), version);
                     // }
@@ -128,13 +129,15 @@ impl ServiceAnalyseTask {
                     .and_then(|tcp|tcp.get("21"))
                     .and_then(|result|result.ftp.as_ref());
                 if let Some(ftp_result) = ftp_scan_result {
-                    ftp_services = Some(self.resource.ftp_analyser.analyse(&ftp_result));
+                    ftp_services = Some(self.resource.ftp_analyser.analyse(&ftp_result).await);
                 }
 
-                ssh_services = record.scan.tcp.as_ref()
+                let ssh_scan_result = record.scan.tcp.as_ref()
                     .and_then(|tcp_result| tcp_result.get("22"))
-                    .and_then(|result| result.ssh.as_ref())
-                    .and_then(|ssh_result| self.resource.ssh_analyser.analyse(ssh_result));
+                    .and_then(|result| result.ssh.as_ref());
+                if let Some(ssh_result) = ssh_scan_result {
+                    ssh_services = self.resource.ssh_analyser.analyse(ssh_result).await;
+                }
             },
             _ => panic!("Unimplement"),
         }

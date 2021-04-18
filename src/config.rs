@@ -86,6 +86,7 @@ pub struct ServiceAnalyserOptions {
     pub rules: ServiceAnalyserRules,
     pub scheduler: SchedulerOptions,
     pub save: String,
+    pub vuln_search: VulnerabilitiesSearchConfig,
 }
 
 #[derive(Deserialize)]
@@ -93,6 +94,11 @@ pub struct ServiceAnalyserRules {
     pub wappanalyser: String,
     pub ftp: String,
     pub ssh: String,
+}
+
+#[derive(Deserialize)]
+pub struct VulnerabilitiesSearchConfig {
+    pub exploitdb: String,
 }
 
 #[derive(Deserialize)]

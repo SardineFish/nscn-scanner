@@ -2,8 +2,10 @@ use std::{collections::HashMap, sync::Arc};
 
 use regex::Regex;
 use serde::{Deserialize};
-use crate::{net_scanner::{http_scanner::HttpResponseData, result_handler::{NetScanResultSet, ScanResult}}};
+use crate::{net_scanner::{http_scanner::HttpResponseData, result_handler::{NetScanResultSet, ScanResult}}, vul_search::VulnerabilitiesSearch};
 use crate::error::*;
+
+use super::ServiceAnalyseResult;
 
 #[derive(Deserialize)]
 struct WebServicePattern {
@@ -39,6 +41,7 @@ struct WappanalyserTechnologies {
 #[derive(Clone)]
 pub struct WebServiceAnalyser {
     rules: Arc<HashMap<String, WappanalyserRuleParsed>>,
+    vuln_searcher: VulnerabilitiesSearch,
 }
 #[derive(Deserialize)]
 struct WappanalyserRule {
@@ -198,11 +201,12 @@ impl WebServiceAnalyser {
         }
         Ok(Self {
             rules: Arc::new(parsed_rules),
+            vuln_searcher: VulnerabilitiesSearch{},
         })
     }
 
-    pub fn analyse(&self, result_set: &NetScanResultSet<HttpResponseData>) -> Result<HashMap<String, String>, SimpleError> {
-        let mut web_services: HashMap<String, String> = HashMap::new();
+    pub async fn analyse(&self, result_set: &NetScanResultSet<HttpResponseData>) -> Result<HashMap<String, ServiceAnalyseResult>, SimpleError> {
+        let mut web_services: HashMap<String, ServiceAnalyseResult> = HashMap::new();
         if result_set.success <= 0 {
             return Ok(web_services);
         }
@@ -214,14 +218,21 @@ impl WebServiceAnalyser {
             for (name, rule) in self.rules.as_ref() {
                 match rule.try_match(data) {
                     Ok(Some(analysed_version)) => match web_services.get_mut(name) {
-                            Some(service_version) => { *service_version = analysed_version; },
-                            None => { web_services.insert(name.to_owned(), analysed_version); },
+                            Some(service_version) => { service_version.version = analysed_version; },
+                            None => { web_services.insert(name.to_owned(), ServiceAnalyseResult::new(name.to_owned(), analysed_version)); },
                         },
                     Ok(None) => (),
                     Err(err) => log::error!("Failed to analyse {}: {}", name, err.msg),
                 }
             };
         }
+        for (_, result) in &mut web_services {
+            match self.vuln_searcher.exploitdb().search(&result.name, &result.version).await {
+                Ok(vulns) => result.vulns = vulns,
+                Err(err) => log::error!("Failed to search exploitdb: {}", err.msg),
+            }
+        }
+
         Ok(web_services)
     }
 }

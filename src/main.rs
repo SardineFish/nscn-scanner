@@ -10,6 +10,7 @@ mod net_scanner;
 mod utils;
 mod service_analyse;
 mod scheduler;
+mod vul_search;
 
 #[allow(dead_code)]
 mod redis_pool;
@@ -129,6 +130,7 @@ async fn try_dispatch_address(scheduler: &SchedulerController) {
 
 async fn try_dispatch_analysing(db: Database, mut scheduler: ServiceAnalyseScheduler) {
     let query = doc! {
+        // "addr": "58.48.0.190",
         "$or": [
             {"scan.http.success": { "$gt": 0}},
             {"scan.tcp.21.ftp.success": { "$gt": 0}},

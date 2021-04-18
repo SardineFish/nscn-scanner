@@ -1,0 +1,3 @@
+[submodule "thirdparty/exploitdb"]
+	path = thirdparty/exploitdb
+	url = git@github.com:offensive-security/exploitdb.git
