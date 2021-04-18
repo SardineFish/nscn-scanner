@@ -9,7 +9,10 @@ edition = "2018"
 [dependencies]
 nscn = { path = "scanner_service" }
 tokio = { version = "1", features = ["full", "sync"] }
+actix-web = "4.0.0-beta.6"
 log = "0.4.14"
 mongodb = "2.0.0-alpha.1"
 env_logger = "0.8.3"
 futures = "0.3.13"
+serde = "1.0.124"
+serde_json = "1.0.64"

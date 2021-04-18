@@ -1,27 +1,47 @@
+mod controller;
+mod misc;
+pub use misc::error;
+
 use std::{ops::Range, str::FromStr};
 
-use mongodb::Database;
-use mongodb::bson::{doc, Document};
-use nscn::{self, SchedulerController, ServiceAnalyseScheduler, ScannerService};
-use tokio::{self, task, time::{Duration, sleep}};
+use actix_web::{middleware::Logger, App};
 use futures::stream::StreamExt;
+use mongodb::bson::{doc, Document};
+use mongodb::Database;
 use nscn::error::*;
+use nscn::{self, ScannerService};
+use tokio::{
+    self, task,
+    time::{sleep, Duration},
+};
 
-#[tokio::main]
+#[actix_web::main]
 async fn main() {
     env_logger::init();
 
     let scanner = ScannerService::start().await.unwrap();
-    let mongodb = mongodb::Client::with_uri_str(&scanner.config().mongodb).await.unwrap();
+    let mongodb = mongodb::Client::with_uri_str(&scanner.config().mongodb)
+        .await
+        .unwrap();
     let db = mongodb.database("nscn");
 
     task::spawn(try_dispatch_address(scanner.clone()));
     task::spawn(try_dispatch_analysing(db.clone(), scanner.clone()));
 
-    scanner.join().await;
+    actix_web::HttpServer::new(move || {
+        App::new()
+            .app_data(scanner.clone())
+            .wrap(Logger::default())
+            .configure(controller::config)
+    })
+    .bind("127.0.0.1:3000")
+    .unwrap()
+    .run()
+    .await
+    .unwrap();
+
+    // scanner.join().await;
 }
-
-
 
 async fn try_dispatch_address(scanner: ScannerService) {
     let scheduler = scanner.scheculer();
@@ -38,13 +58,11 @@ async fn try_dispatch_address(scanner: ScannerService) {
         let list = loop {
             match scanner.fetch_address_list(&url).await {
                 Err(err) => log::error!("Failed to fetch address list from '{}': {}", url, err.msg),
-                Ok(list) => {
-                    break list
-                } 
+                Ok(list) => break list,
             };
             sleep(Duration::from_secs(1)).await;
         };
-        
+
         let mut count = 0;
         log::info!("Get {} address range from {}", list.len(), url);
         for ip_cidr in list {
@@ -52,7 +70,7 @@ async fn try_dispatch_address(scanner: ScannerService) {
                 Err(err) => {
                     log::error!("{}", err.msg);
                     continue;
-                },
+                }
                 Ok(range) => range,
             };
             count += range.len();
@@ -74,7 +92,11 @@ async fn try_dispatch_analysing(db: Database, scanner: ScannerService) {
             {"scan.tcp.22.ssh.success": { "$gt": 0}},
         ],
     };
-    let mut cursor = db.collection::<Document>("scan").find(query, None).await.unwrap();
+    let mut cursor = db
+        .collection::<Document>("scan")
+        .find(query, None)
+        .await
+        .unwrap();
     while let Some(Ok(doc)) = cursor.next().await {
         let addr = doc.get_str("addr").unwrap();
         scheduler.enqueue_task_addr(addr).await.unwrap();
@@ -87,8 +109,7 @@ pub fn parse_ipv4_cidr(cidr: &str) -> Result<Range<u32>, SimpleError> {
         log::warn!("Invalid CIDR address");
         Err("Invalid CIDR address.")?
     } else {
-        let base_ip: u32 = std::net::Ipv4Addr::from_str(slices[0]).unwrap()
-            .into();
+        let base_ip: u32 = std::net::Ipv4Addr::from_str(slices[0]).unwrap().into();
 
         let cidr: i32 = slices[1].parse().unwrap();
         let offset = 32 - cidr;
