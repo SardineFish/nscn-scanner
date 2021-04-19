@@ -1,11 +1,10 @@
 use std::{collections::HashMap, net::Ipv4Addr, str::FromStr};
 
-use actix_web::{Responder, dev::Handler, get, http::StatusCode, post, web::{Data, Path, Query, ServiceConfig, scope}};
-use mongodb::Database;
+use actix_web::{get, http::StatusCode, post, web::{Data, Path, Query, ServiceConfig, scope}};
 use nscn::{FTPAccess, ScannerService, ServiceAnalyseResult, error::SimpleError, parse_ipv4_cidr};
 use serde::{Deserialize, Serialize};
 
-use crate::{error::{ApiError, ServiceError}, misc::responder::{ApiResult, Response}, model::{Model, ScanAnalyseResult}};
+use crate::{error::{ApiError}, misc::responder::{ApiResult, Response}, model::{Model, ScanAnalyseResult}};
 
 #[derive(Serialize)]
 struct ScanResult {
@@ -89,6 +88,7 @@ impl From<ScanAnalyseResult> for ScanResult {
                             response.heder.insert(name, value.remove(0));
                         }
                     }
+                    http_response = Some(response);
                 }
             },
             _ => ()

@@ -12,7 +12,7 @@ impl<T> From<T> for Response<T> {
 }
 
 impl<T> Responder for Response<T> where T: Serialize {
-    fn respond_to(self, req: &HttpRequest) -> HttpResponse {
+    fn respond_to(self, _: &HttpRequest) -> HttpResponse {
         HttpResponse::build(StatusCode::OK).json(self.0)
     }
 }

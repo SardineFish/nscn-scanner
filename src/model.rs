@@ -75,12 +75,6 @@ impl Model {
                 "as": "analyse",
             }
         });
-        let query = doc! {
-            "addr_int": {
-                "$gte": range.start,
-                "$lt": range.end,
-            }
-        };
         let results: Vec<ScanAnalyseResult> = self.db.collection::<Document>("scan").aggregate(pipeline, None)
             .await?
             .filter_map(|doc|async move{ doc.ok().and_then(|doc|bson::from_document::<ScanAnalyseResult>(doc).ok())})
