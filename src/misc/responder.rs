@@ -1,7 +1,7 @@
 use actix_web::{HttpRequest, HttpResponse, Responder, http::StatusCode, web::Json};
 use serde::Serialize;
 
-use crate::error::ServiceError;
+use crate::error::{ApiError, ServiceError};
 
 pub struct Response<T>(pub T);
 
@@ -17,4 +17,4 @@ impl<T> Responder for Response<T> where T: Serialize {
     }
 }
 
-pub type ApiResult<T> = std::result::Result<Response<T>, ServiceError>;
+pub type ApiResult<T> = std::result::Result<Response<T>, ApiError>;

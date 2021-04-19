@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::str::FromStr;
 
 use chrono::Utc;
 use mongodb::{Database, bson::{self, Document}, options::UpdateOptions};
@@ -9,14 +10,15 @@ use crate::error::*;
 
 use super::{http_scanner::HttpResponseData, https_scanner::HttpsResponse, tcp_scanner::scanner::TCPScanResult};
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct NetScanRecord {
+    pub addr_int: i64,
     pub addr: String,
     pub last_update: bson::DateTime,
     pub scan: NetScanResult,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 #[serde(tag="result", content="data")]
 pub enum ScanResult<T> {
     Ok(T),
@@ -34,7 +36,7 @@ impl<T: Serialize> From<Result<T, SimpleError>> for ScanResult<T> {
 
 
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct ScanTaskInfo<T> {
     pub proxy: String,
     pub time: bson::DateTime,
@@ -59,14 +61,14 @@ impl<T> ScanTaskInfo<T> {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct NetScanResult {
     pub http: Option<NetScanResultSet<HttpResponseData>>,
     pub https: Option<NetScanResultSet<HttpsResponse>>,
     pub tcp: Option<HashMap<String, TCPScanResult>>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct NetScanResultSet<T> {
     pub success: i32,
     pub results: Vec<ScanTaskInfo<T>>,
@@ -98,9 +100,11 @@ impl ResultHandler {
             result,
         };
 
+        let addr_int: u32 = std::net::Ipv4Addr::from_str(ip_addr)?.into();
         let doc = bson::doc! {
             "$set": {
                 "addr": ip_addr,
+                "addr_int": addr_int as i64,
                 "last_update": bson::to_bson(&bson::DateTime::from(Utc::now()))?,
             },
             "$inc": {
@@ -111,7 +115,7 @@ impl ResultHandler {
             }
         };
         let query = bson::doc! {
-            "addr": ip_addr,
+            "addr_int": addr_int as i64,
         };
         let mut opts = UpdateOptions::default();
         opts.upsert = Some(true);

@@ -39,7 +39,7 @@ impl TCPScanTask {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct TCPScanResult {
     pub ftp: Option<NetScanResultSet<FTPScanResult>>,
     pub ssh: Option<NetScanResultSet<SSHScannResult>>,

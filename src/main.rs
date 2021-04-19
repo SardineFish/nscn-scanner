@@ -1,5 +1,7 @@
 mod controller;
 mod misc;
+mod model;
+
 pub use misc::error;
 
 use std::{ops::Range, str::FromStr};

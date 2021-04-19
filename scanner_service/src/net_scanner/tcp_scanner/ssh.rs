@@ -62,7 +62,7 @@ impl SSHScanTask {
         Ok(result)
     }
 }
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct SSHScannResult {
     pub protocol: ProtocolVersionMessage,
     pub algorithm: AlgorithmExchange,

@@ -10,7 +10,7 @@ pub struct ServiceInfo {
     pub version: String,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ServiceAnalyseResult {
     pub name: String,
     pub version: String,
@@ -27,7 +27,7 @@ impl ServiceAnalyseResult {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ServiceVuln {
     pub id: String,
     pub title: String,

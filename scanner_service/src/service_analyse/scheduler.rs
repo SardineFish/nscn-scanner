@@ -158,7 +158,7 @@ impl ServiceAnalyseTask {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ServiceRecord {
     addr: String,
     last_update: bson::DateTime,

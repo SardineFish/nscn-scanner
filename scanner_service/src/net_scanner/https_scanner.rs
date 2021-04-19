@@ -87,7 +87,7 @@ struct HttpsScanRecord {
     result: ScanResult<HttpsResponse>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct HttpsResponse {
     cert: String,
 }

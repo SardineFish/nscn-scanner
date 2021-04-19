@@ -24,8 +24,10 @@ use tokio::{task, time::sleep};
 use error::*;
 
 pub use net_scanner::scheduler::SchedulerController;
-pub use service_analyse::{scheduler::ServiceAnalyseScheduler};
+pub use service_analyse::{scheduler::ServiceAnalyseScheduler, scheduler::ServiceRecord};
 pub use config::Config;
+pub use net_scanner::result_handler::NetScanRecord;
+pub use address::parse_ipv4_cidr;
 
 #[derive(Clone)]
 pub struct ScannerService {

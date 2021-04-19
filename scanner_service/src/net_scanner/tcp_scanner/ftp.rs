@@ -142,7 +142,7 @@ impl<'s, S: AsyncRead + AsyncWrite + Unpin> FTPStream<'s, S> {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct FTPScanResult {
     pub handshake_code: i16,
     pub handshake_text: String,
