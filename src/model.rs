@@ -2,7 +2,7 @@ use std::ops::Range;
 
 use serde::{Deserialize, Serialize};
 use mongodb::{Database, bson::{self, doc,  Document}};
-use nscn::{NetScanRecord, ServiceRecord, error::SimpleError};
+use nscn::{NetScanRecord, ServiceRecord};
 use futures::StreamExt;
 
 use crate::error::ServiceError;
@@ -14,8 +14,8 @@ pub struct Model {
 
 #[derive(Deserialize, Serialize, Debug)]
 pub struct ScanAnalyseResult {
-    scan: NetScanRecord,
-    analyse: Option<ServiceRecord>,
+    pub scan: NetScanRecord,
+    pub analyse: Option<ServiceRecord>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -35,7 +35,7 @@ impl Model {
         let query = doc! {
             "addr_int": addr_int as i64
         };
-        let scan_result = self.db.collection::<NetScanRecord>("scan").find_one(query, None).await?
+        let scan_result = self.db.collection::<NetScanRecord>("scan").find_one(query.clone(), None).await?
             .ok_or(ServiceError::DataNotFound)?;
 
         let analyse_resut = self.db.collection::<ServiceRecord>("analyse").find_one(query, None).await?;

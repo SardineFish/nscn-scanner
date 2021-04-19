@@ -1,7 +1,7 @@
-use actix_web::{HttpRequest, HttpResponse, Responder, http::StatusCode, web::Json};
+use actix_web::{HttpRequest, HttpResponse, Responder, http::StatusCode};
 use serde::Serialize;
 
-use crate::error::{ApiError, ServiceError};
+use crate::error::{ApiError};
 
 pub struct Response<T>(pub T);
 

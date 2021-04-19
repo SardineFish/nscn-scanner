@@ -160,10 +160,10 @@ impl ServiceAnalyseTask {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ServiceRecord {
-    addr: String,
-    last_update: bson::DateTime,
-    system: HashMap<String, String>,
-    web: HashMap<String, String>,
-    ftp: HashMap<String, String>,
-    ssh: HashMap<String, String>,
+    pub addr: String,
+    pub last_update: bson::DateTime,
+    pub system: Option<HashMap<String, ServiceAnalyseResult>>,
+    pub web: Option<HashMap<String, ServiceAnalyseResult>>,
+    pub ftp: Option<HashMap<String, ServiceAnalyseResult>>,
+    pub ssh: Option<HashMap<String, ServiceAnalyseResult>>,
 }

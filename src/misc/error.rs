@@ -1,9 +1,7 @@
 use std::fmt::{Display, Formatter};
 
-use actix_web::{Responder, ResponseError, http::StatusCode};
+use actix_web::{ResponseError, http::StatusCode};
 use nscn::error::SimpleError;
-
-use super::responder::Response;
 
 #[derive(Debug)]
 pub enum ServiceError {
@@ -54,7 +52,17 @@ impl From<ServiceError> for ApiError {
     fn from(err: ServiceError) -> Self {
         match err {
             ServiceError::DataNotFound => Self(StatusCode::NOT_FOUND, "Not found".to_owned()),
-            ServiceError::InternalErr(_) => Self(StatusCode::INTERNAL_SERVER_ERROR, "Internal error".to_owned()),
+            ServiceError::InternalErr(err) => {
+                log::error!("InternalError: {}", err);
+                Self(StatusCode::INTERNAL_SERVER_ERROR, "Internal error".to_owned())
+            },
         }
+    }
+}
+
+impl From<SimpleError> for ApiError {
+    fn from(err: SimpleError) -> Self {
+        log::error!("InternalError: {}", err.msg);
+        ApiError(StatusCode::INTERNAL_SERVER_ERROR, "Internal error".to_owned())
     }
 }

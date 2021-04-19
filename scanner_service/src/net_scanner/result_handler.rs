@@ -25,6 +25,21 @@ pub enum ScanResult<T> {
     Err(String),
 }
 
+impl<T> ScanResult<T> {
+    pub fn ok(self) -> Option<T> {
+        match self {
+            ScanResult::Ok(result) => Some(result),
+            _ => None
+        }
+    }
+    pub fn as_ref(&self) -> ScanResult<&T> {
+        match self {
+            ScanResult::Ok(result) => ScanResult::Ok(result),
+            ScanResult::Err(err) => ScanResult::Err(err.to_owned()),
+        }
+    }
+}
+
 impl<T: Serialize> From<Result<T, SimpleError>> for ScanResult<T> {
     fn from(result: Result<T, SimpleError>) -> Self {
         match result {

@@ -89,5 +89,5 @@ struct HttpsScanRecord {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct HttpsResponse {
-    cert: String,
+    pub cert: String,
 }
