@@ -4,9 +4,9 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "build": "node ./build/build.js",
-    "build:watch": "node ./build/build.js --dev -w",
-    "start": "node ./build/build.js --dev -s"
+    "build": "npx webpack --mode production",
+    "build:watch": "npx webpack --mode development --watch",
+    "start": "npx webpack serve"
   },
   "author": "SardineFish",
   "license": "GPL-3.0",
@@ -14,9 +14,16 @@
     "@types/node": "^14.14.41",
     "@types/react": "^17.0.3",
     "@types/react-dom": "^17.0.3",
-    "esbuild": "^0.11.12",
-    "esbuild-plugin-sass": "^0.4.1",
-    "typescript": "^4.2.4"
+    "css-loader": "^5.2.4",
+    "html-webpack-plugin": "^5.3.1",
+    "sass": "^1.32.11",
+    "sass-loader": "^11.0.1",
+    "style-loader": "^2.0.0",
+    "ts-loader": "^9.0.0",
+    "typescript": "^4.2.4",
+    "webpack": "^5.34.0",
+    "webpack-cli": "^4.6.0",
+    "webpack-dev-server": "^3.11.2"
   },
   "dependencies": {
     "antd": "^4.15.2",

@@ -1,0 +1,19 @@
+
+
+.scan-stats {
+    height: 400px;
+    display: flex;
+    flex-flow: row nowrap;
+    align-items: center;
+    justify-content: center;
+    .ant-statistic {
+        margin: 0 5em;
+    }
+    .ant-statistic-title {
+        font-size: 1.5em;
+        // color: #69c0ff;
+    }
+    .ant-statistic-content {
+        // color: #2f54eb;
+    }
+}

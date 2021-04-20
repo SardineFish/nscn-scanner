@@ -45,13 +45,24 @@ interface BreifResult
     vulnerabilities: number,
 }
 
+export interface ScannerStatistics
+{
+    total_scan: number,
+    scan_per_seconds: number,
+    available_servers: number,
+    total_vulnerabilities: number,
+}
+
 const QueryParams = DeclareQuery({
     skip: "number",
     count: "number"
 });
 
+
 export const API = {
     scan: {
+        getStats: api("GET", "/api/scan/stats")
+            .response<ScannerStatistics>(),
         getByIp: api("GET", "/api/scan/{ip}")
             .path({ ip: IPV4Field })
             .response<ScanResult[]>(),
@@ -65,6 +76,10 @@ export const API = {
         requestScanIpRange: api("POST", "/api/scan/{ip}/{cidr}")
             .path({ ip: IPV4Field, cidr: "number" })
             .response(),
+        requestScanAddrList: api("POST", "/api/scan/list")
+            .body({
+                fetch_urls: "string[]",
+            })
     },
     search: {
         listAll: api("GET", "/api/search/all")
