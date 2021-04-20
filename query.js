@@ -13,7 +13,7 @@
                                         "."
                                     ]
                                 }, as: "slice", in: {
-                                    $toInt: "$$slice"
+                                    $convert: { input: "$$slice", to: "long" }
                                 }
                             }
                         }
@@ -34,7 +34,7 @@
                                     0
                                 ]
                             },
-                            1 << 24
+                            NumberLong(1 << 24)
                         ]
                     },
                     {
@@ -45,7 +45,7 @@
                                     1
                                 ]
                             },
-                            1 << 16
+                            NumberLong(1 << 16)
                         ]
                     },
                     {
@@ -56,7 +56,7 @@
                                     2
                                 ]
                             },
-                            1 << 8
+                            NumberLong(1 << 8)
                         ]
                     },
                     {
@@ -69,4 +69,66 @@
             }
         }
     }
-]
+];
+
+[
+    {
+        $match: {
+            addr_int: 974327653,
+        }
+    },
+    { $skip: 0 },
+    { $limit: 10 },
+    {
+        $project: {
+            scan: "$$ROOT",
+        }
+    },
+    {
+        $lookup: {
+            from: "analyse",
+            localField: "scan.addr_int",
+            foreignField: "addr_int",
+            as: "analyse",
+        }
+    },
+    {
+        $project: {
+            scan: "$scan",
+            analyse: {
+                $arrayElemAt: ["$analyse", 0]
+            }
+        }
+    }
+];
+
+[
+    {
+        $match: {
+            $or: [
+                { "web.Nginx": { $gt: {} } },
+                { "ftp.Nginx": { $gt: {} } },
+                { "ssh.Nginx": { $gt: {} } },
+            ]
+        }
+    },
+    {
+        $project: {
+            "analyse": "$$ROOT"
+        }
+    },
+    {
+        $lookup: {
+            from: "scan",
+            localField: "analyse.addr_int",
+            foreignField: "addr_int",
+            as: "scan"
+        }
+    },
+    {
+        $project: {
+            analyse: "$analyse",
+            scan: { $arrayElemAt: ["$scan", 0] }
+        }
+    }
+];

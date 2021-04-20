@@ -3,6 +3,7 @@ mod misc;
 mod model;
 
 pub use misc::error;
+use model::Model;
 
 use std::{ops::Range, str::FromStr};
 
@@ -26,13 +27,15 @@ async fn main() {
         .await
         .unwrap();
     let db = mongodb.database("nscn");
+    let model = Model::new(db.clone());
 
     task::spawn(try_dispatch_address(scanner.clone()));
     task::spawn(try_dispatch_analysing(db.clone(), scanner.clone()));
 
     actix_web::HttpServer::new(move || {
         App::new()
-            .app_data(scanner.clone())
+            .data(scanner.clone())
+            .data(model.clone())
             .wrap(Logger::default())
             .configure(controller::config)
     })

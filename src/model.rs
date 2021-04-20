@@ -70,9 +70,17 @@ impl Model {
         pipeline.push(doc! {
             "$lookup": {
                 "from": "analyse",
-                "localField": "addr_int",
+                "localField": "scan.addr_int",
                 "foreignField": "addr_int",
                 "as": "analyse",
+            }
+        });
+        pipeline.push(doc! {
+             "$project": {
+                "scan": "$scan",
+                "analyse": {
+                    "$arrayElemAt": ["$analyse", 0]
+                }
             }
         });
         let results: Vec<ScanAnalyseResult> = self.db.collection::<Document>("scan").aggregate(pipeline, None)
@@ -118,7 +126,7 @@ impl Model {
         pipeline.push(doc! {
             "$lookup": {
                 "from": "analyse",
-                "localField": "addr_int",
+                "localField": "scan.addr_int",
                 "foreignField": "addr_int",
                 "as": "analyse",
             }
@@ -175,7 +183,7 @@ impl Model {
         pipeline.push(doc! {
             "$lookup": {
                 "from": "scan",
-                "localField": "addr_int",
+                "localField": "analyse.addr_int",
                 "foreignField": "addr_int",
                 "as": "scan",
             }
@@ -189,7 +197,7 @@ impl Model {
             }
         });
 
-        let results: Vec<ScanAnalyseResult> = self.db.collection::<Document>("scan").aggregate(pipeline, None)
+        let results: Vec<ScanAnalyseResult> = self.db.collection::<Document>("analyse").aggregate(pipeline, None)
             .await?
             .filter_map(|doc|async move{ doc.ok().and_then(|doc|bson::from_document::<ScanAnalyseResult>(doc).ok())})
             .collect()
@@ -234,7 +242,7 @@ impl Model {
         pipeline.push(doc! {
             "$lookup": {
                 "from": "scan",
-                "localField": "addr_int",
+                "localField": "analyse.addr_int",
                 "foreignField": "addr_int",
                 "as": "scan",
             }
@@ -248,7 +256,7 @@ impl Model {
             }
         });
 
-        let results: Vec<ScanAnalyseResult> = self.db.collection::<Document>("scan").aggregate(pipeline, None)
+        let results: Vec<ScanAnalyseResult> = self.db.collection::<Document>("analyse").aggregate(pipeline, None)
             .await?
             .filter_map(|doc|async move{ doc.ok().and_then(|doc|bson::from_document::<ScanAnalyseResult>(doc).ok())})
             .collect()
