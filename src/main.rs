@@ -36,7 +36,7 @@ async fn main() {
         App::new()
             .data(scanner.clone())
             .data(model.clone())
-            .wrap(Logger::default())
+            .wrap(Logger::new("%s - %r %Dms"))
             .configure(controller::config)
     })
     .bind("127.0.0.1:3000")
