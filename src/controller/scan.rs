@@ -57,7 +57,7 @@ pub fn get_opened_ports(result: &ScanAnalyseResult) -> Vec<i16> {
         match tcp.get("22") {
             Some(tcp_result) => match &tcp_result.ssh {
                 Some(ssh_result) if ssh_result.success > 0 => {
-                    ports.push(21);
+                    ports.push(22);
                 },
                 _ =>(),
             },
