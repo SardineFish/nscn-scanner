@@ -15,8 +15,10 @@ pub fn parse_ipv4_cidr(cidr: &str) -> Result<Range<u32>, SimpleError> {
             .into();
 
         let cidr: i32 = slices[1].parse().unwrap();
-        let offset = 32 - cidr;
-        Ok(base_ip..base_ip + (1 << offset))
+        match cidr {
+            0 => Ok(0..u32::max_value()),
+            cidr => Ok(base_ip..base_ip + (1 << (32 - cidr)))
+        }
     }
 }
 

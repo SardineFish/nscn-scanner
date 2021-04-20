@@ -58,9 +58,31 @@
 
 
 ## Query by IP Range with CIDR Notation
-`GET /api/scan/{ip}/{CIDR_notation}?skip=0&count=10`
+`GET /api/scan/{ip}/{CIDR_notation}?skip=0&count=10&online_only=1`
 
 e.g. `GET /api/scan/123.123.123.123/24`
+
+
+
+### Response
+```json
+[
+    {
+        "addr": "123.123.123.123",
+        "last_update": 1618933373681,
+        "opened_ports": [80, 443, 22],
+        "services": ["Nginx 1.4.0", "OpenSSH 7.0"],
+        "vulnerabilities": 13
+    },
+    {
+        "addr": "100.100.100.100",
+        "last_update": 1618933373681,
+        "opened_ports": [80, 22],
+        "services": ["PHP 7.0", "OpenSSH 7.2"],
+        "vulnerabilities": 21
+    }
+]
+```
 
 
 ## Request Scanning IP Adress
@@ -84,23 +106,6 @@ e.g. `GET /api/scan/123.123.123.123/24`
 ## Get All Available Hosts
 `GET /api/search/all?skip=0&count=10`
 
-### Response
-```json
-[
-    {
-        "addr": "123.123.123.123",
-        "opened_ports": [80, 443, 22],
-        "services": ["Nginx 1.4.0", "OpenSSH 7.0"],
-        "vulnerabilities": 13
-    },
-    {
-        "addr": "100.100.100.100",
-        "opened_ports": [80, 22],
-        "services": ["PHP 7.0", "OpenSSH 7.2"],
-        "vulnerabilities": 21
-    }
-]
-```
 
 
 ## Search by Service Name

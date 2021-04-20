@@ -26,11 +26,6 @@ pub struct ScanStats {
     pub total_vulnerabilities: usize,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct BriefResult {
-
-}
-
 impl Model {
     pub fn new(db: Database) -> Self {
         Self {
@@ -54,16 +49,28 @@ impl Model {
         })
     }
 
-    pub async fn get_by_ip_range(&self, range: Range<u32>, skip: usize, count: usize) -> Result<Vec<ScanAnalyseResult>, ServiceError> {
+    pub async fn get_by_ip_range(&self, range: Range<u32>, skip: usize, count: usize, online_only: bool) -> Result<Vec<ScanAnalyseResult>, ServiceError> {
         let mut pipeline = Vec::<Document>::new();
         pipeline.push(doc! {
             "$match": {
                 "addr_int": {
-                    "$gte": range.start,
-                    "$lt": range.end,
+                    "$gte": range.start as i64,
+                    "$lt": range.end as i64,
                 }
             }
         });
+        if online_only {
+            pipeline.push(doc! {
+                "$match": {
+                    "$or": [
+                        {"scan.http.success": {"$gt": 0}},
+                        {"scan.https.success": {"$gt": 0}},
+                        {"scan.tcp.21.ftp.success": {"$gt": 0}},
+                        {"scan.tcp.22.ssh.success": {"$gt": 0}},
+                    ]
+                }
+            })
+        }
         pipeline.push(doc! {
             "$skip": skip as i64,
         });
@@ -91,63 +98,6 @@ impl Model {
                 }
             }
         });
-        let results: Vec<ScanAnalyseResult> = self.db.collection::<Document>("scan").aggregate(pipeline, None)
-            .await?
-            .filter_map(|doc|async move{ doc.ok().and_then(|doc|bson::from_document::<ScanAnalyseResult>(doc).ok())})
-            .collect()
-            .await;
-        Ok(results)
-    }
-
-    pub async fn get_all_available(&self, skip: usize, count: usize) -> Result<Vec<ScanAnalyseResult>, ServiceError> {
-        let mut pipeline = Vec::<Document>::new();
-
-        pipeline.push(doc! {
-            "$match": {
-                "$or": [
-                    {
-                        "scan.http.success": {"$gt": 0},
-                    },
-                    {
-                        "scan.https.success": {"$gt": 0},
-                    },
-                    {
-                        "scan.tcp.21.ftp.success": {"$gt": 0},
-                    },
-                    {
-                        "scan.tcp.22.ssh.success": {"$gt": 0},
-                    }
-                ]
-            }
-        });
-        pipeline.push(doc! {
-            "$skip": skip as i64,
-        });
-        pipeline.push(doc! {
-            "$limit": count as i64,
-        });
-        pipeline.push(doc! {
-            "$project": {
-                "scan": "$$ROOT",
-            }
-        });
-        pipeline.push(doc! {
-            "$lookup": {
-                "from": "analyse",
-                "localField": "scan.addr_int",
-                "foreignField": "addr_int",
-                "as": "analyse",
-            }
-        });
-        pipeline.push(doc! {
-            "$project": {
-                "scan": "$scan",
-                "analyse": {
-                    "$arrayElemAt": ["$analyse", 0]
-                }
-            }
-        });
-
         let results: Vec<ScanAnalyseResult> = self.db.collection::<Document>("scan").aggregate(pipeline, None)
             .await?
             .filter_map(|doc|async move{ doc.ok().and_then(|doc|bson::from_document::<ScanAnalyseResult>(doc).ok())})

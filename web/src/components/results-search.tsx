@@ -9,7 +9,7 @@ import { CheckboxChangeEvent } from "antd/lib/checkbox";
 export const ResultSearch: React.FC = () =>
 {
     const [data, setData] = useState([] as BreifResult[]);
-    const [searchAddr, setSearch] = useState({ ip: "58.49.89.20", cidr: 27 });
+    const [searchAddr, setSearch] = useState({ ip: "0.0.0.0", cidr: 0 });
     const [skip, setSkip] = useState(0);
     const [loading, setLoading] = useState(false);
     const [hasMore, setHasMore] = useState(true);
@@ -51,7 +51,7 @@ export const ResultSearch: React.FC = () =>
         try
         {
             setLoading(true);
-            const list = await API.scan.getByIpRange({ ...addr, skip, count: 10 });
+            const list = await API.scan.getByIpRange({ ...addr, skip, count: 10, online_only: onlineOnly ? 1 : 0 });
             setData([...oldData, ...list]);
             setSkip(skip + list.length);
             setLoading(false);
@@ -66,7 +66,13 @@ export const ResultSearch: React.FC = () =>
 
     const onlineOnlyChange = (e: CheckboxChangeEvent) =>
     {
-        
+        setOnlineOnly(e.target.checked);
+        if (!loading)
+        {
+            setSkip(0);
+            setData([]);
+            // loadMore(searchAddr, [], true);
+        }
     }
 
 
@@ -78,7 +84,7 @@ export const ResultSearch: React.FC = () =>
                 allowClear
                 enterButton size="large"
                 onSearch={search} />
-            <Checkbox checked={onlineOnly} onChange={onlineOnlyChange}>Online Only</Checkbox>
+            <Checkbox className="search-online-only" checked={onlineOnly} onChange={onlineOnlyChange}>Online Only</Checkbox>
             <InfiniteScroll
                 className="scan-results"
                 initialLoad={true}
@@ -102,10 +108,11 @@ export const ResultSearch: React.FC = () =>
 
 const SearchResultItem = (props: {result: BreifResult}) =>
 {
+    const time = new Date(props.result.last_update).toLocaleString();
     return (<List.Item>
         <List.Item.Meta
             avatar={<DatabaseOutlined style={{ fontSize: "32px" }} />}
-            title={props.result.addr}
+            title={<span>{props.result.addr} <span className="update-time">{time}</span></span>}
             description={<>
                 {
                     props.result.opened_ports.length <= 0

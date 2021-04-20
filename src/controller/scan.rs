@@ -6,6 +6,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::{error::{ApiError}, misc::responder::{ApiResult, Response}, model::{Model, ScanAnalyseResult, ScanStats}};
 
+use super::search::ScanResultBreif;
+
 #[derive(Serialize)]
 struct ScanResult {
     addr: String,
@@ -26,6 +28,7 @@ struct HTTPResponseData {
 pub struct QueryParameters {
     pub skip: usize,
     pub count: usize,
+    pub online_only: Option<i32>,
 }
 
 pub fn get_opened_ports(result: &ScanAnalyseResult) -> Vec<i16> {
@@ -180,14 +183,19 @@ async fn get_by_ip(addr_str: Path<String>, model: Data<Model>) -> ApiResult<Vec<
 }
 
 #[get("/{addr}/{cidr}")]
-async fn get_range_by_cidr(path: Path<(String, String)>, query: Query<QueryParameters>, model: Data<Model>) -> ApiResult<Vec<ScanResult>> {
+async fn get_range_by_cidr(path: Path<(String, String)>, query: Query<QueryParameters>, model: Data<Model>) -> ApiResult<Vec<ScanResultBreif>> {
     let (addr_str, cidr) = path.into_inner();
     let range = parse_ipv4_cidr(&format!("{}/{}", addr_str, cidr))
         .map_err(|_|ApiError(StatusCode::BAD_REQUEST, "Invalid CIDR notation format".to_owned()))?;
-    
-    let result = model.get_by_ip_range(range, query.skip, query.count).await?;
 
-    Ok(Response(result.into_iter().map(ScanResult::from).collect()))
+    let online_only = match query.online_only {
+        Some(x) if x > 0 => true,
+        _ => false,
+    };
+    
+    let result = model.get_by_ip_range(range, query.skip, query.count, online_only).await?;
+
+    Ok(Response(result.into_iter().map(ScanResultBreif::from).collect()))
 }
 
 #[post("/{addr}")]

@@ -7,8 +7,9 @@ use crate::misc::responder::Response;
 use super::scan::{QueryParameters, get_opened_ports};
 
 #[derive(Serialize)]
-struct ScanResultBreif {
+pub struct ScanResultBreif {
     addr: String,
+    last_update: i64,
     opened_ports: Vec<i16>,
     services: Vec<String>,
     vulnerabilities: usize,
@@ -37,6 +38,7 @@ impl From<ScanAnalyseResult> for ScanResultBreif {
         Self {
             addr: result.scan.addr,
             opened_ports: ports,
+            last_update: result.scan.last_update.timestamp_millis(),
             services,
             vulnerabilities: vulns
         }
@@ -45,7 +47,7 @@ impl From<ScanAnalyseResult> for ScanResultBreif {
 
 #[get("/all")]
 async fn get_all_available(query: Query<QueryParameters>, model: Data<Model>) -> ApiResult<Vec<ScanResultBreif>> {
-    let results = model.get_all_available(query.skip, query.count).await?;
+    let results = model.get_by_ip_range(0..u32::max_value(),query.skip, query.count, true).await?;
 
     Ok(Response(results.into_iter().map(ScanResultBreif::from).collect()))
 }

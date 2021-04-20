@@ -34,6 +34,7 @@
         width: 100%;
         display: flex;
         flex-flow: column nowrap;
+        
 
         .ant-list-item {
             background-color: white;
@@ -43,6 +44,22 @@
         }
         .ant-list-item-meta {
             margin-bottom: 0;
+        }
+    }
+    .search-online-only {
+        align-self: flex-end;
+    }
+
+    .update-time {
+        font-size: 12px;
+        font-weight: normal;
+        color: #bbb;
+        margin-left: 1em;
+
+        &::before {
+            content: "@";
+            font-size: 1em;
+            margin-right: 0.5em;
         }
     }
 }

@@ -40,6 +40,7 @@ export interface ScanResult
 export interface BreifResult
 {
     addr: string,
+    last_update: number,
     opened_ports: number[],
     services: string[],
     vulnerabilities: number,
@@ -55,7 +56,12 @@ export interface ScannerStatistics
 
 const QueryParams = DeclareQuery({
     skip: "number",
-    count: "number"
+    count: "number",
+    online_only: {
+        type: "number",
+        validator: (_, v) => v,
+        optional: true,
+    },
 });
 
 
