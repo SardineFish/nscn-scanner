@@ -15,7 +15,7 @@ const IPV4Field: ParamInfo<"string"> = {
     validator: ipv4Validator,
 }
 
-interface ScanResult
+export interface ScanResult
 {
     addr: string,
     opened_ports: number[],
@@ -37,7 +37,7 @@ interface ScanResult
     }>
 }
 
-interface BreifResult
+export interface BreifResult
 {
     addr: string,
     opened_ports: number[],
@@ -69,7 +69,7 @@ export const API = {
         getByIpRange: api("GET", "/api/scan/{ip}/{cidr}")
             .path({ ip: IPV4Field, cidr: "number" })
             .query(QueryParams)
-            .response<ScanResult[]>(),
+            .response<BreifResult[]>(),
         requestScanIp: api("POST", "/api/scan/{ip}")
             .path({ ip: IPV4Field })
             .response(),
@@ -93,5 +93,5 @@ export const API = {
             .path({ service: "string", version: "string" })
             .query(QueryParams)
             .response<BreifResult[]>()
-    }
+    },
 };

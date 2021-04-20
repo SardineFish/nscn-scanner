@@ -6,6 +6,8 @@
     flex-flow: row nowrap;
     align-items: center;
     justify-content: center;
+    user-select: none;
+
     .ant-statistic {
         margin: 0 5em;
     }
@@ -15,5 +17,32 @@
     }
     .ant-statistic-content {
         // color: #2f54eb;
+    }
+}
+
+.result-search {
+    width: 800px;
+    margin: auto;
+    display: flex;
+    flex-flow: column nowrap;
+    align-items: center;
+    .search-input {
+        width: 800px;
+    }
+    .scan-results {
+        margin-top: 2em;
+        width: 100%;
+        display: flex;
+        flex-flow: column nowrap;
+
+        .ant-list-item {
+            background-color: white;
+            padding: 1em;
+            margin: 1em 0;
+            box-shadow: 0 0 20px rgba(0,0,0,0.02);
+        }
+        .ant-list-item-meta {
+            margin-bottom: 0;
+        }
     }
 }

@@ -1,6 +1,7 @@
 import { Statistic } from "antd";
 import React, { CSSProperties, useEffect, useState } from "react";
 import { API } from "../api/api";
+import InfiniteScroll, { } from "react-infinite-scroller";
 
 export const StatsPreview: React.FC = () =>
 {
@@ -22,6 +23,7 @@ export const StatsPreview: React.FC = () =>
     }, []);
 
     return (<section className="scan-stats">
+
         <Statistic title="Total Scanned" suffix="Ips" value={totalScan} valueStyle={ValueStyle}></Statistic>
         <Statistic title="Available" suffix="Ips" value={allAvailable} valueStyle={ValueStyle}></Statistic>
         <Statistic title="Total Vulnerabilities Found" value={vulns} valueStyle={ValueStyle}></Statistic>
