@@ -1,3 +1,16 @@
+## Get Statistics
+`GET /api/scan/stats`
+
+### Response
+```json
+{
+    "total_scan": 0,
+    "scan_per_seconds": 0,
+    "available_servers": 0,
+    "total_vulnerabilities": 0,
+}
+```
+
 ## Query by IP Address
 `GET /api/scan/{ip}`
 
@@ -55,6 +68,18 @@ e.g. `GET /api/scan/123.123.123.123/24`
 
 ## Request Scanning IP Range with CIDR Notation
 `POST /api/scan/{ip}/{CIDR_notation}`
+
+## Request Scanning IP from List URL
+`POST /api/scan/list`
+### Request
+```json
+{
+    "fetch_urls": [
+        "https://example.com/addr_list1.txt",
+        "https://example.com/addr_list2.txt"
+    ]
+}
+```
 
 ## Get All Available Hosts
 `GET /api/search/all?skip=0&count=10`

@@ -38,7 +38,10 @@ pub struct ApiError(pub StatusCode, pub String);
 
 impl Display for ApiError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "internal service error")
+        match self.0 {
+            StatusCode::INTERNAL_SERVER_ERROR => write!(f, "internal service error"),
+            _ => write!(f, "{}", self.0)
+        }
     }
 }
 

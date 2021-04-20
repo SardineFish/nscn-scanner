@@ -1,6 +1,7 @@
 mod controller;
 mod misc;
 mod model;
+mod utils;
 
 pub use misc::error;
 use model::Model;

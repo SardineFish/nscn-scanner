@@ -1,10 +1,10 @@
 use std::{collections::HashMap, net::Ipv4Addr, str::FromStr};
 
-use actix_web::{get, http::StatusCode, post, web::{Data, Path, Query, ServiceConfig, scope}};
+use actix_web::{get, http::StatusCode, post, web::{Data, Json, Path, Query, ServiceConfig, scope}};
 use nscn::{FTPAccess, ScannerService, ServiceAnalyseResult, error::SimpleError, parse_ipv4_cidr};
 use serde::{Deserialize, Serialize};
 
-use crate::{error::{ApiError}, misc::responder::{ApiResult, Response}, model::{Model, ScanAnalyseResult}};
+use crate::{error::{ApiError}, misc::responder::{ApiResult, Response}, model::{Model, ScanAnalyseResult, ScanStats}};
 
 #[derive(Serialize)]
 struct ScanResult {
@@ -153,6 +153,24 @@ impl From<ScanAnalyseResult> for ScanResult {
     }
 }
 
+#[derive(Deserialize)]
+struct ScanningRequest {
+    fetch_urls: Option<Vec<String>>,
+}
+
+#[derive(Serialize)]
+struct ScanningRequestResult {
+    tasks: usize,
+}
+
+#[get("/stats")]
+async fn get_stats(service: Data<ScannerService>, model: Data<Model>) -> ApiResult<ScanStats> {
+    let mut stats = model.get_stats().await?;
+    stats.scan_per_seconds = service.scheculer().stats().await.dispatched_addrs / 10;
+
+    Ok(Response(stats))
+}
+
 #[get("/{addr}")]
 async fn get_by_ip(addr_str: Path<String>, model: Data<Model>) -> ApiResult<Vec<ScanResult>> {
     let addr = parse_ip(&addr_str).map_err(|_|ApiError(StatusCode::BAD_REQUEST, "Invalid address format".to_owned()))?;
@@ -173,18 +191,47 @@ async fn get_range_by_cidr(path: Path<(String, String)>, query: Query<QueryParam
 }
 
 #[post("/{addr}")]
-async fn request_scan(addr_str: Path<String>, service: Data<ScannerService>) -> ApiResult<()> {
+async fn request_scan(addr_str: Path<String>, service: Data<ScannerService>) -> ApiResult<ScanningRequestResult> {
     service.scheculer().enqueue_addr_range(&format!("{}/32", addr_str)).await?;
 
-    Ok(Response(()))
+    Ok(Response(ScanningRequestResult {
+        tasks: 1
+    }))
 }
 
 #[post("/{addr}/{cidr}")]
-async fn request_scan_range(path: Path<(String, String)>, service: Data<ScannerService>) -> ApiResult<()> {
+async fn request_scan_range(path: Path<(String, String)>, service: Data<ScannerService>) -> ApiResult<ScanningRequestResult> {
     let (addr_str, cidr) = path.into_inner();
+    let range = parse_ipv4_cidr(&format!("{}/{}", addr_str, cidr))
+        .map_err(|_|ApiError(StatusCode::BAD_REQUEST, "Invalid CIDR notation format".to_owned()))?;
     service.scheculer().enqueue_addr_range(&format!("{}/{}", addr_str, cidr)).await?;
 
-    Ok(Response(()))
+    Ok(Response(ScanningRequestResult {
+        tasks: range.len()
+    }))
+}
+
+#[post("/list")]
+async fn request_scan_by_list(request: Json<ScanningRequest>, service: Data<ScannerService>) -> ApiResult<ScanningRequestResult> {
+    let mut tasks = 0;
+    let scheduler = service.scheculer();
+    if let Some(lists) = &request.fetch_urls {
+        for url in lists {
+            let list = service.fetch_address_list(url.as_str()).await
+                .map_err(|_|ApiError(StatusCode::BAD_REQUEST, format!("Faild to fetch address list from '{}'", url)))?;
+
+            for addr in list {
+                let range = parse_ipv4_cidr(&addr)
+                    .map_err(|_| ApiError(StatusCode::BAD_REQUEST, "Invalid address list format".to_owned()))?;
+                scheduler.enqueue_addr_range(&addr).await?;
+                tasks += range.len();
+            }
+        }
+    }
+
+    Ok(Response(ScanningRequestResult {
+        tasks,
+    }))
 }
 
 fn parse_ip(addr: &str) -> Result<u32, SimpleError> {
@@ -195,9 +242,11 @@ fn parse_ip(addr: &str) -> Result<u32, SimpleError> {
 pub fn config(cfg: &mut ServiceConfig) {
     cfg.service(
         scope("/scan")
+            .service(get_stats)
             .service(get_by_ip)
             .service(get_range_by_cidr)
+            .service(request_scan_by_list)
             .service(request_scan)
-            .service(request_scan_range),
+            .service(request_scan_range)
     );
 }

@@ -11,7 +11,7 @@ pub fn parse_ipv4_cidr(cidr: &str) -> Result<Range<u32>, SimpleError> {
         log::warn!("Invalid CIDR address");
         Err("Invalid CIDR address.")?
     } else {
-        let base_ip: u32 = std::net::Ipv4Addr::from_str(slices[0]).unwrap()
+        let base_ip: u32 = std::net::Ipv4Addr::from_str(slices[0])?
             .into();
 
         let cidr: i32 = slices[1].parse().unwrap();

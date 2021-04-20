@@ -18,6 +18,14 @@ pub struct ScanAnalyseResult {
     pub analyse: Option<ServiceRecord>,
 }
 
+#[derive(Serialize, Deserialize)]
+pub struct ScanStats {
+    pub total_scan: usize,
+    pub scan_per_seconds: usize,
+    pub available_servers: usize,
+    pub total_vulnerabilities: usize,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct BriefResult {
 
@@ -263,5 +271,56 @@ impl Model {
             .await;
 
         Ok(results)
+    }
+
+    pub async fn get_stats(&self) -> Result<ScanStats, ServiceError> 
+    {
+        let total_scan = self.db.collection::<Document>("scan").estimated_document_count(None).await?;
+        let total_available = self.db.collection::<Document>("analyse").estimated_document_count(None).await?;
+        let mut pipeline = Vec::new();
+        pipeline.push(doc! {
+            "$replaceRoot": {
+                "newRoot": {
+                    "vulns": {
+                        "$sum": {
+                            "$map": {
+                                "input": {
+                                    "$concatArrays": [
+                                        { "$objectToArray": "$web" },
+                                        { "$objectToArray": "$ssh" },
+                                        { "$objectToArray": "$ftp" },
+                                    ],
+                                },
+                                "as": "service",
+                                "in": {
+                                    "$sum": { "$size": "$$service.v.vulns" }
+                                }
+
+                            }
+                        }
+
+                    },
+                }
+            }
+        });
+        pipeline.push(doc! {
+            "$group": {
+                "_id": null,
+                "total_vulns": { "$sum": "$vulns"}
+            }
+        });
+        let doc = self.db.collection::<Document>("analyse").aggregate(pipeline, None)
+            .await?
+            .next()
+            .await
+            .ok_or(ServiceError::InternalErr("Failed to get total vulns".to_owned()))??;
+        let total_vulns = doc.get_i32("total_vulns")? as usize;
+
+        Ok(ScanStats {
+            total_scan: total_scan as usize,
+            available_servers: total_available as usize,
+            total_vulnerabilities: total_vulns as usize,
+            scan_per_seconds: 0
+        })
     }
 }

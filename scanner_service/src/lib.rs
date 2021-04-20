@@ -27,7 +27,7 @@ pub use net_scanner::scheduler::SchedulerController;
 pub use service_analyse::{scheduler::ServiceAnalyseScheduler, scheduler::ServiceRecord, ServiceAnalyseResult, ServiceVuln};
 pub use config::Config;
 pub use net_scanner::result_handler::NetScanRecord;
-pub use address::parse_ipv4_cidr;
+pub use address::{parse_ipv4_cidr};
 pub use net_scanner::tcp_scanner::ftp::FTPAccess;
 
 #[derive(Clone)]

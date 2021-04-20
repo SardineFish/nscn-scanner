@@ -132,3 +132,37 @@
         }
     }
 ];
+
+[
+    {
+        $replaceRoot: {
+            newRoot: {
+                vulns: {
+                    $sum: {
+                        $map: {
+                            input: {
+                                $concatArrays: [
+                                    { $objectToArray: "$web" },
+                                    { $objectToArray: "$ssh" },
+                                    { $objectToArray: "$ftp" },
+                                ],
+                            },
+                            as: "service",
+                            in: {
+                                $sum: { $size: "$$service.v.vulns" }
+                            }
+
+                        }
+                    }
+                    
+                },
+            }
+        }
+    },
+    {
+        $group: {
+            _id: null,
+            total_vulns: { $sum: "$vulns" }
+        }
+    }
+];

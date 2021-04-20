@@ -1,5 +1,6 @@
 const esbuild = require("esbuild");
 const fs = require("fs");
+const sassPlugin = require("esbuild-plugin-sass");
 // import { Plugin } from "esbuild";
 // import esbuild from "esbuild";
 
@@ -26,4 +27,5 @@ buildFunc({
     watch: watch,
     sourcemap: true,
     bundle: true,
+    plugins: [sassPlugin()]
 });
