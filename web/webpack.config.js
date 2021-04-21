@@ -14,6 +14,10 @@ module.exports = {
     },
     resolve: {
         extensions: ['.tsx', '.ts', '.js'],
+        fallback: {
+            "events": require.resolve("events/"),
+            "stream": require.resolve("stream-browserify"),
+        }
     },
     module: {
         rules: [

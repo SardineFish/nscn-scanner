@@ -14,7 +14,7 @@ export const ResultSearch: React.FC = () =>
     const [skip, setSkip] = useState(0);
     const [loading, setLoading] = useState(false);
     const [hasMore, setHasMore] = useState(true);
-    const [onlineOnly, setOnlineOnly] = useState(false);
+    const [onlineOnly, setOnlineOnly] = useState(true);
     const [showDetail, setShowDetail] = useState("");
 
     const search = async (value: string) =>
