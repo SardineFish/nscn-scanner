@@ -96,9 +96,9 @@ impl ServiceAnalyseTask {
     async fn analyse(self) -> Result<(), SimpleError> {
         log::info!("Analyse {}", self.addr);
 
-        let mut web_services: Option<HashMap::<String, ServiceAnalyseResult>> = None;
-        let mut ftp_services: Option<HashMap::<String, ServiceAnalyseResult>> = None;
-        let mut ssh_services: Option<HashMap::<String, ServiceAnalyseResult>> = None;
+        let mut web_services: HashMap::<String, ServiceAnalyseResult> = HashMap::new();
+        let mut ftp_services: HashMap::<String, ServiceAnalyseResult> = HashMap::new();
+        let mut ssh_services: HashMap::<String, ServiceAnalyseResult> = HashMap::new();
 
         match &GLOBAL_CONFIG.scanner.save {
             ResultSavingOption::SingleCollection(name) => {
@@ -117,13 +117,13 @@ impl ServiceAnalyseTask {
                     // for (name, version) in services {
                     //     web_services.insert(format!("web.{}", name), version);
                     // }
-                    web_services = Some(services);
+                    web_services = services;
                 }
                 let ftp_scan_result = record.scan.tcp.as_ref()
                     .and_then(|tcp|tcp.get("21"))
                     .and_then(|result|result.ftp.as_ref());
                 if let Some(ftp_result) = ftp_scan_result {
-                    ftp_services = Some(self.resource.ftp_analyser.analyse(&ftp_result).await);
+                    ftp_services = self.resource.ftp_analyser.analyse(&ftp_result).await;
                 }
 
                 let ssh_scan_result = record.scan.tcp.as_ref()

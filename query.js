@@ -166,3 +166,18 @@
         }
     }
 ];
+
+[
+    {
+        $set: {
+            any_available: {
+                $or: [
+                    { $gt: ["$scan.http.success", 0] },
+                    { $gt: ["$scan.https.success", 0] },
+                    { $gt: ["$scan.tcp.21.ftp.success", 0] },
+                    { $gt: ["$scan.tcp.22.ssh.success", 0] },
+                ]
+            }
+        }
+    }
+]

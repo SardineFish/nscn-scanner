@@ -62,15 +62,74 @@ impl Model {
         if online_only {
             pipeline.push(doc! {
                 "$match": {
-                    "$or": [
-                        {"scan.http.success": {"$gt": 0}},
-                        {"scan.https.success": {"$gt": 0}},
-                        {"scan.tcp.21.ftp.success": {"$gt": 0}},
-                        {"scan.tcp.22.ssh.success": {"$gt": 0}},
-                    ]
+                    "any_available": true,
                 }
             })
         }
+        self.query_union_scan_with_analyse(pipeline, skip, count).await
+    }
+
+    pub async fn get_by_scanner(&self, scanner: &str,skip: usize, count: usize) -> Result<Vec<ScanAnalyseResult>, ServiceError> {
+        let mut pipeline = Vec::new();
+        pipeline.push(doc! {
+            "$match": {
+                "any_available": true,
+                format!("scan.{}.success", scanner): {"$gt": 0}
+            }
+        });
+        self.query_union_scan_with_analyse(pipeline, skip, count).await
+    }
+ 
+    pub async fn get_by_service_name(&self, service_name: &str, skip: usize, count: usize) -> Result<Vec<ScanAnalyseResult>, ServiceError> {
+        let mut pipeline = Vec::<Document>::new();
+        let web_key = format!("web.{}", service_name);
+        let ftp_key = format!("ftp.{}", service_name);
+        let ssh_key = format!("ssh.{}", service_name);
+        pipeline.push(doc! {
+            "$match": {
+                "$or": [
+                    {
+                        web_key: { "$gt": {} },
+                    },
+                    {
+                        ftp_key: { "$gt": {} },
+                    },
+                    {
+                        ssh_key: { "$gt": {} },
+                    }
+                    
+                ]
+            }
+        });
+        self.query_union_analyse_with_scan(pipeline, skip, count).await
+    }
+
+    pub async fn get_by_service_version(&self, service_name: &str, version: &str, skip: usize, count: usize) -> Result<Vec<ScanAnalyseResult>, ServiceError> {
+        
+        let mut pipeline = Vec::<Document>::new();
+        let web_key = format!("web.{}.version", service_name);
+        let ftp_key = format!("ftp.{}.version", service_name);
+        let ssh_key = format!("ssh.{}.version", service_name);
+        pipeline.push(doc! {
+            "$match": {
+                "$or": [
+                    {
+                        web_key: version,
+                    },
+                    {
+                        ftp_key: version,
+                    },
+                    {
+                        ssh_key: version,
+                    }
+                    
+                ]
+            }
+        });
+        self.query_union_analyse_with_scan(pipeline, skip, count).await
+    }
+
+    async fn query_union_scan_with_analyse(&self, mut pipeline: Vec<Document>, skip: usize, count: usize) -> Result<Vec<ScanAnalyseResult>, ServiceError> {
         pipeline.push(doc! {
             "$skip": skip as i64,
         });
@@ -105,28 +164,8 @@ impl Model {
             .await;
         Ok(results)
     }
- 
-    pub async fn get_by_service_name(&self, service_name: &str, skip: usize, count: usize) -> Result<Vec<ScanAnalyseResult>, ServiceError> {
-        let mut pipeline = Vec::<Document>::new();
-        let web_key = format!("web.{}", service_name);
-        let ftp_key = format!("ftp.{}", service_name);
-        let ssh_key = format!("ssh.{}", service_name);
-        pipeline.push(doc! {
-            "$match": {
-                "$or": [
-                    {
-                        web_key: { "$gt": {} },
-                    },
-                    {
-                        ftp_key: { "$gt": {} },
-                    },
-                    {
-                        ssh_key: { "$gt": {} },
-                    }
-                    
-                ]
-            }
-        });
+
+    async fn query_union_analyse_with_scan(&self, mut pipeline: Vec<Document>, skip: usize, count: usize) -> Result<Vec<ScanAnalyseResult>, ServiceError> {
         pipeline.push(doc! {
             "$skip": skip as i64,
         });
@@ -164,64 +203,6 @@ impl Model {
         Ok(results)
     }
 
-    pub async fn get_by_service_version(&self, service_name: &str, version: &str, skip: usize, count: usize) -> Result<Vec<ScanAnalyseResult>, ServiceError> {
-        
-        let mut pipeline = Vec::<Document>::new();
-        let web_key = format!("web.{}.version", service_name);
-        let ftp_key = format!("ftp.{}.version", service_name);
-        let ssh_key = format!("ssh.{}.version", service_name);
-        pipeline.push(doc! {
-            "$match": {
-                "$or": [
-                    {
-                        web_key: version,
-                    },
-                    {
-                        ftp_key: version,
-                    },
-                    {
-                        ssh_key: version,
-                    }
-                    
-                ]
-            }
-        });
-        pipeline.push(doc! {
-            "$skip": skip as i64,
-        });
-        pipeline.push(doc! {
-            "$limit": count as i64,
-        });
-        pipeline.push(doc! {
-            "$project": {
-                "analyse": "$$ROOT",
-            }
-        });
-        pipeline.push(doc! {
-            "$lookup": {
-                "from": "scan",
-                "localField": "analyse.addr_int",
-                "foreignField": "addr_int",
-                "as": "scan",
-            }
-        });
-        pipeline.push(doc! {
-            "$project": {
-                "analyse": "$analyse",
-                "scan": {
-                    "$arrayElemAt": ["$scan", 0]
-                }
-            }
-        });
-
-        let results: Vec<ScanAnalyseResult> = self.db.collection::<Document>("analyse").aggregate(pipeline, None)
-            .await?
-            .filter_map(|doc|async move{ doc.ok().and_then(|doc|bson::from_document::<ScanAnalyseResult>(doc).ok())})
-            .collect()
-            .await;
-
-        Ok(results)
-    }
 
     pub async fn get_stats(&self) -> Result<ScanStats, ServiceError> 
     {

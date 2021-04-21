@@ -11,6 +11,8 @@
 }
 ```
 
+--------
+
 ## Query by IP Address
 `GET /api/scan/{ip}`
 
@@ -55,9 +57,41 @@
     "ssh_server": "OpenSSH 7.0"
 }]
 ```
+--------
 
 
-## Query by IP Range with CIDR Notation
+## Request Scanning IP Adress
+`POST /api/scan/{ip}`
+
+--------
+
+## Request Scanning IP Range with CIDR Notation
+`POST /api/scan/{ip}/{CIDR_notation}`
+
+--------
+
+## Request Scanning IP from List URL
+`POST /api/scan/list`
+### Request
+```json
+{
+    "fetch_urls": [
+        "https://example.com/addr_list1.txt",
+        "https://example.com/addr_list2.txt"
+    ]
+}
+```
+--------
+
+## Get All Available Hosts
+`GET /api/search/all?skip=0&count=10`
+
+Just alias of `/api/scan/0.0.0.0/0?online_only=1`
+
+--------
+
+
+## Search by IP Range with CIDR Notation
 `GET /api/scan/{ip}/{CIDR_notation}?skip=0&count=10&online_only=1`
 
 e.g. `GET /api/scan/123.123.123.123/24`
@@ -84,28 +118,7 @@ e.g. `GET /api/scan/123.123.123.123/24`
 ]
 ```
 
-
-## Request Scanning IP Adress
-`POST /api/scan/{ip}`
-
-## Request Scanning IP Range with CIDR Notation
-`POST /api/scan/{ip}/{CIDR_notation}`
-
-## Request Scanning IP from List URL
-`POST /api/scan/list`
-### Request
-```json
-{
-    "fetch_urls": [
-        "https://example.com/addr_list1.txt",
-        "https://example.com/addr_list2.txt"
-    ]
-}
-```
-
-## Get All Available Hosts
-`GET /api/search/all?skip=0&count=10`
-
+--------
 
 
 ## Search by Service Name
@@ -131,6 +144,10 @@ e.g. `GET /api/scan/123.123.123.123/24`
 ]
 ```
 
+--------
+
+## Search by Port
+`GET /api/search/port/{port}`
 
 
 

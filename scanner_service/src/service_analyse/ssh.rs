@@ -28,11 +28,11 @@ impl SSHServiceAnalyser {
         })
     }
 
-    pub async fn analyse(&self, result_set: &NetScanResultSet<SSHScannResult>) -> Option<HashMap<String, ServiceAnalyseResult>> {
-        if result_set.success <= 0 {
-            return None;
-        }
+    pub async fn analyse(&self, result_set: &NetScanResultSet<SSHScannResult>) -> HashMap<String, ServiceAnalyseResult> {
         let mut services = HashMap::new();
+        if result_set.success <= 0 {
+            return services;
+        }
 
         for scan_result in &result_set.results {
             let result = match &scan_result.result {
@@ -66,6 +66,6 @@ impl SSHServiceAnalyser {
             }
         }
 
-        Some(services)
+        services
     }
 }

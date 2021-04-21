@@ -38,6 +38,12 @@ impl<T> ScanResult<T> {
             ScanResult::Err(err) => ScanResult::Err(err.to_owned()),
         }
     }
+    pub fn success(&self) -> bool {
+        match self {
+            ScanResult::Ok(_) => true,
+            _ => false
+        }
+    }
 }
 
 impl<T: Serialize> From<Result<T, SimpleError>> for ScanResult<T> {
@@ -116,17 +122,33 @@ impl ResultHandler {
         };
 
         let addr_int: u32 = std::net::Ipv4Addr::from_str(ip_addr)?.into();
-        let doc = bson::doc! {
-            "$set": {
-                "addr": ip_addr,
-                "addr_int": addr_int as i64,
-                "last_update": bson::to_bson(&bson::DateTime::from(Utc::now()))?,
+        let doc = match success {
+            1 => bson::doc! {
+                "$set": {
+                    "addr": ip_addr,
+                    "addr_int": addr_int as i64,
+                    "last_update": bson::to_bson(&bson::DateTime::from(Utc::now()))?,
+                    "any_available": true,
+                },
+                "$inc": {
+                    success_key: success,
+                },
+                "$push": {
+                    result_key: bson::to_bson(&info)?,
+                },
             },
-            "$inc": {
-                success_key: success,
-            },
-            "$push": {
-                result_key: bson::to_bson(&info)?,
+            _ => bson::doc! {
+                "$set": {
+                    "addr": ip_addr,
+                    "addr_int": addr_int as i64,
+                    "last_update": bson::to_bson(&bson::DateTime::from(Utc::now()))?,
+                },
+                "$inc": {
+                    success_key: success,
+                },
+                "$push": {
+                    result_key: bson::to_bson(&info)?,
+                }
             }
         };
         let query = bson::doc! {
