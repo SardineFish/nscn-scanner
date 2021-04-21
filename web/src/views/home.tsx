@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Col, Layout, Row, Statistic } from "antd";
 import { StatsPreview } from "../components/stats-preview";
 import { ResultSearch } from "../components/results-search";
+import { Footer } from "../components/footer";
 
 export const HomePage: React.FC = () =>
 {
@@ -13,7 +14,7 @@ export const HomePage: React.FC = () =>
                 <StatsPreview />
                 <ResultSearch/>
             </Layout.Content>
-            <Layout.Footer>Footer</Layout.Footer>
+            <Layout.Footer className="page-footer"><Footer/></Layout.Footer>
         </Layout>
     )
 };

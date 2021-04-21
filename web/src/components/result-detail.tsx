@@ -52,7 +52,7 @@ export function ScanResultDetail(props: { addr: string, visible: boolean, onClos
             {
                 data
                     ?
-                    <Carousel ref={ref}>
+                    <Carousel ref={ref} speed={100}>
                         <Overview data={data} />
                         <VulnsPage result={data} />
                     </Carousel>

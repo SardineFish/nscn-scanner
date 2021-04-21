@@ -123,3 +123,13 @@
         flex: 1 0;
     }
 }
+
+.page-footer {
+    min-height: 200px;
+    display: flex;
+    flex-flow: column;
+    align-items: center;
+    justify-content: center;
+    background: gainsboro;
+    margin-top: 3em;
+}

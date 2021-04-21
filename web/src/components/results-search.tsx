@@ -33,6 +33,9 @@ export const ResultSearch: React.FC = () =>
         catch (err)
         {
             message.error(err);
+            setHasMore(false);
+            setSkip(0);
+            setData([]);
         }
     };
 
@@ -52,6 +55,8 @@ export const ResultSearch: React.FC = () =>
         }
         catch (err)
         {
+            setLoading(false);
+            setHasMore(false);
             message.error(err.message);
         }
     };
@@ -133,9 +138,12 @@ const patterns = {
     ip: /^(\d{1,3}.\d{1,3}.\d{1,3}.\d{1,3})(?:\/(\d+))?$/,
     port: /^\d+$/,
     serviceVersion: /^(.+?)(?:\s+(\d+(?:.\d+)*))?$/,
+    empty: /^\s+$|^$/
 }
 function search(input: string, count: number): [boolean, LoadFunc]
 {
+    if (patterns.empty.test(input))
+        return search("0.0.0.0/0", count);
     let matches = patterns.ip.exec(input);
     if (matches)
     {
