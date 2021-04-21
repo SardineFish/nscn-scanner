@@ -4,6 +4,8 @@ import React, { useEffect, useRef, useState } from "react";
 import { API, NetScanResult, ScanResult } from "../api/api";
 import { HttpsResult } from "./https-result";
 import { HTTPResult } from "./http-result";
+import { FTPScanResult } from "./ftp-result";
+import { SSHResultPanel } from "./ssh-result";
 
 export function ScanResultDetail(props: { addr: string, visible: boolean, onClose: () => void })
 {
@@ -93,6 +95,16 @@ function ScanningResults(props: { data: ScanResult })
                 <Collapse.Panel key={"https"+idx} header={breifHeader("HTTPS", 443, data)}>
                     {<HttpsResult result={data}/>}
                 </Collapse.Panel>))}
+            {data.ftp_results.map((data, idx) => (
+                <Collapse.Panel key={"ftp" + idx} header={breifHeader("FTP", 21, data)}>
+                    <FTPScanResult result={data}/>
+                </Collapse.Panel>
+            ))}
+            {data.ssh_results.map((data, idx) => (
+                <Collapse.Panel key={"ssh" + idx} header={breifHeader("SSH", 22, data)}>
+                    <SSHResultPanel result={data}/>
+                </Collapse.Panel>
+            ))}
         </Collapse>
     </div>)
 }

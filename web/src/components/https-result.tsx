@@ -4,9 +4,9 @@ import { ArrayElement, extract, parsePEM } from "../utils/utils";
 import { GenericScanResult } from "./generic-scan-result";
 import {Buffer} from "buffer";
 import { Descriptions, Divider, message } from "antd";
-import * as asn1js from "asn1js";
 // import Certificate from "pkijs/src/Certificate";
 import { Attribute, Certificate } from "@sardinefish/x509";
+import { ASN1 } from "@sardinefish/asn1";
 
 export function HttpsResult(props: { result: ArrayElement<ScanResult["https_results"]> })
 {
@@ -19,6 +19,11 @@ export function HttpsResult(props: { result: ArrayElement<ScanResult["https_resu
     //     cert = new Certificate({ schema: asn1js.fromBER(new Uint8Array(pem).buffer).result });
     //     console.log(cert);
         const cert = Certificate.fromPEM(Buffer.from(data.data.cert, "utf-8"));
+        let rsaBits = null as number | null;
+        if (cert.publicKey.algo.toLowerCase().startsWith("rsa"))
+        {
+            rsaBits = getRSABits(cert.publicKey.keyRaw);
+        }
         console.log(cert);
         return (<>
             <GenericScanResult result={props.result} scanner="TLSScanner"/>
@@ -38,6 +43,12 @@ export function HttpsResult(props: { result: ArrayElement<ScanResult["https_resu
                 <Descriptions.Item label="Is CA">{cert.isCA}</Descriptions.Item>
                 <Descriptions.Item label="Pubkey Algorithm">{cert.publicKey.algo}</Descriptions.Item>
                 <Descriptions.Item label="Signature Algorithm">{cert.signatureAlgorithm}</Descriptions.Item>
+                {rsaBits
+                    ? <>
+                        <Descriptions.Item label="Pubkey Bits">{rsaBits}</Descriptions.Item>
+                        <Descriptions.Item label=""> </Descriptions.Item>
+                    </>
+                    : null}
 
                 {showAttributes(cert.subject.attributes, "Subject")}
                 {showAttributes(cert.issuer.attributes, "Issuer")}
@@ -57,19 +68,14 @@ export function HttpsResult(props: { result: ArrayElement<ScanResult["https_resu
     }
 }
 
-const rdnmap = {
-    "2.5.4.6": "CountryName",
-    "2.5.4.10": "Organization",
-    "2.5.4.11": "OrganizationalUnit",
-    "2.5.4.3": "CommonName",
-    "2.5.4.7": "Locality",
-    "2.5.4.8": "stateOrProvinceName",
-    "2.5.4.12": "Title",
-    "2.5.4.42": "GivenName",
-    "2.5.4.43": "I",
-    "2.5.4.4": "SurName",
-    "1.2.840.113549.1.9.1": "E-mail"
-};
+function getRSABits(key: Uint8Array)
+{
+    const buf = Buffer.from(key);
+    const bytes = ASN1.fromDER(buf)?.value?.[0]?.bytes?.length as null | number;
+    if (!bytes)
+        return null;
+    return (bytes - 1) * 8;
+}
 
 function firstCaseUpper(text: string): string
 {
