@@ -15,16 +15,20 @@ export function ScanResultDetail(props: { addr: string, visible: boolean, onClos
     const ref = useRef<CarouselRef>(null);
     useEffect(() =>
     {
-        setPage(0);
-        setData(null);
-        setLoading(true);
-        ref.current?.goTo(0, true);
-        (async () =>
+        if (props.visible)
         {
-            const data = await API.scan.getByIp({ ip: props.addr });
-            setData(data[0] || null);
-            setLoading(false);
-        })();
+
+            setPage(0);
+            setData(null);
+            setLoading(true);
+            ref.current?.goTo(0, true);
+            (async () =>
+            {
+                const data = await API.scan.getByIp({ ip: props.addr });
+                setData(data[0] || null);
+                setLoading(false);
+            })();
+        }
     }, [props.addr]);
     return (<>
         <Drawer

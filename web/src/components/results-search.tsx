@@ -7,40 +7,28 @@ import InfiniteScroll from "react-infinite-scroller";
 import { CheckboxChangeEvent } from "antd/lib/checkbox";
 import { ScanResultDetail } from "./result-detail";
 
+type LoadFunc = (skip: number, onlineOnly?: boolean) => Promise<BreifResult[]>;
+
 export const ResultSearch: React.FC = () =>
 {
     const [data, setData] = useState([] as BreifResult[]);
-    const [searchAddr, setSearch] = useState({ ip: "0.0.0.0", cidr: 0 });
+    const [searchFn, setSearch] = useState(() => search("0.0.0.0/0", 10)[1]);
     const [skip, setSkip] = useState(0);
     const [loading, setLoading] = useState(false);
     const [hasMore, setHasMore] = useState(true);
     const [onlineOnly, setOnlineOnly] = useState(true);
     const [showDetail, setShowDetail] = useState("");
 
-    const search = async (value: string) =>
+    const onSearch = async (value: string) =>
     {
         try
         {
-            const reg = /([^/]+)(?:\/(\d+))?/;
-            const matches = reg.exec(value);
-            if (!matches)
-                throw new Error(`Invalid IP Address ${value}`);
-            const ip = matches[1];
-            let cidr = parseInt(matches[2]);
-            
-            if (!isNaN(cidr))
-            {
-                setHasMore(true);
-            }
-            else
-            {
-                cidr = 32;
-                setHasMore(false);
-            }
-            setSearch({ ip: ip, cidr: cidr });
+            const [hasMore, loadFunc] = search(value, 10);
+            setSearch(() => loadFunc);
+            setHasMore(hasMore);
             setSkip(0);
             setData([]);
-            loadMore({ ip: ip, cidr: cidr }, [], true);
+            // loadMore({ ip: ip, cidr: cidr }, [], true);
         }
         catch (err)
         {
@@ -48,15 +36,17 @@ export const ResultSearch: React.FC = () =>
         }
     };
 
-    const loadMore = async (addr: {ip: string, cidr: number}, oldData: BreifResult[] = data, showMessage = false) =>
+    const loadMore = async (load: LoadFunc, oldData: BreifResult[] = data, showMessage = false) =>
     {
         try
         {
             setLoading(true);
-            const list = await API.scan.getByIpRange({ ...addr, skip, count: 10, online_only: onlineOnly ? 1 : 0 });
+            const list = await load(skip, onlineOnly);
             setData([...oldData, ...list]);
             setSkip(skip + list.length);
             setLoading(false);
+            if (list.length === 0)
+                setHasMore(false);
             if (showMessage)
                 message.info(`Show ${list.length} results`);
         }
@@ -85,14 +75,14 @@ export const ResultSearch: React.FC = () =>
                 placeholder="123.123.123.123 or 123.123.123.0/24"
                 allowClear
                 enterButton size="large"
-                onSearch={search} />
+                onSearch={onSearch} />
             <Checkbox className="search-online-only" checked={onlineOnly} onChange={onlineOnlyChange}>Online Only</Checkbox>
             <InfiniteScroll
                 className="scan-results"
                 initialLoad={true}
                 pageStart={0}
                 hasMore={!loading && hasMore}
-                loadMore={() => loadMore(searchAddr)}
+                loadMore={() => loadMore(searchFn)}
             >
                 <List
                     dataSource={data}
@@ -137,4 +127,54 @@ const SearchResultItem = (props: { result: BreifResult, onClick: (addr: string) 
         />
 
     </List.Item>)
+}
+
+const patterns = {
+    ip: /^(\d{1,3}.\d{1,3}.\d{1,3}.\d{1,3})(?:\/(\d+))?$/,
+    port: /^\d+$/,
+    serviceVersion: /^(.+?)(?:\s+(\d+(?:.\d+)*))?$/,
+}
+function search(input: string, count: number): [boolean, LoadFunc]
+{
+    let matches = patterns.ip.exec(input);
+    if (matches)
+    {
+        const ip = matches[1];
+        let cidr = parseInt(matches[2]);
+        if (!isNaN(cidr))
+        {
+            return [true, (skip: number, onlineOnly = false) => API.scan.getByIpRange({ ip: ip, cidr: cidr, skip, count, online_only: onlineOnly? 1: 0})];
+        }
+        else
+            return [false, (_: number, onlineOnly = false) => API.scan.getByIpRange({ ip: ip, cidr: 32, skip: 0, count, online_only: onlineOnly ? 1 : 0})];
+    }
+    else if (patterns.port.test(input))
+    {
+        const port = parseInt(input);
+        return [true, (skip: number, onlineOnly = false) => API.search.searchPort({ port: port, skip: skip, count, online_only: onlineOnly ? 1 : 0})];
+    }
+    matches = patterns.serviceVersion.exec(input);
+    if (matches)
+    {
+        const service = matches[1];
+        const version = matches[2];
+        if (!version)
+        {
+            switch (service.toLowerCase())
+            {
+                case "http":
+                    return search("80", count);
+                case "https":
+                    return search("443", count);
+                case "ftp":
+                    return search("21", count);
+                case "ssh":
+                    return search("22", count);
+            }
+            return [true, (skip: number, onlineOnly = false) => API.search.searchService({ service, skip: skip, count, online_only: onlineOnly ? 1 : 0 })];
+        }
+        else
+            return [true, (skip: number, onlineOnly = false) => API.search.searchServiceVersion({ service, version, skip, count, online_only: onlineOnly ? 1 : 0 })];
+    }
+    throw new Error(`Invalid search pattern`);
 }

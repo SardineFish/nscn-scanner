@@ -23,7 +23,7 @@ export function SSHResultPanel(props: {result: ArrayElement<ScanResult["ssh_resu
                     <Collapse>
                         {Object.keys(data.data.algorithm).map((key, idx) => (
                             <Collapse.Panel header={key} key={idx}>
-                                <List>
+                                <List size="small">
                                     {(data.data.algorithm as Record<string, string[]>)[key].map((algo, idx) => (
                                         <List.Item key={idx}>{algo}</List.Item>
                                     ))}

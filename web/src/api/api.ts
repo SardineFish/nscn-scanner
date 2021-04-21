@@ -134,6 +134,10 @@ export const API = {
         searchServiceVersion: api("GET", "/api/search/service/{service}/{version}")
             .path({ service: "string", version: "string" })
             .query(QueryParams)
-            .response<BreifResult[]>()
+            .response<BreifResult[]>(),
+        searchPort: api("GET", "/api/search/port/{port}")
+            .path({ port: "number" })
+            .query(QueryParams)
+            .response<BreifResult[]>(),
     },
 };
