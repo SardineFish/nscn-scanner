@@ -1,10 +1,11 @@
-import { Checkbox, List, message, Spin, Tag } from "antd";
+import { Button, Checkbox, List, message, Spin, Tag } from "antd";
 import Search from "antd/lib/input/Search";
 import React, { useEffect, useState } from "react";
 import { API, BreifResult } from "../api/api";
 import { DatabaseOutlined, ExclamationCircleOutlined } from "@ant-design/icons";
 import InfiniteScroll from "react-infinite-scroller";
 import { CheckboxChangeEvent } from "antd/lib/checkbox";
+import { ScanResultDetail } from "./result-detail";
 
 export const ResultSearch: React.FC = () =>
 {
@@ -14,6 +15,7 @@ export const ResultSearch: React.FC = () =>
     const [loading, setLoading] = useState(false);
     const [hasMore, setHasMore] = useState(true);
     const [onlineOnly, setOnlineOnly] = useState(false);
+    const [showDetail, setShowDetail] = useState("");
 
     const search = async (value: string) =>
     {
@@ -95,24 +97,28 @@ export const ResultSearch: React.FC = () =>
                 <List
                     dataSource={data}
                     itemLayout="vertical"
-                    renderItem={item => (<SearchResultItem result={item}/>)} />
+                    renderItem={item => (<SearchResultItem result={item} onClick={addr => setShowDetail(addr)} />)} />
                 {
                     loading
                         ? <Spin />
                         : null
                 }
             </InfiniteScroll>
+            <ScanResultDetail addr={showDetail} visible={showDetail !== ""} onClose={() => setShowDetail("")} />
         </section>
     )
 }
 
-const SearchResultItem = (props: {result: BreifResult}) =>
+const SearchResultItem = (props: { result: BreifResult, onClick: (addr: string) => any }) =>
 {
     const time = new Date(props.result.last_update).toLocaleString();
     return (<List.Item>
         <List.Item.Meta
             avatar={<DatabaseOutlined style={{ fontSize: "32px" }} />}
-            title={<span>{props.result.addr} <span className="update-time">{time}</span></span>}
+            title={<span>
+                <span className="addr" onClick={() => props.onClick(props.result.addr)}>{props.result.addr}</span>
+                <span className="update-time">{time}</span>
+            </span>}
             description={<>
                 {
                     props.result.opened_ports.length <= 0

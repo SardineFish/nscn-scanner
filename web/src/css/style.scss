@@ -50,6 +50,15 @@
         align-self: flex-end;
     }
 
+    .addr {
+        transition: color .3s;
+        cursor: pointer;
+
+        &:hover {
+            color: #1890ff;
+        }
+    }
+
     .update-time {
         font-size: 12px;
         font-weight: normal;
@@ -60,6 +69,34 @@
             content: "@";
             font-size: 1em;
             margin-right: 0.5em;
+        }
+    }
+}
+
+.result-detail {
+    .ant-drawer-header {
+        padding-bottom: 0;
+        user-select: none;
+    }
+    .ant-drawer-title {
+        display: flex;
+        flex-flow: row nowrap;
+    }
+    .ant-menu {
+        border: none 0;
+    }
+    .ant-page-header {
+        padding: 0;
+    }
+    .ant-menu-horizontal {
+        .ant-menu-item {
+            min-width: 6em;
+            margin: 0 0.5em;
+            text-align: center;
+
+            &:nth-child(0) {
+                margin-left: 2em;
+            }
         }
     }
 }

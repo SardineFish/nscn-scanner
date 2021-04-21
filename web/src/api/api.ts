@@ -15,17 +15,51 @@ const IPV4Field: ParamInfo<"string"> = {
     validator: ipv4Validator,
 }
 
+type NetScanResult<T> =
+    {
+        proxy: string,
+        time: { $date: string },
+    } & ({
+        result: "Ok",
+        data: T
+    } | {
+        result: "Err",
+    });
+
 export interface ScanResult
 {
     addr: string,
     opened_ports: number[],
-    http_response: null | {
+    http_results: NetScanResult<{
         status: number,
-        header: Record<string, string>,
-    },
-    https_certificate: null | string,
-    ftp_access: null | "Anonymous" | "Login",
-    ssh_server: null | string,
+        headers: Record<string, string[]>,
+        body: string,
+    }>[];
+    https_results: NetScanResult<{ cert: string }>,
+    ftp_results: NetScanResult<{
+        handshake_code: number,
+        handshake_text: string,
+        access: "Anonymous" | "Login",
+    }>;
+    ssh_results: NetScanResult<{
+        protocol: {
+            version: string,
+            software: string,
+            comments: string,
+        },
+        algorithm: {
+            kex: string[],
+            host_key: string[],
+            encryption_client_to_server: string[],
+            encryption_server_to_client: string[],
+            mac_client_to_server: string[],
+            mac_server_to_client: string[],
+            compression_client_to_server: string[],
+            compression_server_to_client: string[],
+            languages_client_to_server: string[],
+            languages_server_to_client: string[],
+        }
+    }>;
     services: Record<string, {
         name: string,
         version: string,
