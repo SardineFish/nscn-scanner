@@ -6,6 +6,7 @@ import { HttpsResult } from "./https-result";
 import { HTTPResult } from "./http-result";
 import { FTPScanResult } from "./ftp-result";
 import { SSHResultPanel } from "./ssh-result";
+import { VulnsPage } from "./vulns-page";
 
 export function ScanResultDetail(props: { addr: string, visible: boolean, onClose: () => void })
 {
@@ -44,8 +45,7 @@ export function ScanResultDetail(props: { addr: string, visible: boolean, onClos
                     ref.current?.goTo(parseInt(props.key as string));
                 }}>
                     <Menu.Item key={0}>Overview</Menu.Item>
-                    <Menu.Item key={1}>Scanning</Menu.Item>
-                    <Menu.Item key={2}>Vulnerabilities</Menu.Item>
+                    <Menu.Item key={1}>Vulnerabilities</Menu.Item>
                 </Menu>
             </>)}
         >
@@ -54,7 +54,7 @@ export function ScanResultDetail(props: { addr: string, visible: boolean, onClos
                     ?
                     <Carousel ref={ref}>
                         <Overview data={data} />
-                        <ScanningResults data={data}/>
+                        <VulnsPage result={data} />
                     </Carousel>
                     : null
             }
@@ -80,15 +80,7 @@ function Overview(props: { data: ScanResult })
                     : "None"
             }</Descriptions.Item>
         </Descriptions>
-    </div>)
-}
-type ArrayElement<ArrayType extends readonly unknown[]> =
-    ArrayType extends readonly (infer ElementType)[] ? ElementType : never;
-
-function ScanningResults(props: { data: ScanResult })
-{
-    const data = props.data;
-    return (<div className="results">
+        <Divider orientation="left">Scanning Results</Divider>
         <Collapse>
             {data.http_results.map((data, idx) => (
                 <Collapse.Panel key={"http" + idx} header={breifHeader("HTTP", 80, data)}>
@@ -96,17 +88,17 @@ function ScanningResults(props: { data: ScanResult })
                 </Collapse.Panel>
             ))}
             {data.https_results.map((data, idx) => (
-                <Collapse.Panel key={"https"+idx} header={breifHeader("HTTPS", 443, data)}>
-                    {<HttpsResult result={data}/>}
+                <Collapse.Panel key={"https" + idx} header={breifHeader("HTTPS", 443, data)}>
+                    {<HttpsResult result={data} />}
                 </Collapse.Panel>))}
             {data.ftp_results.map((data, idx) => (
                 <Collapse.Panel key={"ftp" + idx} header={breifHeader("FTP", 21, data)}>
-                    <FTPScanResult result={data}/>
+                    <FTPScanResult result={data} />
                 </Collapse.Panel>
             ))}
             {data.ssh_results.map((data, idx) => (
                 <Collapse.Panel key={"ssh" + idx} header={breifHeader("SSH", 22, data)}>
-                    <SSHResultPanel result={data}/>
+                    <SSHResultPanel result={data} />
                 </Collapse.Panel>
             ))}
         </Collapse>

@@ -15,9 +15,6 @@
         font-size: 1.5em;
         // color: #69c0ff;
     }
-    .ant-statistic-content {
-        // color: #2f54eb;
-    }
 }
 
 .result-search {
@@ -100,9 +97,29 @@
         }
     }
 
-    .overview {
-        .ant-descriptions-item {
-            font-weight: bold;
-        }
+    
+}
+.overview {
+    .ant-descriptions-item {
+        font-weight: bold;
+    }
+
+    .ant-collapse-header {
+        user-select: none;
+    }
+}
+
+.vulns-page {
+    .vuln-count {
+        margin-left: 0.5em;
+    }
+    .vuln-list .ant-list-item {
+        justify-content: flex-start;
+    }
+    .vuln-id {
+        margin-right: 1em;
+    }
+    .vuln-title {
+        flex: 1 0;
     }
 }

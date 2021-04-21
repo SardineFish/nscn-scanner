@@ -62,8 +62,6 @@ export function HttpsResult(props: { result: ArrayElement<ScanResult["https_resu
     {
         return (<>
             <GenericScanResult result={props.result} scanner="TLSScanner"/>
-            <Divider orientation="left">Error Message</Divider>
-            <p>{data.data}</p>
         </>)
     }
 }

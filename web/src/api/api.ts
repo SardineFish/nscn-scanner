@@ -65,7 +65,7 @@ export interface ScanResult
     services: Record<string, {
         name: string,
         version: string,
-        vulnerabilities: Array<{
+        vulns: Array<{
             id: string,
             title: string,
             url: string,
