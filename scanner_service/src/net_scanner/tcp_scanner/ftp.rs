@@ -1,9 +1,9 @@
-use std::time::{Duration};
+use std::{collections::HashMap, time::{Duration}};
 
 use tokio::{io::{AsyncRead, AsyncWrite, AsyncWriteExt}, time::timeout};
 use serde::{Serialize, Deserialize};
 
-use crate::{error::*, net_scanner::scheduler::{ScannerResources}, proxy::socks5_proxy::Socks5Proxy};
+use crate::{ServiceAnalyseResult, error::*, net_scanner::scheduler::{ScannerResources}, proxy::socks5_proxy::Socks5Proxy};
 use crate::config::GLOBAL_CONFIG;
 use super::super::result_handler::ScanResult;
 
@@ -32,7 +32,15 @@ impl FTPScanTask {
             },
             Err(err) => ScanResult::Err(err.msg),
         };
-        self.resources.result_handler.save(&format!("tcp.{}.ftp", self.port), &self.host, &proxy_addr, result).await;
+        self.resources.result_handler.save_scan_results(&format!("tcp.{}.ftp", self.port), &self.host, &proxy_addr, &result).await;
+
+        if let ScanResult::Ok(_) = &result {
+            let mut services = HashMap::<String, ServiceAnalyseResult>::new();
+            self.resources.analyser.ftp_analyser.analyse(&result, &mut services).await;
+            self.resources.result_handler.save_analyse_results(&self.host, "ftp", services)
+                .await
+                .log_error_consume("ftp-result-saving");
+        }
     }
     async fn scan_with_proxy(&self, proxy: Socks5Proxy) -> Result<FTPScanResult, SimpleError> {
         let mut stream = proxy.connect(&format!("{}:{}", self.host, self.port), GLOBAL_CONFIG.scanner.ftp.timeout).await?;

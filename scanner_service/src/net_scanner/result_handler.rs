@@ -2,10 +2,10 @@ use std::collections::HashMap;
 use std::str::FromStr;
 
 use chrono::Utc;
-use mongodb::{Database, bson::{self, Document}, options::UpdateOptions};
+use mongodb::{Database, bson::{self, Document, doc}, options::{FindOneAndUpdateOptions, UpdateOptions}};
 use serde::{Serialize, Deserialize};
 
-use crate::config::{GLOBAL_CONFIG, ResultSavingOption};
+use crate::{ServiceAnalyseResult, config::{GLOBAL_CONFIG, ResultSavingOption}};
 use crate::error::*;
 
 use super::{http_scanner::HttpResponseData, https_scanner::HttpsResponse, tcp_scanner::scanner::TCPScanResult};
@@ -101,10 +101,39 @@ pub struct ResultHandler {
 }
 
 impl ResultHandler {
-    pub async fn save<T: Serialize>(&self, key: &str, ip_addr: &str, proxy: &str, result: ScanResult<T>) {
+    pub async fn save_scan_results<T: Serialize>(&self, key: &str, ip_addr: &str, proxy: &str, result: &ScanResult<T>) {
         self.try_save(key, ip_addr, proxy, result).await.log_error_consume("result-saving");
     }
-    async fn try_save<T: Serialize>(&self, key: &str, ip_addr: &str, proxy: &str, result: ScanResult<T>) -> Result<(), SimpleError> {
+    pub async fn save_analyse_results(&self, ip_addr: &str, service_key: &str, services: HashMap<String, ServiceAnalyseResult>) -> Result<(), SimpleError> {
+        let collecion = self.db.collection::<Document>(&GLOBAL_CONFIG.analyser.save);
+
+        let addr_int: u32 = std::net::Ipv4Addr::from_str(ip_addr)?.into();
+        let query = doc! {
+            "addr_int": addr_int,
+        };
+        let update = doc! {
+            "$set": {
+                service_key: bson::to_bson(&services)?,
+                "last_update": bson::to_bson(&bson::DateTime::from(Utc::now()))?,
+            },
+            "$setOnInsert": {
+                "addr": ip_addr,
+                "ftp": {},
+                "ssh": {},
+                "web": {},
+                "addr_int": addr_int,
+            }
+        };
+
+        let mut opts = FindOneAndUpdateOptions::default();
+        opts.upsert = Some(true);
+
+        collecion.find_one_and_update(query, update, opts).await?;
+
+        Ok(())
+
+    }
+    async fn try_save<T: Serialize>(&self, key: &str, ip_addr: &str, proxy: &str, result: &ScanResult<T>) -> Result<(), SimpleError> {
         let collection = match &GLOBAL_CONFIG.scanner.save {
             ResultSavingOption::SingleCollection(collection) => self.db.collection::<Document>(&collection),
             _ => panic!("Not implement"),
@@ -115,26 +144,26 @@ impl ResultHandler {
             ScanResult::Ok(_) => 1,
             ScanResult::Err(_) => 0,
         };
-        let info = ScanTaskInfo {
-            proxy: proxy.to_owned(),
-            time: Utc::now().into(),
-            result,
-        };
 
+        let current_time = bson::DateTime::from(Utc::now());
         let addr_int: u32 = std::net::Ipv4Addr::from_str(ip_addr)?.into();
         let doc = match success {
             1 => bson::doc! {
                 "$set": {
                     "addr": ip_addr,
                     "addr_int": addr_int as i64,
-                    "last_update": bson::to_bson(&bson::DateTime::from(Utc::now()))?,
+                    "last_update": bson::to_bson(&current_time)?,
                     "any_available": true,
                 },
                 "$inc": {
                     success_key: success,
                 },
                 "$push": {
-                    result_key: bson::to_bson(&info)?,
+                    result_key: {
+                        "proxy": proxy.to_owned(),
+                        "time": bson::to_bson(&current_time)?,
+                        "result": bson::to_bson(result)?,
+                    },
                 },
             },
             _ => bson::doc! {
@@ -147,7 +176,11 @@ impl ResultHandler {
                     success_key: success,
                 },
                 "$push": {
-                    result_key: bson::to_bson(&info)?,
+                    result_key: {
+                        "proxy": proxy.to_owned(),
+                        "time": bson::to_bson(&current_time)?,
+                        "result": bson::to_bson(result)?,
+                    },
                 }
             }
         };

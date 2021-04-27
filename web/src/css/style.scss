@@ -41,6 +41,10 @@
         }
         .ant-list-item-meta {
             margin-bottom: 0;
+
+        }
+        .ant-list-item-meta-description {
+            line-height: 2em;
         }
     }
     .search-online-only {
@@ -121,6 +125,9 @@
     }
     .vuln-title {
         flex: 1 0;
+    }
+    .ant-descriptions-item-label {
+        font-weight: bolder;
     }
 }
 

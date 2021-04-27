@@ -32,7 +32,7 @@ impl HttpsScanTask {
             },
             Err(err) => ScanResult::Err(err.msg), //log::warn!("HTTPS scan failed at {}: {}", self.addr, err.msg),
         };
-        self.resources.result_handler.save("https", &self.addr, &proxy_addr, result).await;
+        self.resources.result_handler.save_scan_results("https", &self.addr, &proxy_addr, &result).await;
     }
     async fn try_scan(&self, proxy_addr: &mut String) -> Result<HttpsResponse, SimpleError> {
         let target_addr = format!("{}:443", self.addr);

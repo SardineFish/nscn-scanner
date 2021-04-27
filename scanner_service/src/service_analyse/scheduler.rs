@@ -17,9 +17,9 @@ const KEY_ANALYSE_RUNNING: &str = "analyse_running";
 
 #[derive(Clone)]
 pub struct ServiceAnalyser {
-    web_analyser: WebServiceAnalyser,
-    ftp_analyser: FTPServiceAnalyser,
-    ssh_analyser: SSHServiceAnalyser,
+    pub web_analyser: WebServiceAnalyser,
+    pub ftp_analyser: FTPServiceAnalyser,
+    pub ssh_analyser: SSHServiceAnalyser,
 }
 
 impl ServiceAnalyser {
