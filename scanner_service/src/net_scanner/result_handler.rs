@@ -66,14 +66,14 @@ pub struct ScanTaskInfo<T> {
 }
 
 impl<T> ScanTaskInfo<T> {
-    fn new(result: ScanResult<T>) -> Self {
+    pub fn new(result: ScanResult<T>) -> Self {
         Self {
-            proxy: "".to_owned(),
+            proxy : "".to_owned(),
             time: Utc::now().into(),
             result,
         }
     }
-    fn with_proxy(proxy: &str, result: ScanResult<T>) -> Self {
+    pub fn with_proxy(proxy: String, result: ScanResult<T>) -> Self {
         Self {
             proxy: proxy.to_owned(),
             time: Utc::now().into(),
@@ -101,8 +101,8 @@ pub struct ResultHandler {
 }
 
 impl ResultHandler {
-    pub async fn save_scan_results<T: Serialize>(&self, key: &str, ip_addr: &str, proxy: &str, result: &ScanResult<T>) {
-        self.try_save(key, ip_addr, proxy, result).await.log_error_consume("result-saving");
+    pub async fn save_scan_results<T: Serialize>(&self, key: &str, ip_addr: &str, task_result: &ScanTaskInfo<T>) {
+        self.try_save(key, ip_addr, task_result).await.log_error_consume("result-saving");
     }
     pub async fn save_analyse_results(&self, ip_addr: &str, service_key: &str, services: HashMap<String, ServiceAnalyseResult>) -> Result<(), SimpleError> {
         let collecion = self.db.collection::<Document>(&GLOBAL_CONFIG.analyser.save);
@@ -116,12 +116,32 @@ impl ResultHandler {
                 service_key: bson::to_bson(&services)?,
                 "last_update": bson::to_bson(&bson::DateTime::from(Utc::now()))?,
             },
-            "$setOnInsert": {
-                "addr": ip_addr,
-                "ftp": {},
-                "ssh": {},
-                "web": {},
-                "addr_int": addr_int,
+            "$setOnInsert": match service_key {
+                "web" => doc!{
+                    "addr": ip_addr,
+                    "ftp": {},
+                    "ssh": {},
+                    "addr_int": addr_int,
+                },
+                "ftp" => doc!{
+                    "addr": ip_addr,
+                    "web": {},
+                    "ssh": {},
+                    "addr_int": addr_int,
+                },
+                "ssh" => doc!{
+                    "addr": ip_addr,
+                    "ftp": {},
+                    "web": {},
+                    "addr_int": addr_int,
+                },
+                _ => doc!{
+                    "addr": ip_addr,
+                    "ftp": {},
+                    "ssh": {},
+                    "web": {},
+                    "addr_int": addr_int,
+                },
             }
         };
 
@@ -133,14 +153,14 @@ impl ResultHandler {
         Ok(())
 
     }
-    async fn try_save<T: Serialize>(&self, key: &str, ip_addr: &str, proxy: &str, result: &ScanResult<T>) -> Result<(), SimpleError> {
+    async fn try_save<T: Serialize>(&self, key: &str, ip_addr: &str, task_result: &ScanTaskInfo<T>) -> Result<(), SimpleError> {
         let collection = match &GLOBAL_CONFIG.scanner.save {
             ResultSavingOption::SingleCollection(collection) => self.db.collection::<Document>(&collection),
             _ => panic!("Not implement"),
         };
         let result_key = format!("scan.{}.results", key);
         let success_key = format!("scan.{}.success", key);
-        let success: i32 = match result {
+        let success: i32 = match &task_result.result {
             ScanResult::Ok(_) => 1,
             ScanResult::Err(_) => 0,
         };
@@ -159,11 +179,7 @@ impl ResultHandler {
                     success_key: success,
                 },
                 "$push": {
-                    result_key: {
-                        "proxy": proxy.to_owned(),
-                        "time": bson::to_bson(&current_time)?,
-                        "result": bson::to_bson(result)?,
-                    },
+                    result_key: bson::to_bson(&task_result)?
                 },
             },
             _ => bson::doc! {
@@ -176,11 +192,7 @@ impl ResultHandler {
                     success_key: success,
                 },
                 "$push": {
-                    result_key: {
-                        "proxy": proxy.to_owned(),
-                        "time": bson::to_bson(&current_time)?,
-                        "result": bson::to_bson(result)?,
-                    },
+                    result_key: bson::to_bson(&task_result)?
                 }
             }
         };

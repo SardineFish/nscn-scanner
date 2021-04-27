@@ -5,7 +5,7 @@ use openssl::ssl::Ssl;
 use tokio::{io::{AsyncRead, AsyncWrite}, time::{timeout}};
 use mongodb::{bson};
 
-use crate::{config::GLOBAL_CONFIG, net_scanner::scheduler::{ScannerResources, TaskPool}};
+use crate::{ScanTaskInfo, config::GLOBAL_CONFIG, net_scanner::scheduler::{ScannerResources, TaskPool}};
 use crate::error::*;
 use crate::ssl::ssl_context::SSL_CONTEXT;
 use crate::ssl::async_ssl;
@@ -32,7 +32,8 @@ impl HttpsScanTask {
             },
             Err(err) => ScanResult::Err(err.msg), //log::warn!("HTTPS scan failed at {}: {}", self.addr, err.msg),
         };
-        self.resources.result_handler.save_scan_results("https", &self.addr, &proxy_addr, &result).await;
+        let task_result = ScanTaskInfo::with_proxy(proxy_addr, result);
+        self.resources.result_handler.save_scan_results("https", &self.addr, &task_result).await;
     }
     async fn try_scan(&self, proxy_addr: &mut String) -> Result<HttpsResponse, SimpleError> {
         let target_addr = format!("{}:443", self.addr);

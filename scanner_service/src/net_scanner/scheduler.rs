@@ -6,7 +6,7 @@ use redis::{AsyncCommands, RedisError, pipe};
 use tokio::{sync::{Mutex, mpsc::{Receiver, Sender, channel}}, task::{self, JoinHandle}, time::{sleep, timeout}};
 use async_trait::async_trait;
 
-use crate::{error::*, service_analyse::scheduler::ServiceAnalyser};
+use crate::{error::*, service_analyse::scheduler::ServiceAnalyser, vul_search::VulnerabilitiesSearch};
 use super::{http_scanner::HttpScanTask, https_scanner::HttpsScanTask, result_handler::ResultHandler, tcp_scanner::scanner::TCPScanTask};
 use crate::config::{GLOBAL_CONFIG};
 use crate::proxy::proxy_pool::ProxyPool;
@@ -36,6 +36,7 @@ impl NetScanner {
                 },
                 stats: Arc::new(Mutex::new(SchedulerStats::default())),
                 analyser: ServiceAnalyser::new().unwrap(),
+                vuln_searcher: VulnerabilitiesSearch::new(),
             }
         }
     }
@@ -302,4 +303,5 @@ pub struct ScannerResources {
     pub result_handler: ResultHandler,
     pub stats: Arc<Mutex<SchedulerStats>>,
     pub analyser: ServiceAnalyser,
+    pub vuln_searcher: VulnerabilitiesSearch,
 }

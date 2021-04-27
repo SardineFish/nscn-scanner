@@ -2,7 +2,7 @@ use std::{collections::HashMap};
 
 use reqwest::{ Response, header::HeaderMap};
 use serde::{Serialize, Deserialize};
-use crate::{ServiceAnalyseResult, error::LogError, net_scanner::scheduler::{ScannerResources, TaskPool}, proxy::{http_proxy::HttpProxyClient}};
+use crate::{ScanTaskInfo, ServiceAnalyseResult, error::LogError, net_scanner::scheduler::{ScannerResources, TaskPool}, proxy::{http_proxy::HttpProxyClient}};
 use crate::config::GLOBAL_CONFIG;
 
 use super::result_handler::ScanResult;
@@ -60,14 +60,18 @@ impl HttpScanTask {
             _ => self.resources.proxy_pool.get_http_client().await,
         };
         let result = self.scan(&mut client).await;
-        self.resources.result_handler.save_scan_results("http", &self.address, &client.proxy_addr, &result).await;
+        let task_result = ScanTaskInfo::with_proxy(client.proxy_addr, result);
+        self.resources.result_handler.save_scan_results("http", &self.address, &task_result).await;
 
 
-        if let ScanResult::Ok(_) = &result {
+        if let ScanResult::Ok(_) = &task_result.result {
             let mut services = HashMap::<String, ServiceAnalyseResult>::new();
-            self.resources.analyser.web_analyser.analyse(&result, &mut services)
+            self.resources.analyser.web_analyser.analyse(&task_result.result, &mut services)
                 .await
                 .log_error_consume("web-analyse");
+
+            self.resources.vuln_searcher.search_all(&mut services).await;
+            
             self.resources.result_handler.save_analyse_results(&self.address, "web", services)
                 .await
                 .log_error_consume("web-result-saving");

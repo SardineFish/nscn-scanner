@@ -83,6 +83,45 @@
 ```
 --------
 
+## Get Pending Tasks
+`GET /api/scan/task?skip=0&count=0`
+### Response
+```json
+[
+    "123.123.123.123/32",
+    "123.123.123.0/24",
+]
+```
+
+--------
+
+## Remove Pending Task
+`DELETE /api/scan/task/{ip}/{CIDR_notation}`
+
+e.g. `DELETE /api/scan/task/123.123.123.0/24`
+
+### Response
+```json
+{
+    "removed_tasks": 1
+}
+```
+
+--------
+
+## Clear Pending Tasks
+`DELETE /api/scan/task/all`
+
+### Response
+```json
+{
+    "removed_tasks": 1024
+}
+```
+
+--------
+
+
 ## Get All Available Hosts
 `GET /api/search/all?skip=0&count=10`
 
