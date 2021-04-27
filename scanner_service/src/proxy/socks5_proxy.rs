@@ -66,9 +66,9 @@ impl Socks5ProxyUpdater {
             loop {
                 sleep(std::time::Duration::from_secs(3)).await;
                 let proxy = proxy_pool.get_socks5_proxy().await;
-                if let Err(err) = Self::validate_proxy(&proxy).await {
-                    log::warn!("Proxy {} validate failed: {}", proxy.addr, err.msg);
-                }
+                // if let Err(err) = Self::validate_proxy(&proxy).await {
+                //     log::warn!("Proxy {} validate failed: {}", proxy.addr, err.msg);
+                // }
             }
         });
     }
