@@ -104,6 +104,13 @@ export interface SystemStats
     load_fiftee: number,
 }
 
+export interface SchedulerStats
+{
+    pending_addrs: number,
+    tasks_per_second: number,
+    ip_per_second: number,
+}
+
 const QueryParams = DeclareQuery({
     skip: "number",
     count: "number",
@@ -166,5 +173,7 @@ export const API = {
     stats: {
         getSysStats: api("GET", "/api/stats/system")
             .response<SystemStats>(),
+        getSchedulerStats: api("GET", "/api/stats/scheduler")
+            .response<SchedulerStats>(),
     }
 };

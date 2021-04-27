@@ -50,7 +50,7 @@ module.exports = {
     devtool: "source-map",
     devServer: {
         contentBase: "./dist",
-        writeToDisk: false,
+        writeToDisk: true,
         open: false,
         host: "localhost",
         port: 5000,
