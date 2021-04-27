@@ -1,12 +1,13 @@
-use std::{mem, net::Ipv4Addr, sync::Arc, time::{Duration}};
+use std::{net::Ipv4Addr, sync::Arc, time::{Duration}};
 
+use serde::{Serialize};
 use futures::{Future};
 use mongodb::{Database};
 use redis::{AsyncCommands, RedisError, pipe};
 use tokio::{sync::{Mutex, mpsc::{Receiver, Sender, channel}}, task::{self, JoinHandle}, time::{sleep, timeout}};
 use async_trait::async_trait;
 
-use crate::{error::*, service_analyse::scheduler::ServiceAnalyser, vul_search::VulnerabilitiesSearch};
+use crate::{error::*, parse_ipv4_cidr, service_analyse::scheduler::ServiceAnalyser, vul_search::VulnerabilitiesSearch};
 use super::{http_scanner::HttpScanTask, https_scanner::HttpsScanTask, result_handler::ResultHandler, tcp_scanner::scanner::TCPScanTask};
 use crate::config::{GLOBAL_CONFIG};
 use crate::proxy::proxy_pool::ProxyPool;
@@ -47,7 +48,7 @@ impl NetScanner {
         let controller = SchedulerController {
             redis: redis::Client::open(self.redis_url.as_str())?,
             scheduler_stats: scheduler.resources.stats.clone(),
-            join_receiver: Some(task::spawn(SchedulerController::receive_task(redis, receiver))),
+            join_receiver: Some(task::spawn(SchedulerController::receive_task(redis, receiver, self.resources.stats.clone()))),
             join_scheduler: Some(task::spawn(scheduler.start())),
             task_sender: sender,
         };
@@ -55,10 +56,11 @@ impl NetScanner {
     }
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone, Debug, Default, Serialize)]
 pub struct SchedulerStats { 
     pub dispatched_addrs: usize,
     pub dispatched_tasks: usize,
+    pub pending_address: usize,
     // pub http_time: f64,
     // pub http_tasks: usize,
     // pub https_time: f64,
@@ -91,6 +93,7 @@ impl Scheduler {
         if !GLOBAL_CONFIG.scanner.scheduler.enabled {
             return ;
         }
+        self.count_pending_tasks().await.log_warn_consume("count-taskqueue");
         let mut redis = self.redis.get_async_connection().await.unwrap();
         self.recover_tasks().await;
         loop {
@@ -153,7 +156,23 @@ impl Scheduler {
         {
             let mut guard = self.resources.stats.lock().await;
             guard.dispatched_addrs += 1;
+            guard.pending_address -=1;
         }
+    }
+    async fn count_pending_tasks(&self) -> Result<(), SimpleError> {
+        let mut redis = self.redis.get_async_connection().await?;
+        let mut count = 0;
+        let task_queue:Vec<String> = redis.lrange(KEY_TASK_QUEUE, 0, -1).await?;
+        for addr_cidr in task_queue {
+            let range = parse_ipv4_cidr(&addr_cidr)?;
+            count += range.len();
+        }
+        log::info!("Totally {} pending IPs", count);
+
+        let mut guard = self.resources.stats.lock().await;
+        guard.pending_address = count;
+
+        Ok(())
     }
 }
 
@@ -251,18 +270,18 @@ impl SchedulerController {
             _ => log::warn!("Cannot join from copies of controller."),
         }
     }
-    pub async fn stats(&self) -> SchedulerStats {
-        let guard = self.scheduler_stats.lock().await;
-        guard.clone()
+    pub fn stats(&self) -> Arc<Mutex<SchedulerStats>> {
+        self.scheduler_stats.clone()
     }
-    pub async fn reset_stats(&self) -> SchedulerStats {
-        let mut stats = SchedulerStats::default();
-        {
-            let mut guard = self.scheduler_stats.lock().await;
-            mem::swap(&mut stats, &mut guard);
-        }
-        stats
-    }
+    // pub async fn reset_stats(&self) -> SchedulerStats {
+    //     let mut stats = SchedulerStats::default();
+    //     {
+    //         let mut guard = self.scheduler_stats.lock().await;
+    //         mem::swap(&mut stats, &mut guard);
+    //         guard.pending_address = stats.pending_address;
+    //     }
+    //     stats
+    // }
     pub async fn get_pending_tasks(&self, skip: isize, count: isize) -> Result<Vec<String>, SimpleError> {
         let mut redis = self.redis.get_async_connection().await?;
         let result:Vec<String> = redis.lrange(KEY_TASK_QUEUE, -skip - count, -skip - 1).await?;
@@ -272,30 +291,48 @@ impl SchedulerController {
     pub async fn clear_tasks(&self) -> Result<usize, SimpleError> {
         let mut redis = self.redis.get_async_connection().await?;
         let count: usize = redis.llen(KEY_TASK_QUEUE).await?;
+
         self.task_sender.send(ScanTask::ClearTasks).await?;
+
         Ok(count)
     }
     pub async fn remove_task(&self, task: &str) -> Result<usize, SimpleError> {
         let mut redis = self.redis.get_async_connection().await?;
         let count: usize = redis.lrem(KEY_TASK_QUEUE, -1, task).await?;
 
+        let range = parse_ipv4_cidr(&task)?;
+
+        let mut guard = self.scheduler_stats.lock().await;
+        guard.pending_address -= range.len() * count;
+
         Ok(count)
     }
 
-    async fn receive_task(redis: redis::Client, mut receiver: Receiver<ScanTask>) {
+    async fn receive_task(redis: redis::Client, mut receiver: Receiver<ScanTask>, stats: Arc<Mutex<SchedulerStats>>) {
         let mut redis = redis.get_async_connection().await.unwrap();
         while let Some(task) = receiver.recv().await {
             match task {
-                ScanTask::IPCIDR(addr) => 
-                    pipe().lpush(KEY_TASK_QUEUE, addr).ignore()
+                ScanTask::IPCIDR(addr) => {
+                    pipe().lpush(KEY_TASK_QUEUE, &addr).ignore()
                     .query_async::<_, ()>(&mut redis)
                     .await
-                    .log_error_consume("task-receiver"),
-                ScanTask::ClearTasks => 
+                    .log_error_consume("task-receiver");
+
+                    if let Ok(range) = parse_ipv4_cidr(&addr).log_error("task-receiver") {
+                        let mut guard = stats.lock().await;
+                        guard.pending_address += range.len();
+                    }
+                },
+                ScanTask::ClearTasks => {
                     pipe().del(KEY_TASK_QUEUE).ignore()
                     .query_async::<_, ()>(&mut redis)
                     .await
-                    .log_error_consume("task-receiver"),
+                    .log_error_consume("task-receiver");
+
+                    let mut guard = stats.lock().await;
+                    guard.pending_address = 0;
+
+                },
             }
             
         }

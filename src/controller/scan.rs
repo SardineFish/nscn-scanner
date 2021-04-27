@@ -169,7 +169,7 @@ struct TaskRemoveResult {
 #[get("/stats")]
 async fn get_stats(service: Data<ScannerService>, model: Data<Model>) -> ApiResult<ScanStats> {
     let mut stats = model.get_stats().await?;
-    stats.scan_per_seconds = service.scheculer().stats().await.dispatched_addrs / 10;
+    stats.scan_per_seconds = service.scheduler_stats().await.ip_per_second;
 
     Ok(Response(stats))
 }

@@ -11,7 +11,7 @@ mod utils;
 mod service_analyse;
 mod scheduler;
 mod vul_search;
-mod system_info;
+mod stats_mornitor;
 
 #[allow(dead_code)]
 mod redis_pool;
@@ -20,7 +20,7 @@ use address::fetch_address_list;
 use proxy::ProxyPool;
 use config::GLOBAL_CONFIG;
 use net_scanner::scheduler::{NetScanner};
-use system_info::SystemStatsMornitor;
+use stats_mornitor::{SchedulerStatsMornotor, SystemStatsMornitor};
 use tokio::{task, time::sleep};
 
 use error::*;
@@ -32,13 +32,14 @@ pub use net_scanner::result_handler::NetScanRecord;
 pub use address::{parse_ipv4_cidr};
 pub use net_scanner::tcp_scanner::ftp::FTPAccess;
 pub use net_scanner::{http_scanner::HttpResponseData, https_scanner::HttpsResponse, result_handler::ScanTaskInfo, tcp_scanner::{ftp::FTPScanResult, ssh::SSHScannResult}};
-pub use system_info::SystemStats;
+pub use stats_mornitor::{SystemStats, SchedulerStatsReport};
 
 #[derive(Clone)]
 pub struct ScannerService {
     scheduler: SchedulerController,
     analyser: ServiceAnalyseScheduler,
-    stats_mornitor: SystemStatsMornitor,
+    sys_mornitor: SystemStatsMornitor,
+    scheduler_mornitor: SchedulerStatsMornotor,
 }
 
 impl ScannerService {
@@ -56,7 +57,8 @@ impl ScannerService {
         
         // http_scanner.enqueue("47.102.198.236").await.unwrap();
         
-        stats(&scheduler);
+        let scheduler_mornitor = SchedulerStatsMornotor::start(scheduler.stats());
+        stats(scheduler_mornitor.clone());
         // try_dispatch_address(&scheduler).await;
 
         // let range = parse_ipv4_cidr("47.102.198.0/24").unwrap();
@@ -78,7 +80,8 @@ impl ScannerService {
         Ok(Self {
             scheduler: scheduler,
             analyser: analyser_scheduler,
-            stats_mornitor: SystemStatsMornitor::start(),
+            sys_mornitor: SystemStatsMornitor::start(),
+            scheduler_mornitor: scheduler_mornitor,
         })
     }
 
@@ -99,7 +102,11 @@ impl ScannerService {
     }
 
     pub async fn sys_stats(&self) -> SystemStats {
-        self.stats_mornitor.get_stats().await
+        self.sys_mornitor.get_stats().await
+    }
+
+    pub async fn scheduler_stats(&self) -> SchedulerStatsReport {
+        self.scheduler_mornitor.get_stats().await
     }
 
     pub async fn join(self)
@@ -108,24 +115,13 @@ impl ScannerService {
     }
 }
 
-fn stats(scheduler: &SchedulerController) {
-    let scheduler = scheduler.clone();
+fn stats(mornitor: SchedulerStatsMornotor) {
     let interval = 10.0;
     task::spawn(async move {
         loop {
             sleep(tokio::time::Duration::from_secs_f64(interval)).await;
-            let stats = scheduler.reset_stats().await;
-            log::info!("Scan speed: {:.2} IP/s, {:.2} Tasks/s", stats.dispatched_addrs as f64 / interval, stats.dispatched_tasks as f64 / interval);
-            
-                // log::info!("HTTP {} avg. {:.2}s, HTTPS {} avg. {:.2}s, FTP {} avg. {:.2}s, SSH {} avg. {:.2}s, TASK {} {} avg. {:.5}s, Spawn {:.5}s, Send {:.5}s",
-                //     stats.http_tasks, stats.http_time / stats.http_tasks as f64, 
-                //     stats.https_tasks, stats.https_time / stats.https_tasks as f64, 
-                //     stats.ftp_tasks, stats.ftp_time / stats.ftp_tasks as f64, 
-                //     stats.ssh_tasks, stats.ssh_time / stats.ssh_tasks as f64,
-                //     stats.dispatched_tasks, stats.active_tasks, stats.task_time / stats.dispatched_tasks as f64,
-                //     stats.spawn_time / stats.dispatched_tasks as f64,
-                //     stats.send_time / stats.dispatched_tasks as f64,
-                // );
+            let stats = mornitor.get_stats().await;
+            log::info!("Scan speed: {:.2} IP/s, {:.2} Tasks/s, {} IPs pending", stats.ip_per_second, stats.tasks_per_second, stats.pending_addrs);
             
         }
     });

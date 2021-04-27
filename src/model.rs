@@ -21,7 +21,7 @@ pub struct ScanAnalyseResult {
 #[derive(Serialize, Deserialize)]
 pub struct ScanStats {
     pub total_scan: usize,
-    pub scan_per_seconds: usize,
+    pub scan_per_seconds: f64,
     pub available_servers: usize,
     pub total_vulnerabilities: usize,
 }
@@ -251,7 +251,7 @@ impl Model {
             total_scan: total_scan as usize,
             available_servers: total_available as usize,
             total_vulnerabilities: total_vulns as usize,
-            scan_per_seconds: 0
+            scan_per_seconds: 0.0
         })
     }
 }

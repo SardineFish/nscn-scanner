@@ -21,7 +21,8 @@ pub struct Config {
 #[derive(Deserialize)]
 pub struct StatsConfig {
     pub net_interface: Option<String>,
-    pub update_interval: u64, //ms
+    pub sys_update_interval: u64, //ms
+    pub scheduler_update_interval: u64, // ms
 }
 
 #[derive(Deserialize)]

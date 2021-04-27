@@ -28,6 +28,7 @@
     "webpack-dev-server": "^3.11.2"
   },
   "dependencies": {
+    "@ant-design/charts": "^1.1.2",
     "@ant-design/icons": "^4.6.2",
     "@sardinefish/asn1": "^1.0.4",
     "@sardinefish/x509": "^1.2.1",

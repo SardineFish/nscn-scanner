@@ -208,3 +208,16 @@ e.g. `GET /api/scan/123.123.123.123/24`
     "load_fifteen": 0
 }
 ```
+
+--------
+
+## Get Scheduler Stats
+`GET /api/stats/scheduler`
+### Response
+```json
+{
+    "pending_addrs": 0,
+    "tasks_per_second": 0,
+    "ip_per_second": 0,
+}
+```

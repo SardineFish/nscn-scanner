@@ -1,10 +1,10 @@
-use std::{sync::Arc, time::Duration};
+use std::{mem, sync::Arc, time::Duration};
 
 use serde::{Serialize};
 use sysinfo::{ProcessorExt, System, SystemExt, NetworkExt, NetworksExt};
 use tokio::{sync::Mutex, task, time::sleep};
 
-use crate::GLOBAL_CONFIG;
+use crate::{GLOBAL_CONFIG, net_scanner::scheduler::SchedulerStats};
 
 #[derive(Serialize)]
 pub struct SystemStats {
@@ -37,7 +37,7 @@ impl SystemStatsMornitor {
 
         let data = GLOBAL_CONFIG.stats.net_interface.as_ref()
             .and_then(|stats_interface| sys.get_networks().iter()
-                .find(|(interface, _)|interface == stats_interface)
+                .find(|(interface, _)|interface == &stats_interface)
                 .map(|(_, data)| data));
         let net_in;
         let net_out;
@@ -68,13 +68,61 @@ impl SystemStatsMornitor {
         }
     }
     async fn update(self) {
-        while (true) {
-            sleep(Duration::from_millis(GLOBAL_CONFIG.stats.update_interval)).await;
+        loop {
+            sleep(Duration::from_millis(GLOBAL_CONFIG.stats.sys_update_interval)).await;
             {
                 let mut sys = self.sys.lock().await;
                 sys.refresh_cpu();
                 sys.refresh_memory();
                 sys.refresh_networks();
+            }
+        }
+    }
+}
+
+#[derive(Serialize, Debug)]
+pub struct SchedulerStatsReport {
+    pub pending_addrs: usize,
+    pub tasks_per_second: f64,
+    pub ip_per_second: f64,
+}
+
+#[derive(Clone)]
+pub struct SchedulerStatsMornotor {
+    src_stats: Arc<Mutex<SchedulerStats>>,
+    last_stats:  Arc<Mutex<SchedulerStats>>,
+}
+
+impl SchedulerStatsMornotor {
+    pub fn start(stats: Arc<Mutex<SchedulerStats>>) -> Self {
+        let mornitor = Self {
+            src_stats: stats,
+            last_stats: Arc::new(Mutex::new(SchedulerStats::default())),
+        };
+
+        task::spawn(mornitor.clone().update());
+        mornitor
+    }
+
+    pub async fn get_stats(&self) -> SchedulerStatsReport {
+        let stats = self.last_stats.lock().await.clone();
+        SchedulerStatsReport {
+            pending_addrs: stats.pending_address,
+            ip_per_second: stats.dispatched_addrs as f64 / (GLOBAL_CONFIG.stats.scheduler_update_interval as f64 / 1000.0),
+            tasks_per_second: stats.dispatched_tasks as f64 /  (GLOBAL_CONFIG.stats.scheduler_update_interval as f64 / 1000.0),
+        }
+    }
+
+    async fn update(self){
+        loop {
+            sleep(Duration::from_millis(GLOBAL_CONFIG.stats.scheduler_update_interval)).await;
+            {
+                let mut last_stats = self.last_stats.lock().await;
+                let mut src_stats = self.src_stats.lock().await;
+
+                *last_stats = mem::replace(&mut src_stats, SchedulerStats::default());
+
+                src_stats.pending_address = last_stats.pending_address;
             }
         }
     }

@@ -90,6 +90,20 @@ export interface ScannerStatistics
     total_vulnerabilities: number,
 }
 
+export interface SystemStats
+{
+    cpu_usage: number,
+    total_memory_kb: number,
+    used_memory_kb: number,
+    total_swap_kb: number,
+    used_swap_kb: number,
+    network_in_bytes: number,
+    network_out_bytes: number,
+    load_one: number,
+    load_five: number,
+    load_fiftee: number,
+}
+
 const QueryParams = DeclareQuery({
     skip: "number",
     count: "number",
@@ -98,6 +112,11 @@ const QueryParams = DeclareQuery({
         validator: (_, v) => v,
         optional: true,
     },
+});
+
+const SkipCountParams = DeclareQuery({
+    skip: "number",
+    count: "number",
 });
 
 
@@ -118,10 +137,14 @@ export const API = {
         requestScanIpRange: api("POST", "/api/scan/{ip}/{cidr}")
             .path({ ip: IPV4Field, cidr: "number" })
             .response(),
-        requestScanAddrList: api("POST", "/api/scan/list")
-            .body({
-                fetch_urls: "string[]",
-            })
+        getPendingTask: api("GET", "/api/scan/task")
+            .query(SkipCountParams)
+            .response<string[]>(),
+        removePendingTask: api("DELETE", "/api/scan/task/{ip}")
+            .path({ ip: "string" })
+            .response<{ removed_tasks: number }>(),
+        clearPendingTask: api("DELETE", "api/scan/task/all")
+            .response<{ removed_tasks: number }>(),
     },
     search: {
         listAll: api("GET", "/api/search/all")
@@ -140,4 +163,8 @@ export const API = {
             .query(QueryParams)
             .response<BreifResult[]>(),
     },
+    stats: {
+        getSysStats: api("GET", "/api/stats/system")
+            .response<SystemStats>(),
+    }
 };
