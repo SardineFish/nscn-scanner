@@ -1,20 +1,14 @@
 import React, { useEffect, useState } from "react";
-import { Col, Layout, Row, Statistic } from "antd";
+import { Col, Layout, Menu, Row, Statistic } from "antd";
 import { StatsPreview } from "../components/stats-preview";
 import { ResultSearch } from "../components/results-search";
 import { Footer } from "../components/footer";
+import { BrowserRouter as Router, Link, Switch, useHistory, Route } from "react-router-dom";
 
 export const HomePage: React.FC = () =>
 {
-
-    return (
-        <Layout>
-            <Layout.Header>Header</Layout.Header>
-            <Layout.Content>
-                <StatsPreview />
-                <ResultSearch/>
-            </Layout.Content>
-            <Layout.Footer className="page-footer"><Footer/></Layout.Footer>
-        </Layout>
-    )
+    return (<>
+        <StatsPreview />
+        <ResultSearch />
+    </>)
 };
