@@ -45,6 +45,7 @@ impl NetScanner {
         let scheduler = Scheduler::new(&self.redis_url, &self.resources)?;
         let redis = redis::Client::open(self.redis_url.as_str())?;
         let controller = SchedulerController {
+            redis: redis::Client::open(self.redis_url.as_str())?,
             scheduler_stats: scheduler.resources.stats.clone(),
             join_receiver: Some(task::spawn(SchedulerController::receive_task(redis, receiver))),
             join_scheduler: Some(task::spawn(scheduler.start())),
@@ -221,6 +222,7 @@ const KEY_TASK_QUEUE: &str = "task_queue";
 const KEY_RUNNING_TASKS: &str = "running_tasks";
 
 pub struct SchedulerController {
+    redis: redis::Client,
     join_scheduler: Option<JoinHandle<()>>,
     join_receiver: Option<JoinHandle<()>>,
     task_sender: Sender<ScanTask>,
@@ -249,10 +251,6 @@ impl SchedulerController {
             _ => log::warn!("Cannot join from copies of controller."),
         }
     }
-    pub async fn clear_tasks(&self) -> Result<(), SimpleError> {
-        self.task_sender.send(ScanTask::ClearTasks).await?;
-        Ok(())
-    }
     pub async fn stats(&self) -> SchedulerStats {
         let guard = self.scheduler_stats.lock().await;
         guard.clone()
@@ -264,6 +262,24 @@ impl SchedulerController {
             mem::swap(&mut stats, &mut guard);
         }
         stats
+    }
+    pub async fn get_pending_tasks(&self, skip: isize, count: isize) -> Result<Vec<String>, SimpleError> {
+        let mut redis = self.redis.get_async_connection().await?;
+        let result:Vec<String> = redis.lrange(KEY_TASK_QUEUE, -skip - count, -skip - 1).await?;
+
+        Ok(result)
+    }
+    pub async fn clear_tasks(&self) -> Result<usize, SimpleError> {
+        let mut redis = self.redis.get_async_connection().await?;
+        let count: usize = redis.llen(KEY_TASK_QUEUE).await?;
+        self.task_sender.send(ScanTask::ClearTasks).await?;
+        Ok(count)
+    }
+    pub async fn remove_task(&self, task: &str) -> Result<usize, SimpleError> {
+        let mut redis = self.redis.get_async_connection().await?;
+        let count: usize = redis.lrem(KEY_TASK_QUEUE, -1, task).await?;
+
+        Ok(count)
     }
 
     async fn receive_task(redis: redis::Client, mut receiver: Receiver<ScanTask>) {
@@ -289,6 +305,7 @@ impl SchedulerController {
 impl Clone for SchedulerController {
     fn clone(&self) -> Self {
         Self {
+            redis: self.redis.clone(),
             join_receiver: None,
             join_scheduler: None,
             scheduler_stats: self.scheduler_stats.clone(),

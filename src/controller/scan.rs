@@ -1,6 +1,6 @@
 use std::{collections::HashMap, net::Ipv4Addr, str::FromStr};
 
-use actix_web::{get, http::StatusCode, post, web::{Data, Json, Path, Query, ServiceConfig, scope}};
+use actix_web::{get, delete, http::StatusCode, post, web::{Data, Json, Path, Query, ServiceConfig, scope}};
 use nscn::{FTPScanResult, HttpResponseData, HttpsResponse, SSHScannResult, ScanTaskInfo, ScannerService, ServiceAnalyseResult, error::SimpleError, parse_ipv4_cidr};
 use serde::{Deserialize, Serialize};
 
@@ -161,6 +161,11 @@ struct ScanningRequestResult {
     tasks: usize,
 }
 
+#[derive(Serialize)]
+struct TaskRemoveResult {
+    removed_tasks: usize,
+}
+
 #[get("/stats")]
 async fn get_stats(service: Data<ScannerService>, model: Data<Model>) -> ApiResult<ScanStats> {
     let mut stats = model.get_stats().await?;
@@ -237,6 +242,42 @@ async fn request_scan_by_list(request: Json<ScanningRequest>, service: Data<Scan
     }))
 }
 
+#[get("/task")]
+async fn request_pending_tasks(query: Query<QueryParameters>, service: Data<ScannerService>) -> ApiResult<Vec<String>> {
+    let tasks = service.scheculer().get_pending_tasks(query.skip as isize, query.count as isize).await?;
+
+    Ok(Response(tasks))
+}
+
+#[delete("/task/{ip}")]
+async fn remove_pending_task_ip(ip: Path<String>, service: Data<ScannerService>) -> ApiResult<TaskRemoveResult> {
+    let count = service.scheculer().remove_task(&format!("{}/32", ip)).await?;
+
+    Ok(Response(TaskRemoveResult {
+        removed_tasks: count
+    }))
+}
+
+#[delete("/task/{ip}/{cidr}")]
+async fn remove_pending_task(path: Path<(String, String)>, service: Data<ScannerService>) -> ApiResult<TaskRemoveResult> {
+    let (ip, cidr) = path.into_inner();
+    let addr = format!("{}/{}", ip, cidr);
+    let count = service.scheculer().remove_task(&addr).await?;
+
+    Ok(Response(TaskRemoveResult{
+        removed_tasks: count,
+    }))
+}
+
+#[delete("/task/all")]
+async fn clear_pending_tasks(service: Data<ScannerService>) -> ApiResult<TaskRemoveResult> {
+    let count = service.scheculer().clear_tasks().await?;
+
+    Ok(Response(TaskRemoveResult{
+        removed_tasks: count
+    }))
+}
+
 fn parse_ip(addr: &str) -> Result<u32, SimpleError> {
     let ip: u32 = Ipv4Addr::from_str(addr)?.into();
     Ok(ip)
@@ -245,9 +286,13 @@ fn parse_ip(addr: &str) -> Result<u32, SimpleError> {
 pub fn config(cfg: &mut ServiceConfig) {
     cfg.service(
         scope("/scan")
+            .service(request_pending_tasks)
             .service(get_stats)
             .service(get_by_ip)
             .service(get_range_by_cidr)
+            .service(clear_pending_tasks)
+            .service(remove_pending_task)
+            .service(remove_pending_task_ip)
             .service(request_scan_by_list)
             .service(request_scan)
             .service(request_scan_range)
