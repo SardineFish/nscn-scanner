@@ -38,11 +38,6 @@ struct WappanalyserTechnologies {
     technologies: HashMap<String, WappanalyserRule>
 }
 
-#[derive(Clone)]
-pub struct WebServiceAnalyser {
-    rules: Arc<HashMap<String, WappanalyserRuleParsed>>,
-    vuln_searcher: VulnerabilitiesSearch,
-}
 #[derive(Deserialize)]
 struct WappanalyserRule {
     cookies: Option<HashMap<String, String>>,
@@ -188,6 +183,13 @@ impl WappanalyserRuleParsed {
 //     }
 // }
 
+
+#[derive(Clone)]
+pub struct WebServiceAnalyser {
+    rules: Arc<HashMap<String, WappanalyserRuleParsed>>,
+    vuln_searcher: VulnerabilitiesSearch,
+}
+
 impl WebServiceAnalyser {
     pub fn init_from_json(wappanalyser_rules: &str)-> Result<Self, SimpleError> {
         let json_text = std::fs::read_to_string(wappanalyser_rules)?;
@@ -205,26 +207,31 @@ impl WebServiceAnalyser {
         })
     }
 
-    pub async fn analyse(&self, result_set: &NetScanResultSet<HttpResponseData>) -> Result<HashMap<String, ServiceAnalyseResult>, SimpleError> {
+    pub async fn analyse(&self, result: &ScanResult<HttpResponseData>, web_services: &mut HashMap<String, ServiceAnalyseResult>) -> Result<(), SimpleError> {
+        let data = match result {
+            ScanResult::Ok(data) => data,
+            _ => return Ok(()),
+        };
+        for (name, rule) in self.rules.as_ref() {
+            match rule.try_match(data) {
+                Ok(Some(analysed_version)) => match web_services.get_mut(name) {
+                        Some(service_version) => { service_version.version = analysed_version; },
+                        None => { web_services.insert(name.to_owned(), ServiceAnalyseResult::new(name.to_owned(), analysed_version)); },
+                    },
+                Ok(None) => (),
+                Err(err) => log::error!("Failed to analyse {}: {}", name, err.msg),
+            }
+        };
+        Ok(())
+    }
+
+    pub async fn analyse_result_set(&self, result_set: &NetScanResultSet<HttpResponseData>) -> Result<HashMap<String, ServiceAnalyseResult>, SimpleError> {
         let mut web_services: HashMap<String, ServiceAnalyseResult> = HashMap::new();
         if result_set.success <= 0 {
             return Ok(web_services);
         }
         for result in &result_set.results {
-            let data = match &result.result {
-                ScanResult::Ok(data) => data,
-                _ => continue,
-            };
-            for (name, rule) in self.rules.as_ref() {
-                match rule.try_match(data) {
-                    Ok(Some(analysed_version)) => match web_services.get_mut(name) {
-                            Some(service_version) => { service_version.version = analysed_version; },
-                            None => { web_services.insert(name.to_owned(), ServiceAnalyseResult::new(name.to_owned(), analysed_version)); },
-                        },
-                    Ok(None) => (),
-                    Err(err) => log::error!("Failed to analyse {}: {}", name, err.msg),
-                }
-            };
+            self.analyse(&result.result,&mut web_services).await?;
         }
         for (_, result) in &mut web_services {
             match self.vuln_searcher.exploitdb().search(&result.name, &result.version).await {

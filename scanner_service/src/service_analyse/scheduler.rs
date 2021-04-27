@@ -16,6 +16,23 @@ const KEY_ANALYSE_TASKQUEUE: &str = "analyse_taskqueue";
 const KEY_ANALYSE_RUNNING: &str = "analyse_running";
 
 #[derive(Clone)]
+pub struct ServiceAnalyser {
+    web_analyser: WebServiceAnalyser,
+    ftp_analyser: FTPServiceAnalyser,
+    ssh_analyser: SSHServiceAnalyser,
+}
+
+impl ServiceAnalyser {
+    pub fn new() -> Result<Self, SimpleError> {
+        Ok(Self {
+            web_analyser: WebServiceAnalyser::init_from_json(&GLOBAL_CONFIG.analyser.rules.wappanalyser)?,
+            ftp_analyser: FTPServiceAnalyser::from_json(&GLOBAL_CONFIG.analyser.rules.ftp)?,
+            ssh_analyser: SSHServiceAnalyser::from_json(&GLOBAL_CONFIG.analyser.rules.ssh)?,
+        })
+    }
+}
+
+#[derive(Clone)]
 pub struct ServiceAnalyseScheduler {
     scheduler: Scheduler,
     resources: TaskResources,
@@ -113,7 +130,7 @@ impl ServiceAnalyseTask {
                 let record: NetScanRecord = bson::from_document(doc)?;
 
                 if let Some(http_scan) = record.scan.http {
-                    let services = self.resource.web_analyser.analyse(&http_scan).await?;
+                    let services = self.resource.web_analyser.analyse_result_set(&http_scan).await?;
                     // for (name, version) in services {
                     //     web_services.insert(format!("web.{}", name), version);
                     // }
@@ -123,14 +140,14 @@ impl ServiceAnalyseTask {
                     .and_then(|tcp|tcp.get("21"))
                     .and_then(|result|result.ftp.as_ref());
                 if let Some(ftp_result) = ftp_scan_result {
-                    ftp_services = self.resource.ftp_analyser.analyse(&ftp_result).await;
+                    ftp_services = self.resource.ftp_analyser.analyse_results_set(&ftp_result).await;
                 }
 
                 let ssh_scan_result = record.scan.tcp.as_ref()
                     .and_then(|tcp_result| tcp_result.get("22"))
                     .and_then(|result| result.ssh.as_ref());
                 if let Some(ssh_result) = ssh_scan_result {
-                    ssh_services = self.resource.ssh_analyser.analyse(ssh_result).await;
+                    ssh_services = self.resource.ssh_analyser.analyse_results_set(ssh_result).await;
                 }
             },
             _ => panic!("Unimplement"),

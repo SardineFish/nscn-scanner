@@ -54,7 +54,24 @@ impl FTPServiceAnalyser {
             vuln_searcher: VulnerabilitiesSearch::new(),
         })
     }
-    pub async fn analyse(&self, result_set: &NetScanResultSet<FTPScanResult>) -> HashMap<String, ServiceAnalyseResult> {
+    pub async fn analyse(&self, results: &ScanResult<FTPScanResult>, services: &mut HashMap<String, ServiceAnalyseResult>) {
+        let scan_result = match &results {
+            ScanResult::Ok(result) => result,
+            _ => return,
+        };
+        let _banner = &scan_result.handshake_text;
+        for rule in self.rules.as_ref() {
+            match rule.try_match(&scan_result.handshake_text) {
+                Some(version) => { 
+                    services.insert(
+                        rule.name.to_owned(), 
+                        ServiceAnalyseResult::new(rule.name.to_owned(), version.to_owned())); 
+                },
+                _ => (),
+            }
+        }
+    }
+    pub async fn analyse_results_set(&self, result_set: &NetScanResultSet<FTPScanResult>) -> HashMap<String, ServiceAnalyseResult> {
         let mut result = HashMap::new();
         if result_set.success <= 0 {
             return result;
@@ -62,21 +79,7 @@ impl FTPServiceAnalyser {
 
         let mut _banner = "";
         for scan_result in &result_set.results {
-            let scan_result = match &scan_result.result {
-                ScanResult::Ok(result) => result,
-                _ => continue,
-            };
-            _banner = &scan_result.handshake_text;
-            for rule in self.rules.as_ref() {
-                match rule.try_match(&scan_result.handshake_text) {
-                    Some(version) => { 
-                        result.insert(
-                            rule.name.to_owned(), 
-                            ServiceAnalyseResult::new(rule.name.to_owned(), version.to_owned())); 
-                    },
-                    _ => (),
-                }
-            }
+            self.analyse(&scan_result.result, &mut result).await;
         }
 
         for (_, result) in &mut result {

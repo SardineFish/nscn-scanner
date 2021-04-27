@@ -28,35 +28,39 @@ impl SSHServiceAnalyser {
         })
     }
 
-    pub async fn analyse(&self, result_set: &NetScanResultSet<SSHScannResult>) -> HashMap<String, ServiceAnalyseResult> {
+    pub async fn analyse(&self, results: &ScanResult<SSHScannResult>, services: &mut HashMap<String, ServiceAnalyseResult>) {
+        let result = match results {
+            ScanResult::Err(_) => return,
+            ScanResult::Ok(result) => result,
+        };
+        for rule in self.rules.as_ref() {
+            match rule.try_match(&result.protocol.software) {
+                Some(version) => { 
+                    services.insert(
+                        rule.name.to_owned(), 
+                        ServiceAnalyseResult::new(rule.name.to_owned(), version.to_owned())); 
+                },
+                _ => (),
+            }
+            match rule.try_match(&result.protocol.comments) {
+                Some(version) => { 
+                    services.insert(
+                        rule.name.to_owned(), 
+                        ServiceAnalyseResult::new(rule.name.to_owned(), version.to_owned())); 
+                    },
+                _ => (),
+            }
+        }
+    }
+
+    pub async fn analyse_results_set(&self, result_set: &NetScanResultSet<SSHScannResult>) -> HashMap<String, ServiceAnalyseResult> {
         let mut services = HashMap::new();
         if result_set.success <= 0 {
             return services;
         }
 
         for scan_result in &result_set.results {
-            let result = match &scan_result.result {
-                ScanResult::Err(_) => continue,
-                ScanResult::Ok(result) => result,
-            };
-            for rule in self.rules.as_ref() {
-                match rule.try_match(&result.protocol.software) {
-                    Some(version) => { 
-                        services.insert(
-                            rule.name.to_owned(), 
-                            ServiceAnalyseResult::new(rule.name.to_owned(), version.to_owned())); 
-                    },
-                    _ => (),
-                }
-                match rule.try_match(&result.protocol.comments) {
-                    Some(version) => { 
-                        services.insert(
-                            rule.name.to_owned(), 
-                            ServiceAnalyseResult::new(rule.name.to_owned(), version.to_owned())); 
-                        },
-                    _ => (),
-                }
-            }
+            self.analyse(&scan_result.result, &mut services).await;
         }
 
         for (_, result) in &mut services {
