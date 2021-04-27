@@ -14,7 +14,14 @@ pub struct Config {
     pub proxy_pool: ProxyPoolConfig,
     pub scanner: ScannerConfig,
     pub analyser: ServiceAnalyserOptions,
+    pub stats: StatsConfig,
     pub test: Option<HashMap<String, String>>,
+}
+
+#[derive(Deserialize)]
+pub struct StatsConfig {
+    pub net_interface: Option<String>,
+    pub update_interval: u64, //ms
 }
 
 #[derive(Deserialize)]

@@ -189,4 +189,22 @@ e.g. `GET /api/scan/123.123.123.123/24`
 `GET /api/search/port/{port}`
 
 
+--------
 
+## Get System Stats
+`GET /api/stats/system`
+### Response
+```json
+{
+    "cpu_usage": 0,
+    "total_memory_kb": 0,
+    "used_memory_kb": 0,
+    "total_swap_kb": 0,
+    "used_swap_kb": 0,
+    "network_in_bytes": 0,
+    "network_out_bytes": 0,
+    "load_one": 0,
+    "load_five": 0,
+    "load_fifteen": 0
+}
+```

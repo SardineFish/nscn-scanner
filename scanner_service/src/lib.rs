@@ -11,6 +11,7 @@ mod utils;
 mod service_analyse;
 mod scheduler;
 mod vul_search;
+mod system_info;
 
 #[allow(dead_code)]
 mod redis_pool;
@@ -19,6 +20,7 @@ use address::fetch_address_list;
 use proxy::ProxyPool;
 use config::GLOBAL_CONFIG;
 use net_scanner::scheduler::{NetScanner};
+use system_info::SystemStatsMornitor;
 use tokio::{task, time::sleep};
 
 use error::*;
@@ -30,11 +32,13 @@ pub use net_scanner::result_handler::NetScanRecord;
 pub use address::{parse_ipv4_cidr};
 pub use net_scanner::tcp_scanner::ftp::FTPAccess;
 pub use net_scanner::{http_scanner::HttpResponseData, https_scanner::HttpsResponse, result_handler::ScanTaskInfo, tcp_scanner::{ftp::FTPScanResult, ssh::SSHScannResult}};
+pub use system_info::SystemStats;
 
 #[derive(Clone)]
 pub struct ScannerService {
     scheduler: SchedulerController,
     analyser: ServiceAnalyseScheduler,
+    stats_mornitor: SystemStatsMornitor,
 }
 
 impl ScannerService {
@@ -73,7 +77,8 @@ impl ScannerService {
 
         Ok(Self {
             scheduler: scheduler,
-            analyser: analyser_scheduler
+            analyser: analyser_scheduler,
+            stats_mornitor: SystemStatsMornitor::start(),
         })
     }
 
@@ -91,6 +96,10 @@ impl ScannerService {
 
     pub async fn fetch_address_list(&self, url: &str) -> Result<Vec<String>, SimpleError> {
         Ok(fetch_address_list(url).await?)
+    }
+
+    pub async fn sys_stats(&self) -> SystemStats {
+        self.stats_mornitor.get_stats().await
     }
 
     pub async fn join(self)
