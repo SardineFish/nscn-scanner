@@ -89,10 +89,9 @@ async fn try_dispatch_address(scanner: ScannerService) {
 }
 
 async fn try_dispatch_analysing(db: Database, scanner: ScannerService) {
-    return;
     let mut scheduler = scanner.analyser();
     let query = doc! {
-        "addr": "58.48.0.190",
+        "addr": "0.0.0.0",
         "$or": [
             {"scan.http.success": { "$gt": 0}},
             {"scan.tcp.21.ftp.success": { "$gt": 0}},
