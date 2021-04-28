@@ -1,10 +1,12 @@
-import { Descriptions, Statistic } from "antd";
+import { Col, Descriptions, Row, Statistic } from "antd";
 import React, { useEffect, useState } from "react";
 import { API, SystemStats } from "../api/api";
-import { Gauge, RingProgress } from "@ant-design/charts";
+// import { Gauge, RingProgress } from "@ant-design/charts";
+import RingProgress from "@ant-design/charts/es/ringProgress"
 import { formatbytes } from "../utils/utils";
 import Text from "antd/lib/typography/Text";
 import Title from "antd/lib/typography/Title";
+import { ArrowDownOutlined, ArrowUpOutlined } from "@ant-design/icons";
 
 export function SysStats()
 {
@@ -23,12 +25,12 @@ export function SysStats()
 
     useEffect(() =>
     {
-        setInterval(async () =>
+        const interval = setInterval(async () =>
         {
             const stats = await API.stats.getSysStats({});
             setStats(stats);
-        }, 1000);
-        
+        }, 3000);
+        return () => clearInterval(interval);
     }, []);
 
     const usedRAM = `${formatbytes(stats.used_memory_kb * 1024, 1)} / ${formatbytes(stats.total_memory_kb * 1024, 1)}`;
@@ -67,10 +69,20 @@ export function SysStats()
         <div className="stats">
             <Title>127.0.0.1</Title>
             <div className="stats-content">
-                <Statistic title="Used Memory" value={usedRAM}/>
-                <Statistic title="Used Swap" value={usedSwap} />
-                <Statistic title="Network Send" value={formatbytes(stats.network_out_bytes)} />
-                <Statistic title="Network Recv" value={formatbytes(stats.network_in_bytes)} />
+                <Row>
+                    <Col span={6}>
+                        <Statistic title="Used Memory" value={usedRAM} />
+                    </Col>
+                    <Col span={6}>
+                        <Statistic title="Used Swap" value={usedSwap} />
+                    </Col>
+                    <Col span={6}>
+                        <Statistic title="Network Send" value={formatbytes(stats.network_out_bytes)} prefix={<ArrowUpOutlined />} valueStyle={{ color: "#f5222d" }} suffix="/s" />
+                    </Col>
+                    <Col span={6}>
+                        <Statistic title="Network Recv" value={formatbytes(stats.network_in_bytes)} prefix={<ArrowDownOutlined />} valueStyle={{ color: "#52c41a" }} suffix="/s" />
+                    </Col>
+                </Row>
             </div>
         </div>
     </section>)

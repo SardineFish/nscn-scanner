@@ -36,7 +36,7 @@ impl FTPScanTask {
         let task_result = ScanTaskInfo::with_proxy(proxy_addr, result);
         self.resources.result_handler.save_scan_results(&format!("tcp.{}.ftp", self.port), &self.host, &task_result).await;
 
-        if let ScanResult::Ok(_) = &task_result.result {
+        if let (ScanResult::Ok(_), true) = (&task_result.result, GLOBAL_CONFIG.analyser.analyse_on_scan) {
             let mut services = HashMap::<String, ServiceAnalyseResult>::new();
             self.resources.analyser.ftp_analyser.analyse(&task_result.result, &mut services).await;
             

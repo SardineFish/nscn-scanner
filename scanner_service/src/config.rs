@@ -91,6 +91,7 @@ pub struct TaskOptions {
 
 #[derive(Deserialize)]
 pub struct ServiceAnalyserOptions {
+    pub analyse_on_scan: bool,
     pub rules: ServiceAnalyserRules,
     pub scheduler: SchedulerOptions,
     pub save: String,

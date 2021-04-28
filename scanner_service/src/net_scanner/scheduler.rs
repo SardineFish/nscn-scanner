@@ -217,8 +217,8 @@ impl TaskPool {
         self.running_tasks += 1;
         let complete_sender = self.complete_sender.clone();
         task::spawn(async move {
-            if let Err(_) = timeout(Duration::from_secs(60), future).await {
-                log::error!("Task {} suspedned over 60s", name);
+            if let Err(_) = timeout(Duration::from_secs(300), future).await {
+                log::error!("Task {} suspedned over 300s", name);
             }
             // sleep(Duration::from_secs(5)).await;
             complete_sender.send(()).await.log_error_consume("result-saving");

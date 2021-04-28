@@ -50,13 +50,19 @@ module.exports = {
     devtool: "source-map",
     devServer: {
         contentBase: "./dist",
-        writeToDisk: true,
+        writeToDisk: false,
         open: false,
         host: "localhost",
         port: 5000,
         proxy: {
             "/api/**": {
                 target: "http://localhost:3000/",
+            },
+            "/tasks": {
+                bypass: () =>
+                {
+                    return "/index.html";
+                }
             }
         },
     },
