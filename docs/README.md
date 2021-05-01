@@ -78,7 +78,17 @@
     "fetch_urls": [
         "https://example.com/addr_list1.txt",
         "https://example.com/addr_list2.txt"
+    ],
+    "addr_ranges": [
+        "10.1.0.0/16",
+        "192.168.1.0/24"
     ]
+}
+```
+### Response
+```json
+{
+    "tasks": 1
 }
 ```
 --------

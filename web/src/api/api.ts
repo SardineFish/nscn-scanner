@@ -144,6 +144,20 @@ export const API = {
         requestScanIpRange: api("POST", "/api/scan/{ip}/{cidr}")
             .path({ ip: IPV4Field, cidr: "number" })
             .response(),
+        requestScanIpList: api("POST", "/api/scan/list")
+            .body({
+                fetch_urls: {
+                    type: "string[]",
+                    optional: true,
+                    validator: Validator.bypass,
+                },
+                addr_ranges: {
+                    type: "string[]",
+                    optional: true,
+                    validator: Validator.bypass
+                }
+            })
+            .response<{ tasks: number }>(),
         getPendingTask: api("GET", "/api/scan/task")
             .query(SkipCountParams)
             .response<string[]>(),

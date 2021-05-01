@@ -154,6 +154,7 @@ impl From<ScanAnalyseResult> for ScanResult {
 #[derive(Deserialize)]
 struct ScanningRequest {
     fetch_urls: Option<Vec<String>>,
+    addr_ranges: Option<Vec<String>>,
 }
 
 #[derive(Serialize)]
@@ -234,6 +235,13 @@ async fn request_scan_by_list(request: Json<ScanningRequest>, service: Data<Scan
                 scheduler.enqueue_addr_range(&addr).await?;
                 tasks += range.len();
             }
+        }
+    }
+    if let Some(list) = &request.addr_ranges {
+        for addr_range in list {
+            let range = parse_ipv4_cidr(&addr_range)?;
+            scheduler.enqueue_addr_range(&addr_range).await?;
+            tasks+=range.len();
         }
     }
 

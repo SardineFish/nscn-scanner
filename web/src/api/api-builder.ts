@@ -108,6 +108,11 @@ function validateNonEmpty(key: string, text: string): string
     return text;
 }
 
+export const Validator = {
+    bypass: validateByPass,
+    nonEmpty: validateNonEmpty,
+}
+
 interface ErrorResponse
 {
     error: string,

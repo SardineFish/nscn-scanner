@@ -1,7 +1,9 @@
 import { DeleteOutlined, PlusOutlined } from "@ant-design/icons";
-import { Badge, Button, Card, Descriptions, Space, Statistic } from "antd";
+import { Badge, Button, Card, Descriptions, Modal, Space, Statistic } from "antd";
 import React, { useEffect, useState } from "react";
 import { API, SchedulerStats } from "../api/api";
+import { ClearAllTasks } from "./clear-all-tasks";
+import { NewScanTask } from "./new-scan-task";
 
 export function SchedulerStatsPanel()
 {
@@ -10,14 +12,19 @@ export function SchedulerStatsPanel()
         tasks_per_second: 0,
         ip_per_second: 0,
     });
+    const [showNewTask, setShowNewTask] = useState(false);
+    const [showClearConfirm, setClearComfirm] = useState(false);
+
     useEffect(() =>
     {
-        setInterval(async () =>
+        const interval = setInterval(async () =>
         {
             const stats = await API.stats.getSchedulerStats({});
             setStats(stats);
         }, 3000);
+        return () => clearInterval(interval);
     }, []);
+
     return (<Card className="scheduler-stats" title="Scheduler Status">
         <Space direction="vertical" size={30}>
             <Descriptions column={6}>
@@ -32,8 +39,8 @@ export function SchedulerStatsPanel()
                 <Statistic title="Scheduled Tasks/s" value={stats.tasks_per_second} />
             </Space>
             <Space direction="horizontal" size={30}>
-                <Button type="primary" size="large" icon={<PlusOutlined />}>New Scan Task</Button>
-                <Button danger size="large" icon={<DeleteOutlined />}>Clear All Tasks</Button>
+                <NewScanTask/>
+                <ClearAllTasks/>
             </Space>
         </Space>
     </Card>)
