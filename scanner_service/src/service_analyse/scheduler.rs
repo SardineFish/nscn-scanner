@@ -1,11 +1,11 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap};
 use bson::{Document, doc};
 use serde::{Serialize, Deserialize};
 use mongodb::{Database, bson};
-use tokio::{sync::Mutex, task::{self, JoinHandle}};
+use tokio::{task::{self, JoinHandle}};
 use chrono::Utc;
 
-use crate::{config::ResultSavingOption, error::*, net_scanner::scheduler::{SchedulerStats, TaskPool}, scheduler::Scheduler};
+use crate::{SchedulerStats, config::ResultSavingOption, error::*, scheduler::{Scheduler, TaskPool}};
 use crate::config::GLOBAL_CONFIG;
 use crate::net_scanner::result_handler::NetScanRecord;
 
@@ -57,8 +57,10 @@ impl ServiceAnalyseScheduler {
 
     async fn dispatch_tasks(mut self)
     {
-        let stats = Arc::new(Mutex::new(SchedulerStats::default()));
-        let mut task_pool = TaskPool::new(GLOBAL_CONFIG.analyser.scheduler.max_tasks, &stats);
+        if !GLOBAL_CONFIG.analyser.scheduler.enabled {
+            return;
+        }
+        let mut task_pool = self.scheduler.new_task_pool(GLOBAL_CONFIG.analyser.scheduler.max_tasks);
         self.scheduler.recover_tasks().await.log_error_consume("service-analyser");
         loop {
             match self.try_dispatch_task(&mut task_pool).await {
@@ -86,6 +88,15 @@ impl ServiceAnalyseScheduler {
 
     pub async fn enqueue_task_addr(&mut self, addr: &str) -> Result<(), SimpleError> {
         self.scheduler.enqueue_task(addr).await
+    }
+    pub async fn remove_task(&mut self, addr: &str) -> Result<usize, SimpleError>{
+        self.scheduler.remove_task(addr).await
+    }
+    pub async fn clear_tasks(&mut self) -> Result<usize, SimpleError> {
+        self.scheduler.clear_tasks().await
+    }
+    pub async fn stats(&mut self) -> SchedulerStats {
+        self.scheduler.stats().await
     }
 }
 

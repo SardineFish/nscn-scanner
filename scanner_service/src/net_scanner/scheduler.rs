@@ -4,15 +4,13 @@ use serde::{Serialize};
 use futures::{Future};
 use mongodb::{Database};
 use redis::{AsyncCommands, RedisError, pipe};
-use tokio::{sync::{Mutex, mpsc::{Receiver, Sender, channel}}, task::{self, JoinHandle}, time::{sleep, timeout}};
+use tokio::{sync::{Mutex, mpsc::{Receiver, Sender, channel}}, task::{self, JoinHandle}, time::{sleep}};
 use async_trait::async_trait;
 
 use crate::{error::*, parse_ipv4_cidr, service_analyse::scheduler::ServiceAnalyser, vul_search::VulnerabilitiesSearch};
 use super::{http_scanner::HttpScanTask, https_scanner::HttpsScanTask, result_handler::ResultHandler, tcp_scanner::scanner::TCPScanTask};
 use crate::config::{GLOBAL_CONFIG};
 use crate::proxy::proxy_pool::ProxyPool;
-
-
 
 #[async_trait]
 pub trait DispatchScanTask {
@@ -198,7 +196,7 @@ impl TaskPool {
             stats: stats.clone(),
         }
     }
-    pub async fn spawn<T>(&mut self, name: &'static str, future: T) where T : Future + Send + 'static, T::Output: Send + 'static {
+    pub async fn spawn<T>(&mut self, _name: &'static str, future: T) where T : Future + Send + 'static, T::Output: Send + 'static {
         if self.running_tasks >= self.max_tasks {
             if self.interval_jitter {
                 self.interval_jitter = false;
@@ -219,11 +217,12 @@ impl TaskPool {
         self.running_tasks += 1;
         let complete_sender = self.complete_sender.clone();
         task::spawn(async move {
-            if let Err(_) = timeout(Duration::from_secs(300), future).await {
-                log::error!("Task {} suspedned over 300s", name);
-            }
+            future.await;
+            // if let Err(_) = timeout(Duration::from_secs(300), future).await {
+            //     log::error!("Task {} suspedned over 300s", name);
+            // }
             // sleep(Duration::from_secs(5)).await;
-            complete_sender.send(()).await.log_error_consume("result-saving");
+            complete_sender.send(()).await.log_error_consume("scan-scheduler");
         });
         {
             let mut guard = self.stats.lock().await;

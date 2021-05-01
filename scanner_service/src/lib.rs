@@ -33,6 +33,7 @@ pub use address::{parse_ipv4_cidr};
 pub use net_scanner::tcp_scanner::ftp::FTPAccess;
 pub use net_scanner::{http_scanner::HttpResponseData, https_scanner::HttpsResponse, result_handler::ScanTaskInfo, tcp_scanner::{ftp::FTPScanResult, ssh::SSHScannResult}};
 pub use stats_mornitor::{SystemStats, SchedulerStatsReport};
+pub use scheduler::SchedulerStats;
 
 #[derive(Clone)]
 pub struct ScannerService {

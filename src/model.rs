@@ -1,7 +1,7 @@
 use std::ops::Range;
 
 use serde::{Deserialize, Serialize};
-use mongodb::{Database, bson::{self, doc,  Document}};
+use mongodb::{Database, bson::{self, doc,  Document}, options::FindOptions};
 use nscn::{NetScanRecord, ServiceRecord};
 use futures::StreamExt;
 
@@ -10,6 +10,12 @@ use crate::error::ServiceError;
 #[derive(Clone)]
 pub struct Model {
     db: Database,
+}
+
+#[derive(Deserialize, Serialize, Debug)]
+pub struct AddrOnlyDoc {
+    pub addr: String,
+    pub addr_int: i64,
 }
 
 #[derive(Deserialize, Serialize, Debug)]
@@ -31,6 +37,47 @@ impl Model {
         Self {
             db
         }
+    }
+
+    pub async fn get_scaned_addr(&self, range: Range<u32>, skip: usize, count: usize, online_only: bool) -> Result<Vec<AddrOnlyDoc>, ServiceError> {
+        let query = match online_only {
+            true => doc! {
+                "addr_int": {
+                    "$gte": range.start as i64,
+                    "$lt": range.end as i64,
+                },
+                "$or": [
+                    {"scan.http.success": { "$gt": 0}},
+                    {"scan.tcp.21.ftp.success": { "$gt": 0}},
+                    {"scan.tcp.22.ssh.success": { "$gt": 0}},
+                ],
+            },
+            false => doc! {
+                "addr_int": {
+                    "$gte": range.start as i64,
+                    "$lt": range.end as i64,
+                }
+            }
+        };
+        let projection = doc! {
+            "addr": 1,
+            "addr_int": 1,
+        };
+
+        let mut opts = FindOptions::default();
+        opts.skip = Some(skip as i64);
+        if count > 0 {
+            opts.limit = Some(count as i64);
+        }
+        opts.projection = Some(projection);
+        let docs: Vec<AddrOnlyDoc> = self.db.collection::<AddrOnlyDoc>("scan")
+            .find(query, opts)
+            .await?
+            .filter_map(|t| async move { t.ok() })
+            .collect()
+            .await;
+
+        Ok(docs)
     }
 
     pub async fn get_by_ip(&self, addr_int: u32) -> Result<ScanAnalyseResult, ServiceError>
@@ -133,9 +180,11 @@ impl Model {
         pipeline.push(doc! {
             "$skip": skip as i64,
         });
-        pipeline.push(doc! {
-            "$limit": count as i64,
-        });
+        if count > 0 {
+            pipeline.push(doc! {
+                "$limit": count as i64,
+            });
+        }
         pipeline.push(doc! {
             "$project": {
                 "scan": "$$ROOT",
