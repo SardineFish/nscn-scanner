@@ -156,7 +156,9 @@ impl Scheduler {
         {
             let mut guard = self.resources.stats.lock().await;
             guard.dispatched_addrs += 1;
-            guard.pending_address -=1;
+            if guard.pending_address > 0 {
+                guard.pending_address -=1;   
+            }
         }
     }
     async fn count_pending_tasks(&self) -> Result<(), SimpleError> {
@@ -303,7 +305,11 @@ impl SchedulerController {
         let range = parse_ipv4_cidr(&task)?;
 
         let mut guard = self.scheduler_stats.lock().await;
-        guard.pending_address -= range.len() * count;
+        if guard.pending_address < range.len() {
+            guard.pending_address = 0;
+        } else {
+            guard.pending_address -= range.len() * count;
+        }
 
         Ok(count)
     }
