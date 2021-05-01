@@ -1,9 +1,9 @@
 import { DeleteOutlined } from "@ant-design/icons";
-import { Button, message, Modal } from "antd";
+import { Button, ButtonProps, message, Modal } from "antd";
 import React, { useState } from "react";
 import { API } from "../api/api";
 
-export function ClearAllTasks()
+export function ConfirmButton(props: {children: React.ReactNode, onOk:()=>Promise<any>, buttonProps?: Partial<ButtonProps>, title?:string, confirmText: string})
 {
     const [modalVisible, setModalVisible] = useState(false);
     const [loading, setLoading] = useState(false);
@@ -15,29 +15,25 @@ export function ClearAllTasks()
     const ok = async () =>
     {
         setLoading(true);
+        
+        await props.onOk();
 
-        try
-        {
-            const result = await API.scan.clearPendingTask({});
-            message.success(`Removed ${result.removed_tasks} tasks`);
-        }
-        catch (err)
-        {
-            message.error(err.message);
-        }
+        
         setLoading(false);
         setModalVisible(false);
     }
+    
     return (<>
-        <Button danger size="large" icon={<DeleteOutlined />} onClick={showModal}>Clear All Tasks</Button>
+        <Button onClick={showModal} {...props.buttonProps}>{props.children}</Button>
         <Modal
-            title="Remove All Pending Tasks"
+            title={props.title}
             confirmLoading={loading}
             visible={modalVisible}
             cancelButtonProps={{ disabled: loading }}
             onOk={ok}
+            onCancel={()=>setModalVisible(false)}
         >
-            All pending tasks will be removed?
+            {props.confirmText}
         </Modal>
     </>)
 }

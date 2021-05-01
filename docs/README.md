@@ -231,3 +231,14 @@ e.g. `GET /api/scan/123.123.123.123/24`
     "ip_per_second": 0,
 }
 ```
+
+--------
+
+## Request Full Analyse
+`POST /api/analyse/all`
+### Response
+```json
+{
+    "tasks": 1,
+}
+```

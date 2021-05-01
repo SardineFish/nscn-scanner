@@ -22,7 +22,7 @@ async fn analyse_all(service: Data<ScannerService>, model: Data<Model>) -> ApiRe
 }
 
 pub fn config(cfg: &mut ServiceConfig) {
-    cfg.service(scope("/analyser")
+    cfg.service(scope("/analyse")
         .service(analyse_all)
     );
 }

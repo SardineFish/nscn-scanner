@@ -106,9 +106,16 @@ export interface SystemStats
 
 export interface SchedulerStats
 {
-    pending_addrs: number,
-    tasks_per_second: number,
-    ip_per_second: number,
+    scanner: {
+        pending_addrs: number,
+        tasks_per_second: number,
+        ip_per_second: number,
+    },
+    analyser: {
+        tasks_per_second: number,
+        jobs_per_second: number,
+        pending_tasks: number,
+    }
 }
 
 const QueryParams = DeclareQuery({
@@ -189,5 +196,10 @@ export const API = {
             .response<SystemStats>(),
         getSchedulerStats: api("GET", "/api/stats/scheduler")
             .response<SchedulerStats>(),
+    },
+    analyser: {
+        requestFullAnalyse: api("POST", "/api/analyse/all")
+            .response<{tasks: number}>(),
+
     }
 };
