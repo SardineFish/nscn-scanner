@@ -46,11 +46,7 @@ impl Model {
                     "$gte": range.start as i64,
                     "$lt": range.end as i64,
                 },
-                "$or": [
-                    {"scan.http.success": { "$gt": 0}},
-                    {"scan.tcp.21.ftp.success": { "$gt": 0}},
-                    {"scan.tcp.22.ssh.success": { "$gt": 0}},
-                ],
+                "any_available": true,
             },
             false => doc! {
                 "addr_int": {
