@@ -60,7 +60,7 @@ impl ScannerService {
         // http_scanner.enqueue("47.102.198.236").await.unwrap();
         
         let scheduler_mornitor = SchedulerStatsMornotor::start(scheduler.stats());
-        stats(scheduler_mornitor.clone());
+        stats_log(scheduler_mornitor.clone());
         // try_dispatch_address(&scheduler).await;
 
         // let range = parse_ipv4_cidr("47.102.198.0/24").unwrap();
@@ -117,13 +117,18 @@ impl ScannerService {
     }
 }
 
-fn stats(mornitor: SchedulerStatsMornotor) {
+fn stats_log(mornitor: SchedulerStatsMornotor) {
     let interval = 10.0;
     task::spawn(async move {
+        let mut last_stats = SchedulerStatsReport::default();
         loop {
             sleep(tokio::time::Duration::from_secs_f64(interval)).await;
             let stats = mornitor.get_stats().await;
+            if last_stats == stats {
+                continue;
+            }
             log::info!("Scan speed: {:.2} IP/s, {:.2} Tasks/s, {} IPs pending", stats.ip_per_second, stats.tasks_per_second, stats.pending_addrs);
+            last_stats = stats;
             
         }
     });

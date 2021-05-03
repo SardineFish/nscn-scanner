@@ -80,7 +80,7 @@ impl SystemStatsMornitor {
     }
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, Default, PartialEq)]
 pub struct SchedulerStatsReport {
     pub pending_addrs: usize,
     pub tasks_per_second: f64,
