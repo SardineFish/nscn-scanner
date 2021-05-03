@@ -11,11 +11,11 @@ struct ScheduleResult {
 #[post("/all")]
 async fn analyse_all(service: Data<ScannerService>, model: Data<Model>) -> ApiResult<ScheduleResult> {
     let docs = model.get_scaned_addr(0..u32::MAX, 0, 0, true).await?;
-    let mut tasks = 0;
-    for doc in docs {
-        service.analyser().enqueue_task_addr(&doc.addr).await?;
-        tasks += 1;
-    }
+    let tasks = docs.len();
+    let addrs: Vec<String> = docs.into_iter()
+        .map(|doc|doc.addr)
+        .collect();
+    service.analyser().enqueue_task_list(addrs).await?;
     Ok(Response(ScheduleResult {
         tasks,
     }))

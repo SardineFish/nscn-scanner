@@ -82,6 +82,9 @@ impl ServiceAnalyseScheduler {
     pub async fn enqueue_task_addr(&mut self, addr: &str) -> Result<(), SimpleError> {
         self.scheduler.enqueue_task(addr).await
     }
+    pub async fn enqueue_task_list(&mut self, addr_list: Vec<String>) -> Result<(), SimpleError> {
+        self.scheduler.enqueue_task_list(addr_list).await
+    }
     pub async fn remove_task(&mut self, addr: &str) -> Result<usize, SimpleError>{
         self.scheduler.remove_task(addr).await
     }

@@ -171,6 +171,14 @@ impl Scheduler {
         self.internal_stats.add_pending_tasks(1).await;
         Ok(())
     }
+    pub async fn enqueue_task_list(&mut self, list: Vec<String>) -> Result<(), SimpleError> {
+        let redis = get_redis!(self);
+        let count = list.len();
+
+        redis.lpush(key_taskqueue!(self), list).await?;
+        self.internal_stats.add_pending_tasks(count).await;
+        Ok(())
+    }
     pub async fn count_tasks(&mut self) -> Result<usize, SimpleError> {
         let redis = get_redis!(self);
 
