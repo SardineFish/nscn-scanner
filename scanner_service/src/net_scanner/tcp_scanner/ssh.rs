@@ -1,9 +1,9 @@
-use std::{collections::HashMap, time::{Duration}};
+use std::{time::{Duration}};
 
 use tokio::{io::{ AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt}, time::timeout};
 use serde::{Serialize, Deserialize};
 
-use crate::{ScanTaskInfo, ServiceAnalyseResult, error::{LogError, SimpleError}, net_scanner::scheduler::{ScannerResources}, proxy::socks5_proxy::Socks5Proxy};
+use crate::{ScanTaskInfo, error::{LogError, SimpleError}, net_scanner::scheduler::{ScannerResources}, proxy::socks5_proxy::Socks5Proxy};
 use crate::config::GLOBAL_CONFIG;
 use super::super::result_handler::ScanResult;
 use super::async_reader::AsyncBufReader;
@@ -41,16 +41,16 @@ impl SSHScanTask {
         let task_result = ScanTaskInfo::with_proxy(proxy_addr, result);
         self.resources.result_handler.save_scan_results(&format!("tcp.{}.ssh", self.port), &self.host, &task_result).await;
 
-        if let (ScanResult::Ok(_), true) = (&task_result.result, GLOBAL_CONFIG.analyser.analyse_on_scan) {
-            let mut services = HashMap::<String, ServiceAnalyseResult>::new();
-            self.resources.analyser.ssh_analyser.analyse(&task_result.result, &mut services).await;
+        // if let (ScanResult::Ok(_), true) = (&task_result.result, GLOBAL_CONFIG.analyser.analyse_on_scan) {
+        //     let mut services = HashMap::<String, ServiceAnalyseResult>::new();
+        //     self.resources.analyser.ssh_analyser.analyse(&task_result.result, &mut services).await;
             
-            self.resources.vuln_searcher.search_all(&mut services).await;
+        //     self.resources.vuln_searcher.search_all(&mut services).await;
             
-            self.resources.result_handler.save_analyse_results(&self.host, "ssh", services)
-                .await
-                .log_error_consume("ssh-result-saving");
-        }
+        //     self.resources.result_handler.save_analyse_results(&self.host, "ssh", services)
+        //         .await
+        //         .log_error_consume("ssh-result-saving");
+        // }
     }
     async fn scan_with_proxy(&self, proxy: &Socks5Proxy) -> Result<SSHScannResult, SimpleError> {
         let mut stream = proxy.connect(&format!("{}:{}", self.host, self.port), GLOBAL_CONFIG.scanner.ssh.timeout).await?;

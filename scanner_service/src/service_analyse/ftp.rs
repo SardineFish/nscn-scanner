@@ -32,14 +32,13 @@ impl UniversalServiceRuleParsed {
     }
 }
 
-#[derive(Clone)]
 pub struct FTPServiceAnalyser {
     rules: Arc<Vec<UniversalServiceRuleParsed>>,
     vuln_searcher: VulnerabilitiesSearch,
 }
 
 impl FTPServiceAnalyser {
-    pub fn from_json(json_file: &str) -> Result<Self, SimpleError> {
+    pub fn from_json(json_file: &str, vuln_searcher: VulnerabilitiesSearch) -> Result<Self, SimpleError> {
         let json_text = fs::read_to_string(json_file)?;
         let rules = serde_json::from_str::<HashMap<String, UniversalServiceRule>>(&json_text)?;
         let mut rule_list = Vec::new();
@@ -51,7 +50,7 @@ impl FTPServiceAnalyser {
         }
         Ok(Self {
             rules: Arc::new(rule_list),
-            vuln_searcher: VulnerabilitiesSearch::new(),
+            vuln_searcher,
         })
     }
     pub async fn analyse(&self, results: &ScanResult<FTPScanResult>, services: &mut HashMap<String, ServiceAnalyseResult>) {
@@ -71,7 +70,7 @@ impl FTPServiceAnalyser {
             }
         }
     }
-    pub async fn analyse_results_set(&self, result_set: &NetScanResultSet<FTPScanResult>) -> HashMap<String, ServiceAnalyseResult> {
+    pub async fn analyse_results_set(&mut self, result_set: &NetScanResultSet<FTPScanResult>) -> HashMap<String, ServiceAnalyseResult> {
         let mut result = HashMap::new();
         if result_set.success <= 0 {
             return result;

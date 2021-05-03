@@ -1,4 +1,4 @@
-use std::{mem, sync::Arc, time::Duration};
+use std::{mem, sync::{Arc, atomic::AtomicPtr}, time::Duration};
 
 use futures::Future;
 use serde::{Serialize};
@@ -198,8 +198,8 @@ impl Scheduler {
     pub async fn stats(&self) -> SchedulerStats {
         self.stats.clone_inner().await
     }
-    pub fn new_task_pool(&self, max_tasks: usize) -> TaskPool {
-        TaskPool::new(max_tasks, self.internal_stats.clone())
+    pub fn new_task_pool<T: Send + 'static>(&self, max_tasks: usize, resource_pool: Vec<T>) -> TaskPool<T> {
+        TaskPool::new(max_tasks, self.internal_stats.clone(), resource_pool)
     }
     async fn stats_mornitor(mut self, update_interval: f64) {
         loop {
@@ -223,17 +223,18 @@ impl Clone for Scheduler {
     }
 }
 
-
-pub struct TaskPool {
+pub struct TaskPool<T> {
     interval_jitter: bool,
     max_tasks: usize,
     running_tasks: usize,
-    complete_sender: Sender<()>,
-    complete_receiver: Receiver<()>,
+    complete_sender: Sender<T>,
+    complete_receiver: Receiver<T>,
     stats: SharedSchedulerInternalStats,
+    resource_pool: Vec<T>,
 }
-impl TaskPool {
-    pub fn new(max_tasks: usize, stats: SharedSchedulerInternalStats) -> Self {
+
+impl<Resource> TaskPool<Resource> where Resource: Send + 'static {
+    pub fn new(max_tasks: usize, stats: SharedSchedulerInternalStats, resource_pool: Vec<Resource>) -> Self {
         let (sender, receiver) = channel(max_tasks * 2);
         Self {
             max_tasks,
@@ -242,17 +243,41 @@ impl TaskPool {
             complete_sender: sender,
             complete_receiver: receiver,
             stats: stats,
+            resource_pool,
         }
     }
-    pub async fn spawn<T>(&mut self, _name: &'static str, future: T) where T : Future + Send + 'static, T::Output: Send + 'static {
-        if self.running_tasks >= self.max_tasks {
+    pub async fn spawn<T, Task>(&mut self, _name: &'static str, func: fn(Task, &'static mut Resource) -> T, task: Task)
+    where T : Future + Send + 'static, 
+        T::Output: Send + 'static,
+        Task: Send + 'static,
+        // F: FnOnce(Task, &mut Resource) -> T + Send + 'static
+    {
+        let complete_sender = self.complete_sender.clone();
+        let future = self.wait_resource();
+        let mut resource = future.await;
+
+        task::spawn(async move {
+            // future.await;
+            let mut ptr: AtomicPtr<Resource> = AtomicPtr::new(&mut resource);
+            let mut_ref = unsafe{ ptr.get_mut().as_mut().unwrap()};
+            func(task, mut_ref).await;
+            // if let Err(_) = timeout(Duration::from_secs(300), future).await {
+            //     log::error!("Task {} suspedned over 300s", name);
+            // }
+            // sleep(Duration::from_secs(5)).await;
+            complete_sender.send(resource).await.log_error_consume("scan-scheduler");
+        });
+    }
+    async fn wait_resource(&mut self) -> Resource {
+        if self.running_tasks >= self.max_tasks || self.resource_pool.len() <= 0 {
             if self.interval_jitter {
                 self.interval_jitter = false;
             }
 
             match self.complete_receiver.recv().await {
-                Some(_) => {
-                    self.running_tasks -= 1
+                Some(resource) => {
+                    self.running_tasks -= 1;
+                    self.resource_pool.push(resource);
                 },
                 None => panic!("Scheduler channel closed."),
             }
@@ -263,15 +288,38 @@ impl TaskPool {
         }
         
         self.running_tasks += 1;
-        let complete_sender = self.complete_sender.clone();
-        task::spawn(async move {
-            future.await;
-            // if let Err(_) = timeout(Duration::from_secs(300), future).await {
-            //     log::error!("Task {} suspedned over 300s", name);
-            // }
-            // sleep(Duration::from_secs(5)).await;
-            complete_sender.send(()).await.log_error_consume("scan-scheduler");
-        });
+        let resource = self.resource_pool.pop().unwrap();
         self.stats.dispatch_job(1).await;
+        resource
     }
+    // pub async fn spawn<T>(&mut self, _name: &'static str, future: T) where T : Future + Send + 'static, T::Output: Send + 'static {
+    //     if self.running_tasks >= self.max_tasks {
+    //         if self.interval_jitter {
+    //             self.interval_jitter = false;
+    //         }
+
+    //         match self.complete_receiver.recv().await {
+    //             Some(_) => {
+    //                 self.running_tasks -= 1
+    //             },
+    //             None => panic!("Scheduler channel closed."),
+    //         }
+    //     }
+    //     if self.interval_jitter {
+    //         let interval = 5.0 / (self.max_tasks as f64);
+    //         sleep(Duration::from_secs_f64(interval)).await;
+    //     }
+        
+    //     self.running_tasks += 1;
+    //     let complete_sender = self.complete_sender.clone();
+    //     task::spawn(async move {
+    //         future.await;
+    //         // if let Err(_) = timeout(Duration::from_secs(300), future).await {
+    //         //     log::error!("Task {} suspedned over 300s", name);
+    //         // }
+    //         // sleep(Duration::from_secs(5)).await;
+    //         complete_sender.send(()).await.log_error_consume("scan-scheduler");
+    //     });
+    //     self.stats.dispatch_job(1).await;
+    // }
 }

@@ -184,14 +184,13 @@ impl WappanalyserRuleParsed {
 // }
 
 
-#[derive(Clone)]
 pub struct WebServiceAnalyser {
     rules: Arc<HashMap<String, WappanalyserRuleParsed>>,
     vuln_searcher: VulnerabilitiesSearch,
 }
 
 impl WebServiceAnalyser {
-    pub fn init_from_json(wappanalyser_rules: &str)-> Result<Self, SimpleError> {
+    pub fn init_from_json(wappanalyser_rules: &str, vuln_searcher: VulnerabilitiesSearch)-> Result<Self, SimpleError> {
         let json_text = std::fs::read_to_string(wappanalyser_rules)?;
         let rules = serde_json::from_str::<WappanalyserTechnologies>(&json_text)?;
         let mut parsed_rules = HashMap::<String, WappanalyserRuleParsed>::new();
@@ -203,7 +202,7 @@ impl WebServiceAnalyser {
         }
         Ok(Self {
             rules: Arc::new(parsed_rules),
-            vuln_searcher: VulnerabilitiesSearch{},
+            vuln_searcher,
         })
     }
 
@@ -225,7 +224,7 @@ impl WebServiceAnalyser {
         Ok(())
     }
 
-    pub async fn analyse_result_set(&self, result_set: &NetScanResultSet<HttpResponseData>) -> Result<HashMap<String, ServiceAnalyseResult>, SimpleError> {
+    pub async fn analyse_result_set(&mut self, result_set: &NetScanResultSet<HttpResponseData>) -> Result<HashMap<String, ServiceAnalyseResult>, SimpleError> {
         let mut web_services: HashMap<String, ServiceAnalyseResult> = HashMap::new();
         if result_set.success <= 0 {
             return Ok(web_services);

@@ -4,14 +4,13 @@ use super::{ServiceAnalyseResult, ftp::{UniversalServiceRule, UniversalServiceRu
 
 use crate::{error::*, net_scanner::{result_handler::{NetScanResultSet, ScanResult}, tcp_scanner::ssh::SSHScannResult}, vul_search::VulnerabilitiesSearch};
 
-#[derive(Clone)]
 pub struct SSHServiceAnalyser {
     rules: Arc<Vec<UniversalServiceRuleParsed>>,
     vuln_searcher: VulnerabilitiesSearch,
 }
 
 impl SSHServiceAnalyser {
-    pub fn from_json(json_file: &str) ->Result<Self, SimpleError> {
+    pub fn from_json(json_file: &str, vuln_searcher: VulnerabilitiesSearch) ->Result<Self, SimpleError> {
         let mut rules_list = Vec::new();
         let json_text = fs::read_to_string(json_file)?;
         let rules = serde_json::from_str::<HashMap<String, UniversalServiceRule>>(&json_text)?;
@@ -24,7 +23,7 @@ impl SSHServiceAnalyser {
 
         Ok(Self{
             rules: Arc::new(rules_list),
-            vuln_searcher: VulnerabilitiesSearch::new(),
+            vuln_searcher,
         })
     }
 
@@ -53,7 +52,7 @@ impl SSHServiceAnalyser {
         }
     }
 
-    pub async fn analyse_results_set(&self, result_set: &NetScanResultSet<SSHScannResult>) -> HashMap<String, ServiceAnalyseResult> {
+    pub async fn analyse_results_set(&mut self, result_set: &NetScanResultSet<SSHScannResult>) -> HashMap<String, ServiceAnalyseResult> {
         let mut services = HashMap::new();
         if result_set.success <= 0 {
             return services;

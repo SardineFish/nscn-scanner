@@ -1,9 +1,9 @@
-use std::{collections::HashMap, time::{Duration}};
+use std::{time::{Duration}};
 
 use tokio::{io::{AsyncRead, AsyncWrite, AsyncWriteExt}, time::timeout};
 use serde::{Serialize, Deserialize};
 
-use crate::{ScanTaskInfo, ServiceAnalyseResult, error::*, net_scanner::scheduler::{ScannerResources}, proxy::socks5_proxy::Socks5Proxy};
+use crate::{ScanTaskInfo, error::*, net_scanner::scheduler::{ScannerResources}, proxy::socks5_proxy::Socks5Proxy};
 use crate::config::GLOBAL_CONFIG;
 use super::super::result_handler::ScanResult;
 
@@ -36,16 +36,16 @@ impl FTPScanTask {
         let task_result = ScanTaskInfo::with_proxy(proxy_addr, result);
         self.resources.result_handler.save_scan_results(&format!("tcp.{}.ftp", self.port), &self.host, &task_result).await;
 
-        if let (ScanResult::Ok(_), true) = (&task_result.result, GLOBAL_CONFIG.analyser.analyse_on_scan) {
-            let mut services = HashMap::<String, ServiceAnalyseResult>::new();
-            self.resources.analyser.ftp_analyser.analyse(&task_result.result, &mut services).await;
+        // if let (ScanResult::Ok(_), true) = (&task_result.result, GLOBAL_CONFIG.analyser.analyse_on_scan) {
+        //     let mut services = HashMap::<String, ServiceAnalyseResult>::new();
+        //     self.resources.analyser.ftp_analyser.analyse(&task_result.result, &mut services).await;
             
-            self.resources.vuln_searcher.search_all(&mut services).await;
+        //     self.resources.vuln_searcher.search_all(&mut services).await;
             
-            self.resources.result_handler.save_analyse_results(&self.host, "ftp", services)
-                .await
-                .log_error_consume("ftp-result-saving");
-        }
+        //     self.resources.result_handler.save_analyse_results(&self.host, "ftp", services)
+        //         .await
+        //         .log_error_consume("ftp-result-saving");
+        // }
     }
     async fn scan_with_proxy(&self, proxy: Socks5Proxy) -> Result<FTPScanResult, SimpleError> {
         let mut stream = proxy.connect(&format!("{}:{}", self.host, self.port), GLOBAL_CONFIG.scanner.ftp.timeout).await?;

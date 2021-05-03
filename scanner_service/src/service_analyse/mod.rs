@@ -14,7 +14,7 @@ pub struct ServiceInfo {
 pub struct ServiceAnalyseResult {
     pub name: String,
     pub version: String,
-    pub vulns: Vec<ServiceVuln>,
+    pub vulns: Vec<String>,
 }
 
 impl ServiceAnalyseResult {
@@ -25,11 +25,4 @@ impl ServiceAnalyseResult {
             vulns: Vec::new(),
         }
     }
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ServiceVuln {
-    pub id: String,
-    pub title: String,
-    pub url: String,
 }
