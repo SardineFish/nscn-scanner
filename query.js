@@ -180,4 +180,67 @@
             }
         }
     }
+];
+
+[
+    {
+        $match: {
+            addr: "58.49.29.195",
+        }
+    },
+    {
+        $replaceRoot: {
+            newRoot: {
+                $mergeObjects: ["$$ROOT", {
+                    vulns: {
+                        $reduce: {
+                            input: {
+                                $map: {
+                                    input: {
+                                        $concatArrays: [
+                                            { $objectToArray: "$web" },
+                                            { $objectToArray: "$ssh" },
+                                            { $objectToArray: "$ftp" },
+                                        ],
+                                    },
+                                    as: "service",
+                                    in: "$$service.v.vulns"
+                                }
+                            },
+                            initialValue: [],
+                            in: { $concatArrays: ['$$value', '$$this'] }
+                        }
+                    }
+                }]
+            }
+        }
+    },
+    {
+        $lookup: {
+            from: "vulns",
+            foreignField: "id",
+            localField: "vulns",
+            as: "vulns",
+        }
+    },
+    {
+        $replaceRoot: {
+            newRoot: {
+                $mergeObjects: ["$$ROOT", {
+                    vulns: {
+                        $arrayToObject: {
+                            $map: {
+                                input: "$vulns",
+                                as: "vuln",
+                                in: {
+                                    k: "$$vuln.id",
+                                    v: "$$vuln"
+                                }
+                            }
+                        }
+                    }
+                }]
+            }
+        }
+    }
 ]

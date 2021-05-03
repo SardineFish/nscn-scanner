@@ -1,7 +1,7 @@
 use std::{collections::HashMap, net::Ipv4Addr, str::FromStr};
 
 use actix_web::{get, delete, http::StatusCode, post, web::{Data, Json, Path, Query, ServiceConfig, scope}};
-use nscn::{FTPScanResult, HttpResponseData, HttpsResponse, SSHScannResult, ScanTaskInfo, ScannerService, ServiceAnalyseResult, error::SimpleError, parse_ipv4_cidr};
+use nscn::{FTPScanResult, HttpResponseData, HttpsResponse, SSHScannResult, ScanTaskInfo, ScannerService, ServiceAnalyseResult, VulnInfo, error::SimpleError, parse_ipv4_cidr};
 use serde::{Deserialize, Serialize};
 
 use crate::{error::{ApiError}, misc::responder::{ApiResult, Response}, model::{Model, ScanAnalyseResult, ScanStats}};
@@ -18,6 +18,7 @@ struct ScanResult {
     https_results: Vec<ScanTaskInfo<HttpsResponse>>,
     ftp_results: Vec<ScanTaskInfo<FTPScanResult>>,
     ssh_results: Vec<ScanTaskInfo<SSHScannResult>>,
+    vulns: Option<HashMap<String, VulnInfo>>,
 }
 #[derive(Serialize)]
 struct HTTPResponseData {
@@ -147,6 +148,7 @@ impl From<ScanAnalyseResult> for ScanResult {
             https_results: https_response,
             ssh_results,
             services,
+            vulns: result.vulns,
         }
     }
 }
@@ -178,7 +180,7 @@ async fn get_stats(service: Data<ScannerService>, model: Data<Model>) -> ApiResu
 #[get("/{addr}")]
 async fn get_by_ip(addr_str: Path<String>, model: Data<Model>) -> ApiResult<Vec<ScanResult>> {
     let addr = parse_ip(&addr_str).map_err(|_|ApiError(StatusCode::BAD_REQUEST, "Invalid address format".to_owned()))?;
-    let result = model.get_by_ip(addr).await?;
+    let result = model.get_details_by_ip(addr).await?;
 
     Ok(Response(vec![result.into()]))
 }

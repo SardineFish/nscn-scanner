@@ -1,8 +1,8 @@
-use std::ops::Range;
+use std::{collections::HashMap, ops::Range};
 
 use serde::{Deserialize, Serialize};
 use mongodb::{Database, bson::{self, doc,  Document}, options::FindOptions};
-use nscn::{NetScanRecord, ServiceRecord};
+use nscn::{NetScanRecord, ServiceRecord, VulnInfo};
 use futures::StreamExt;
 
 use crate::error::ServiceError;
@@ -22,6 +22,7 @@ pub struct AddrOnlyDoc {
 pub struct ScanAnalyseResult {
     pub scan: NetScanRecord,
     pub analyse: Option<ServiceRecord>,
+    pub vulns: Option<HashMap<String, VulnInfo>>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -31,6 +32,21 @@ pub struct ScanStats {
     pub available_servers: usize,
     pub total_vulnerabilities: usize,
 }
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ServiceDetails {
+    pub name: String,
+    pub version: String,
+    pub vulns: Vec<VulnInfo>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct AnalyseVulnDetails {
+    #[serde(flatten)]
+    pub analyse: Option<ServiceRecord>,
+    pub vulns: Option<HashMap<String, VulnInfo>>,
+}
+
 
 impl Model {
     pub fn new(db: Database) -> Self {
@@ -76,7 +92,7 @@ impl Model {
         Ok(docs)
     }
 
-    pub async fn get_by_ip(&self, addr_int: u32) -> Result<ScanAnalyseResult, ServiceError>
+    pub async fn get_details_by_ip(&self, addr_int: u32) -> Result<ScanAnalyseResult, ServiceError>
     {
         let query = doc! {
             "addr_int": addr_int as i64
@@ -84,12 +100,86 @@ impl Model {
         let scan_result = self.db.collection::<NetScanRecord>("scan").find_one(query.clone(), None).await?
             .ok_or(ServiceError::DataNotFound)?;
 
-        let analyse_resut = self.db.collection::<ServiceRecord>("analyse").find_one(query, None).await?;
-
-        Ok(ScanAnalyseResult {
-            scan: scan_result,
-            analyse: analyse_resut
-        })
+        let mut pipe = Vec::new();
+        pipe.push(doc!{
+            "$match": {
+                "addr": "58.49.29.195",
+            }
+        });
+        pipe.push(doc!{
+            "$replaceRoot": {
+                "newRoot": {
+                    "$mergeObjects": ["$$ROOT", {
+                        "vulns": {
+                            "$reduce": {
+                                "input": {
+                                    "$map": {
+                                        "input": {
+                                            "$concatArrays": [
+                                                { "$objectToArray": "$web" },
+                                                { "$objectToArray": "$ssh" },
+                                                { "$objectToArray": "$ftp" },
+                                            ],
+                                        },
+                                        "as": "service",
+                                        "in": "$$service.v.vulns"
+                                    }
+                                },
+                                "initialValue": [],
+                                "in": { "$concatArrays": ["$$value", "$$this"] }
+                            }
+                        }
+                    }]
+                }
+            }
+        });
+        pipe.push(doc!{
+            "$lookup": {
+                "from": "vulns",
+                "foreignField": "id",
+                "localField": "vulns",
+                "as": "vulns",
+            }
+        });
+        pipe.push(doc!{
+            "$replaceRoot": {
+                "newRoot": {
+                    "$mergeObjects": ["$$ROOT", {
+                        "vulns": {
+                            "$arrayToObject": {
+                                "$map": {
+                                    "input": "$vulns",
+                                    "as": "vuln",
+                                    "in": {
+                                        "k": "$$vuln.id",
+                                        "v": "$$vuln"
+                                    }
+                                }
+                            }
+                        }
+                    }]
+                }
+            }
+        });
+        let doc = self.db.collection::<Document>("analyse")
+            .aggregate(pipe, None)
+            .await?
+            .next()
+            .await;
+        if let Some(Ok(doc)) = doc {
+            let analyse_result: AnalyseVulnDetails = bson::from_document(doc)?;
+            Ok(ScanAnalyseResult {
+                scan: scan_result,
+                analyse: analyse_result.analyse,
+                vulns: analyse_result.vulns,
+            })
+        } else {
+            Ok(ScanAnalyseResult {
+                scan: scan_result,
+                analyse: None,
+                vulns: None,
+            })
+        }
     }
 
     pub async fn get_by_ip_range(&self, range: Range<u32>, skip: usize, count: usize, online_only: bool) -> Result<Vec<ScanAnalyseResult>, ServiceError> {
