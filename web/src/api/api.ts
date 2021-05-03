@@ -65,12 +65,13 @@ export interface ScanResult
     services: Record<string, {
         name: string,
         version: string,
-        vulns: Array<{
-            id: string,
-            title: string,
-            url: string,
-        }>
-    }>
+        vulns: string[],
+    }>,
+    vulns: Record<string, {
+        id: string,
+        title: string,
+        url: string
+    }>,
 }
 
 export interface BreifResult

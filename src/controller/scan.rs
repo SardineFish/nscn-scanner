@@ -18,7 +18,7 @@ struct ScanResult {
     https_results: Vec<ScanTaskInfo<HttpsResponse>>,
     ftp_results: Vec<ScanTaskInfo<FTPScanResult>>,
     ssh_results: Vec<ScanTaskInfo<SSHScannResult>>,
-    vulns: Option<HashMap<String, VulnInfo>>,
+    vulns: HashMap<String, VulnInfo>,
 }
 #[derive(Serialize)]
 struct HTTPResponseData {
@@ -148,7 +148,7 @@ impl From<ScanAnalyseResult> for ScanResult {
             https_results: https_response,
             ssh_results,
             services,
-            vulns: result.vulns,
+            vulns: result.vulns.unwrap_or(HashMap::new()),
         }
     }
 }

@@ -36,8 +36,8 @@ export function VulnsPage(props: {result: ScanResult})
                             <List className="vuln-list" size="small">
                                 {data.services[key].vulns.map((vuln, idx) => (
                                     <List.Item key={idx}>
-                                        <Text className="vuln-id" strong>{vuln.id}</Text>
-                                        <a className="vuln-title" href={vuln.url}>{vuln.title}</a>
+                                        <Text className="vuln-id" strong>{data.vulns[vuln].id}</Text>
+                                        <a className="vuln-title" href={data.vulns[vuln].url}>{data.vulns[vuln].title}</a>
                                     </List.Item>
                                 ))}
                             </List>
