@@ -228,7 +228,7 @@ async fn request_scan_by_list(request: Json<ScanningRequest>, service: Data<Mast
     if let Some(url_list) = &request.fetch_urls {
         for url in url_list {
             let task_list = service.fetch_address_list(url.as_str()).await
-                .map_err(|_|ApiError(StatusCode::BAD_REQUEST, format!("Faild to fetch address list from '{}'", url)))?;
+                .map_err(|err|ApiError(StatusCode::BAD_REQUEST, format!("Faild to fetch address list from '{}': {}", url, err)))?;
 
             for addr in &task_list {
                 let range = parse_ipv4_cidr(&addr)
