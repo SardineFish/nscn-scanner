@@ -14,6 +14,7 @@ pub struct Config {
     pub listen: String,
     pub role: NodeRole,
     pub workers: Option<Vec<String>>,
+    pub init: Option<bool>,
     pub proxy_pool: ProxyPoolConfig,
     pub scanner: ScannerConfig,
     pub analyser: ServiceAnalyserOptions,
@@ -155,6 +156,9 @@ impl Config {
         if opts.workers.len() > 0 {
             config.workers = Some(opts.workers);
         }
+        if opts.init {
+            config.init = Some(true);
+        }
         // let mut env: HashMap<String, String> = env::vars().collect();
         // if let Some(workers) = env.remove("NSCN_WORKERS") {
         //     config.workers = Some(serde_json::from_str::<Vec<String>>(&workers).unwrap());
@@ -184,6 +188,9 @@ struct CliOptions {
 
     #[clap(long, arg_enum, env="NSCN_ROLE")]
     role: Option<NodeRole>,
+
+    #[clap(long)]
+    init: bool,
 
     #[clap()]
     workers: Vec<String>,

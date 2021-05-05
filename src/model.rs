@@ -2,7 +2,7 @@ use std::{collections::HashMap, ops::Range};
 
 use serde::{Deserialize, Serialize};
 use mongodb::{Database, bson::{self, doc,  Document}, options::{FindOptions, Hint}};
-use nscn::{NetScanRecord, ServiceRecord, VulnInfo};
+use nscn::{NetScanRecord, ServiceRecord, VulnInfo, error::SimpleError};
 use futures::StreamExt;
 
 use crate::error::ServiceError;
@@ -54,6 +54,59 @@ impl Model {
             db
         }
     }
+
+    pub async fn init(&self) -> Result<(), SimpleError> {
+        self.db.run_command(doc! {
+            "createIndexes": "scan",
+            "indexes": [
+                {
+                    "key": {"addr": 1},
+                    "name": "addr_1",
+                    "unique": true,
+                },
+                {
+                    "key": {"addr_int": 1},
+                    "name": "addr_int_1",
+                    "unique": true,
+                },
+                {
+                    "key": {"any_available" : 1},
+                    "name": "any_available_1",
+                }
+            ]
+        }, None).await?;
+
+        self.db.run_command(doc! {
+            "createIndexes": "analyse",
+            "indexes": [
+                {
+                    "key": {"addr": 1},
+                    "name": "addr_1",
+                    "unique": true,
+                },
+                {
+                    "key": {"addr_int": 1},
+                    "name": "addr_int_1",
+                    "unique": true,
+                },
+            ]
+        }, None).await?;
+
+        self.db.run_command(doc! {
+            "createIndexes": "vulns",
+            "indexes": [
+                {
+                    "key": {"id": 1},
+                    "name": "id_1",
+                    "unique": true,
+                },
+            ]
+        }, None).await?;
+
+
+        Ok(())
+    }
+
 
     pub async fn get_scaned_addr(&self, range: Range<u32>, skip: usize, count: usize, online_only: bool) -> Result<Vec<AddrOnlyDoc>, ServiceError> {
         let query = match online_only {

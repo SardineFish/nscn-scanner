@@ -24,14 +24,20 @@ async fn main() {
     env_logger::init();
 
     log::info!("Run as {}", GLOBAL_CONFIG.role);
-
-    let worker = WorkerService::new().await.unwrap();
-
-    let mongodb = mongodb::Client::with_uri_str(&worker.config().mongodb)
+    
+    let mongodb = mongodb::Client::with_uri_str(&GLOBAL_CONFIG.mongodb)
         .await
         .unwrap();
     let db = mongodb.database("nscn");
     let model = Model::new(db.clone());
+
+    if let Some(true) = GLOBAL_CONFIG.init {
+        model.init().await.log_error_consume("init");
+        log::info!("Initialzed database");
+    }
+
+    let worker = WorkerService::new().await.unwrap();
+
     
     let master = match GLOBAL_CONFIG.role {
         nscn::NodeRole::Worker => None,
