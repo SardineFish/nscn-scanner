@@ -23,6 +23,8 @@ use tokio::{
 async fn main() {
     env_logger::init();
 
+    log::info!("Run as {}", GLOBAL_CONFIG.role);
+
     let worker = WorkerService::new().await.unwrap();
 
     let mongodb = mongodb::Client::with_uri_str(&worker.config().mongodb)
@@ -62,26 +64,30 @@ async fn main() {
     if let Some(master) = master {
         task::spawn(try_dispatch_address(master.clone()));
         task::spawn(try_dispatch_analysing(db.clone(), master.clone()));
-
-        let mut workers = GLOBAL_CONFIG.workers.clone().unwrap_or(Vec::new());
-        if let nscn::NodeRole::Standalone = GLOBAL_CONFIG.role {
-            workers.push(GLOBAL_CONFIG.listen.to_owned());
-        }
-
-        loop {
-            let count = master.update_workers(workers.clone()).await;
-            if count == workers.len() {
-                log::info!("All workers is active.");
-                break;
-            }
-            log::warn!("{} workers not available, retry in 5s.", workers.len() - count);
-            sleep(Duration::from_secs(1)).await;
-        }
+        task::spawn(connect_workers(master));
     }
 
     join.await.unwrap().unwrap();
 
     // scanner.join().await;
+}
+
+async fn connect_workers(master: MasterService) {
+    let mut workers = GLOBAL_CONFIG.workers.clone().unwrap_or(Vec::new());
+    if let nscn::NodeRole::Standalone = GLOBAL_CONFIG.role {
+        workers.push(GLOBAL_CONFIG.listen.to_owned());
+    }
+
+    loop {
+        log::info!("Connecting to {} workers", workers.len());
+        let count = master.update_workers(workers.clone()).await;
+        if count == workers.len() {
+            log::info!("All workers is active.");
+            break;
+        }
+        log::warn!("{} workers not available, retry in 5s.", workers.len() - count);
+        sleep(Duration::from_secs(1)).await;
+    }
 }
 
 async fn try_dispatch_address(service: MasterService) {

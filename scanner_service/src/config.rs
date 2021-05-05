@@ -1,8 +1,8 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::{self, Display, Formatter}};
 
+use clap::{Clap, AppSettings};
 use lazy_static::lazy_static;
 use serde::{Deserialize};
-use tokio::fs::read_to_string;
 use crate::error::*;
 
 
@@ -21,11 +21,21 @@ pub struct Config {
     pub test: Option<HashMap<String, String>>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clap, Debug, PartialEq)]
 pub enum NodeRole {
     Master,
     Worker,
     Standalone,
+}
+
+impl Display for NodeRole {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            NodeRole::Master => write!(f, "Master"),
+            NodeRole::Standalone => write!(f, "Standalone"),
+            NodeRole::Worker => write!(f, "Worker"),
+        }
+    }
 }
 
 #[derive(Deserialize)]
@@ -130,16 +140,57 @@ pub enum ProxyVerify {
 }
 
 impl Config {
-    pub async fn from_file(path: &str) -> Result<Self, SimpleError> {
-        let data = read_to_string(path).await?;
+    pub fn from_file(path: &str) -> Result<Self, SimpleError> {
+        let data = std::fs::read_to_string(path)?;
         Ok(serde_json::from_str(&data)?)
     }
+    pub fn init() -> Self {
+        let opts = CliOptions::parse();
+        let mut config = Self::from_file(&opts.config).unwrap();
+        config.role = opts.role.unwrap_or(config.role);
+        if let Some(listen) = opts.listen {
+            config.listen = listen;
+        }
+        
+        if opts.workers.len() > 0 {
+            config.workers = Some(opts.workers);
+        }
+        // let mut env: HashMap<String, String> = env::vars().collect();
+        // if let Some(workers) = env.remove("NSCN_WORKERS") {
+        //     config.workers = Some(serde_json::from_str::<Vec<String>>(&workers).unwrap());
+
+        // }
+        // config.role = match env.get("NSCN_ROLE").map(|s|s.as_str()) {
+        //     Some("Master") => NodeRole::Master,
+        //     Some("Standalone") => NodeRole::Standalone,
+        //     Some("Worker") => NodeRole::Worker,
+        //     _ => config.role,
+        // };
+        // config.listen = env.remove("NSCN_LISTEN").unwrap_or(config.listen);
+
+        config
+    }
+}
+
+#[derive(Clap)]
+#[clap(version = "0.1.0", author = "SardineFish")]
+#[clap(setting = AppSettings::ColoredHelp)]
+struct CliOptions {
+    #[clap(short, long, default_value="config.json")]
+    config: String,
+
+    #[clap(long, env="NSCN_LISTEN")]
+    listen: Option<String>,
+
+    #[clap(long, arg_enum, env="NSCN_ROLE")]
+    role: Option<NodeRole>,
+
+    #[clap()]
+    workers: Vec<String>,
 }
 
 lazy_static!{
     pub static ref GLOBAL_CONFIG: Config = {
-        let data = std::fs::read_to_string("config.json").unwrap();
-        let config: Config = serde_json::from_str(&data).unwrap();
-        config
+        Config::init()
     };
 }
