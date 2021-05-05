@@ -47,7 +47,7 @@ async fn complete_task(path: Path<String>, data: Json<Vec<String>>, service: Dat
 #[post("/master")]
 async fn register_master(data: Json<String>, service: Data<WorkerService>) -> ApiResult<()> {
     log::info!("Received connection from master {}", data);
-    service.start(data.into_inner())?;
+    service.start(data.into_inner()).await?;
     log::info!("Worker started.");
 
     Ok(Response(()))

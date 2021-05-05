@@ -1,7 +1,7 @@
 use std::{net::Ipv4Addr, sync::Arc, time::{Duration}};
 
 use serde::{Serialize};
-use futures::{Future};
+use futures::{Future, future::join};
 use mongodb::{Database};
 use tokio::{sync::{Mutex, mpsc::{Receiver, Sender, channel}}, task::{self, JoinHandle}, time::{sleep}};
 use async_trait::async_trait;
@@ -40,9 +40,7 @@ impl NetScanner {
         }
     }
     pub fn start(&self, master_addr: String) -> Result<JoinHandle<()>, SimpleError> {
-        // let (sender, receiver) = channel(64);
-        let scheduler = Scheduler::new(master_addr, &self.resources)?;
-        Ok(task::spawn(scheduler.start()))
+        Ok(task::spawn(Scheduler::start(master_addr, self.resources.clone())))
     }
     pub fn stats(&self) -> Arc<Mutex<SchedulerStats>> {
         self.resources.stats.clone()
@@ -68,6 +66,7 @@ pub struct SchedulerStats {
     // pub send_time: f64,
 }
 
+
 pub struct Scheduler {
     local_scheduler: LocalScheduler,
     task_pool: TaskPool,
@@ -75,14 +74,17 @@ pub struct Scheduler {
     // pub proxy_pool: ProxyPool,
 }
 impl Scheduler {
-    fn new(master_addr: String, resources: &ScannerResources) -> Result<Self, SimpleError> {
-        Ok(Self {
-            local_scheduler: LocalScheduler::new("scanner".to_owned(), master_addr, &GLOBAL_CONFIG.scanner.scheduler),
-            task_pool: TaskPool::new(GLOBAL_CONFIG.scanner.scheduler.max_tasks, &resources.stats),
+    async fn start(master_addr: String, resources: ScannerResources) {
+        let (local_scheduler, fetch_task)= 
+            LocalScheduler::start("scanner".to_owned(), master_addr, &GLOBAL_CONFIG.scanner.scheduler);
+        let scheduler = Self {
+            local_scheduler,
             resources: resources.clone(),
-        })
+            task_pool: TaskPool::new(GLOBAL_CONFIG.scanner.scheduler.max_tasks, &resources.stats)
+        };
+        join(scheduler.schedule_loop(), fetch_task).await;
     }
-    async fn start(mut self) {
+    async fn schedule_loop(mut self) {
         if !GLOBAL_CONFIG.scanner.scheduler.enabled {
             return ;
         }
@@ -171,7 +173,7 @@ impl TaskPool {
             //     log::error!("Task {} suspedned over 300s", name);
             // }
             // sleep(Duration::from_secs(5)).await;
-            complete_sender.send(()).await.log_error_consume("scan-scheduler");
+            complete_sender.send(()).await.log_warn_consume("scan-scheduler");
         });
         {
             let mut guard = self.stats.lock().await;

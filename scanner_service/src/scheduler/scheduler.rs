@@ -272,7 +272,7 @@ impl<Resource> TaskPool<Resource> where Resource: Send + 'static {
             //     log::error!("Task {} suspedned over 300s", name);
             // }
             // sleep(Duration::from_secs(5)).await;
-            complete_sender.send(resource).await.log_error_consume("scan-scheduler");
+            complete_sender.send(resource).await.log_warn_consume("scan-scheduler");
         });
     }
     async fn wait_resource(&mut self) -> Resource {

@@ -16,7 +16,7 @@ mod stats_mornitor;
 #[allow(dead_code)]
 mod redis_pool;
 
-use std::sync::Arc;
+use std::{mem, sync::Arc};
 
 use address::fetch_address_list;
 use futures::future::join_all;
@@ -25,7 +25,7 @@ use net_scanner::scheduler::{NetScanner};
 use reqwest::StatusCode;
 use scheduler::master_scheduler::{MasterScheduler};
 use stats_mornitor::{ScannerStatsMornotor, SystemStatsMornitor};
-use tokio::{sync::Mutex, task, time::sleep};
+use tokio::{sync::{Mutex}, task::{self, JoinHandle}, time::sleep};
 
 use error::*;
 
@@ -40,12 +40,31 @@ pub use scheduler::SchedulerStats;
 pub use vul_search::VulnInfo;
 pub use config::*;
 
+struct WorkerState {
+    master_addr: String,
+    scanner_handeler: Option<JoinHandle<()>>,
+    analyser_handler: Option<JoinHandle<()>>,
+}
+
+impl WorkerState {
+    fn abort(self) {
+        if let Some(handler) = self.scanner_handeler {
+            handler.abort();
+        }
+        if let Some(handler) = self.analyser_handler {
+            handler.abort();
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct WorkerService {
     scanner: NetScanner,
     analyser: ServiceAnalyseScheduler,
     sys_mornitor: SystemStatsMornitor,
     scheduler_mornitor: ScannerStatsMornotor,
+
+    current_state: Arc<Mutex<Option<WorkerState>>>
 }
 
 impl WorkerService {
@@ -71,16 +90,42 @@ impl WorkerService {
             analyser: analyser_scheduler,
             sys_mornitor: SystemStatsMornitor::start(),
             scheduler_mornitor: scheduler_mornitor,
+            current_state: Arc::new(Mutex::new(None)),
         })
     }
 
-    pub fn start(&self, master_addr: String) -> Result<(), SimpleError>{
-        self.scanner.start(master_addr.clone())?;
-        self.analyser.start(master_addr)?;
+    pub async fn start(&self, master_addr: String) -> Result<(), SimpleError>{
+        let current_master = {
+            let guard = self.current_state.lock().await;
+            guard.as_ref().map(|state| state.master_addr.to_owned()).unwrap_or(String::new())
+        };
+        if current_master != master_addr {
+            self.abort().await;
+
+            let state = WorkerState {
+                analyser_handler: self.analyser.start(master_addr.clone()).log_error("start-analyser").ok(),
+                scanner_handeler: self.scanner.start(master_addr.clone()).log_error("start-scanner").ok(),
+                master_addr: master_addr
+            };
+
+            let mut guard = self.current_state.lock().await;
+            *guard = Some(state);
+            log::info!("New worker started");
+        }
 
         Ok(())
     }
-    
+
+    async fn abort(&self) {
+        let mut guard = self.current_state.lock().await;
+        let state: Option<WorkerState> = mem::replace(&mut guard, None);
+        if let Some(state) = state {
+            state.abort();
+            log::warn!("Abort running worker");
+        } else {
+            log::warn!("Abort No worker");
+        }
+    }
 
     pub fn scanner(&self) -> NetScanner {
         self.scanner.clone()

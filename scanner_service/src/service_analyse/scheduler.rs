@@ -1,6 +1,6 @@
 use std::{collections::HashMap, time::Duration};
 use bson::{Document, doc};
-use futures::future::join_all;
+use futures::future::{join3, join_all};
 use serde::{Serialize, Deserialize};
 use mongodb::{Database, bson};
 use tokio::{task::{self, JoinHandle}, time::sleep};
@@ -38,9 +38,15 @@ impl ServiceAnalyseScheduler {
     }
     pub fn start(&self, master_addr: String) -> Result<JoinHandle<()>, SimpleError> {
         let dispatcher = self.clone();
-        let scheduler = LocalScheduler::new("analyser".to_owned(), master_addr, &GLOBAL_CONFIG.analyser.scheduler);
-        task::spawn(self.clone().stats_mornitor(5.0));
-        Ok(task::spawn(dispatcher.dispatch_tasks(scheduler)))
+        let (scheduler, fetch_task) = LocalScheduler::start("analyser".to_owned(), master_addr, &GLOBAL_CONFIG.analyser.scheduler);
+        let future = join3(
+            self.clone().stats_mornitor(5.0), 
+            dispatcher.dispatch_tasks(scheduler),
+            fetch_task
+        );
+        Ok(task::spawn(async move {
+            future.await;
+        }))
     }
 
     async fn dispatch_tasks(mut self, mut scheduler: LocalScheduler)

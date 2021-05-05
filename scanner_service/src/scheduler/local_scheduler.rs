@@ -1,6 +1,7 @@
 use std::{sync::Arc, time::Duration};
 
-use tokio::{sync::{Mutex, watch}, task, time::sleep};
+use futures::Future;
+use tokio::{sync::{Mutex, watch}, time::sleep};
 use rand::{Rng, SeedableRng, prelude::SmallRng};
 
 use crate::{config::WorkerSchedulerOptions, error::{LogError, SimpleError}};
@@ -17,8 +18,8 @@ struct WorkerTaskFetcher {
 }
 
 impl WorkerTaskFetcher {
-    pub fn run(self) {
-        task::spawn(self.fetch_tasks());
+    pub async fn start(self) {
+        self.fetch_tasks().await;
     }
 
     async fn fetch_tasks(mut self) {
@@ -68,7 +69,7 @@ pub struct LocalScheduler {
 }
 
 impl LocalScheduler {
-    pub fn new(task_key: String, master_addr: String, options: &WorkerSchedulerOptions) -> Self {
+    pub fn start(task_key: String, master_addr: String, options: &WorkerSchedulerOptions) -> (Self, impl Future<Output=()> + Send + 'static) {
         let (fetch_sender, fetch_receiver) = watch::channel(());
         let (update_sender, update_receiver) = watch::channel(());
 
@@ -95,9 +96,8 @@ impl LocalScheduler {
             remote_fetch_threshold: options.fetch_threshold,
             tasks_updated: update_sender,
         };
-        fetcher.run();
 
-        scheduler
+        (scheduler, fetcher.start())
     }
 
     pub async fn fetch_task(&mut self) -> String {
