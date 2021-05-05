@@ -88,12 +88,12 @@ pub struct SchedulerStatsReport {
 }
 
 #[derive(Clone)]
-pub struct SchedulerStatsMornotor {
+pub struct ScannerStatsMornotor {
     src_stats: Arc<Mutex<SchedulerStats>>,
     last_stats:  Arc<Mutex<SchedulerStats>>,
 }
 
-impl SchedulerStatsMornotor {
+impl ScannerStatsMornotor {
     pub fn start(stats: Arc<Mutex<SchedulerStats>>) -> Self {
         let mornitor = Self {
             src_stats: stats,

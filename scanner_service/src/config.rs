@@ -11,11 +11,20 @@ use crate::error::*;
 pub struct Config {
     pub mongodb: String,
     pub redis: String,
+    pub listen: String,
+    pub role: NodeRole,
+    pub workers: Option<Vec<String>>,
     pub proxy_pool: ProxyPoolConfig,
     pub scanner: ScannerConfig,
     pub analyser: ServiceAnalyserOptions,
     pub stats: StatsConfig,
     pub test: Option<HashMap<String, String>>,
+}
+
+#[derive(Deserialize)]
+pub enum NodeRole {
+    Master,
+    Worker,
 }
 
 #[derive(Deserialize)]
@@ -44,9 +53,11 @@ pub struct Socks5ProxyOptions {
 }
 
 #[derive(Deserialize)]
-pub struct SchedulerOptions {
+pub struct WorkerSchedulerOptions {
     pub enabled: bool,
     pub max_tasks: usize,
+    pub fetch_count: usize,
+    pub fetch_threshold: usize,
 }
 
 #[derive(Deserialize)]
@@ -64,7 +75,7 @@ pub struct ScannerConfig {
     pub ftp: UniversalScannerOption,
     pub tcp: TCPScannerOptions,
     pub task: TaskOptions,
-    pub scheduler: SchedulerOptions,
+    pub scheduler: WorkerSchedulerOptions,
     pub save: ResultSavingOption,
 }
 
@@ -93,7 +104,7 @@ pub struct TaskOptions {
 pub struct ServiceAnalyserOptions {
     pub analyse_on_scan: bool,
     pub rules: ServiceAnalyserRules,
-    pub scheduler: SchedulerOptions,
+    pub scheduler: WorkerSchedulerOptions,
     pub save: String,
     pub vuln_search: VulnerabilitiesSearchConfig,
 }

@@ -242,3 +242,27 @@ e.g. `GET /api/scan/123.123.123.123/24`
     "tasks": 1,
 }
 ```
+
+--------
+
+## Fetch Tasks
+`POST /api/scheduler/fetch`
+### Response
+```json
+[
+    "10.0.0.0/8",
+    "192.168.1.0/24",
+]
+```
+
+--------
+
+## Complete Task
+`POST /api/scheduler/complete`
+### Request
+```json
+[
+    "10.0.0.0/8",
+    "192.168.1.0/24",
+]
+```

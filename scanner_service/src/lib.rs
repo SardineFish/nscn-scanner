@@ -20,12 +20,12 @@ use address::fetch_address_list;
 use proxy::ProxyPool;
 use config::GLOBAL_CONFIG;
 use net_scanner::scheduler::{NetScanner};
-use stats_mornitor::{SchedulerStatsMornotor, SystemStatsMornitor};
+use scheduler::master_scheduler::MasterScheduler;
+use stats_mornitor::{ScannerStatsMornotor, SystemStatsMornitor};
 use tokio::{task, time::sleep};
 
 use error::*;
 
-pub use net_scanner::scheduler::SchedulerController;
 pub use service_analyse::{scheduler::ServiceAnalyseScheduler, scheduler::ServiceRecord, ServiceAnalyseResult};
 pub use config::Config;
 pub use net_scanner::result_handler::NetScanRecord;
@@ -37,58 +37,41 @@ pub use scheduler::SchedulerStats;
 pub use vul_search::VulnInfo;
 
 #[derive(Clone)]
-pub struct ScannerService {
-    scheduler: SchedulerController,
+pub struct WorkerService {
+    scanner: NetScanner,
     analyser: ServiceAnalyseScheduler,
     sys_mornitor: SystemStatsMornitor,
-    scheduler_mornitor: SchedulerStatsMornotor,
+    scheduler_mornitor: ScannerStatsMornotor,
 }
 
-impl ScannerService {
+impl WorkerService {
     pub async fn start() -> Result<Self, SimpleError>
     {
         let mongodb = mongodb::Client::with_uri_str(&GLOBAL_CONFIG.mongodb).await.unwrap();
         let db = mongodb.database("nscn");
-        // let redis_pool = Arc::new(RedisPool::open(&config.redis));
-        // let redis = redis::Client::open(config.redis.as_str()).unwrap();
-        // let conn = redis.get_multiplexed_tokio_connection().await.unwrap();
+        
         let proxy_pool = ProxyPool::new();
         proxy_pool.start().await;
         let scanner = NetScanner::new(&GLOBAL_CONFIG.redis, &db, &proxy_pool);
-        let scheduler = scanner.start().unwrap();
         
-        // http_scanner.enqueue("47.102.198.236").await.unwrap();
         
-        let scheduler_mornitor = SchedulerStatsMornotor::start(scheduler.stats());
+        let scheduler_mornitor = ScannerStatsMornotor::start(scanner.stats());
         stats_log(scheduler_mornitor.clone());
-        // try_dispatch_address(&scheduler).await;
-
-        // let range = parse_ipv4_cidr("47.102.198.0/24").unwrap();
-        // for ip in range {
-        //     let addr = std::net::Ipv4Addr::from(ip);
-        //     http_scanner.enqueue(addr.to_string().as_str()).await;
-        // }
+        
 
         let analyser_scheduler = ServiceAnalyseScheduler::new(&db, &GLOBAL_CONFIG.redis).await.unwrap();
-        let _ = analyser_scheduler.run().await.unwrap();
-        // task::spawn(try_dispatch_analysing(db.clone(), analyser_scheduler));
-        
-
-        // analyser_join.await.unwrap();
-        // scheduler.join().await;
-
-        // panic!();
+        // let _ = analyser_scheduler.run().await.unwrap();
 
         Ok(Self {
-            scheduler: scheduler,
+            scanner: scanner,
             analyser: analyser_scheduler,
             sys_mornitor: SystemStatsMornitor::start(),
             scheduler_mornitor: scheduler_mornitor,
         })
     }
 
-    pub fn scheculer(&self) -> SchedulerController {
-        self.scheduler.clone()
+    pub fn scanner(&self) -> NetScanner {
+        self.scanner.clone()
     }
 
     pub fn analyser(&self) -> ServiceAnalyseScheduler {
@@ -110,14 +93,28 @@ impl ScannerService {
     pub async fn scheduler_stats(&self) -> SchedulerStatsReport {
         self.scheduler_mornitor.get_stats().await
     }
+}
 
-    pub async fn join(self)
-    {
-        self.scheduler.join().await
+#[derive(Clone)]
+pub struct MasterService {
+    scanner_scheduler: MasterScheduler,
+    analyser_scheduler: MasterScheduler,
+    workers: Vec<String>,
+}
+
+impl MasterService {
+    pub async fn new() -> Result<Self, SimpleError> {
+        Ok(Self {
+            scanner_scheduler: MasterScheduler::start("scanner", 
+                redis::Client::open(GLOBAL_CONFIG.redis.as_str())?).await?,
+            analyser_scheduler: MasterScheduler::start("analysser", 
+                redis::Client::open(GLOBAL_CONFIG.redis.as_str())?).await?,
+            workers: Vec::new(),
+        })
     }
 }
 
-fn stats_log(mornitor: SchedulerStatsMornotor) {
+fn stats_log(mornitor: ScannerStatsMornotor) {
     let interval = 10.0;
     task::spawn(async move {
         let mut last_stats = SchedulerStatsReport::default();

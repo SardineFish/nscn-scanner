@@ -1,12 +1,12 @@
-use std::{collections::HashMap};
+use std::{collections::HashMap, time::Duration};
 use bson::{Document, doc};
 use futures::future::join_all;
 use serde::{Serialize, Deserialize};
 use mongodb::{Database, bson};
-use tokio::{task::{self, JoinHandle}};
+use tokio::{task::{self, JoinHandle}, time::sleep};
 use chrono::Utc;
 
-use crate::{SchedulerStats, config::ResultSavingOption, error::*, scheduler::{Scheduler, TaskPool}, vul_search::VulnerabilitiesSearch};
+use crate::{SchedulerStats, config::ResultSavingOption, error::*, scheduler::{Scheduler, SharedSchedulerInternalStats, SharedSchedulerStats, TaskPool, local_scheduler::LocalScheduler}, vul_search::VulnerabilitiesSearch};
 use crate::config::GLOBAL_CONFIG;
 use crate::net_scanner::result_handler::NetScanRecord;
 
@@ -18,27 +18,32 @@ const KEY_ANALYSE_RUNNING: &str = "analyse_running";
 
 #[derive(Clone)]
 pub struct ServiceAnalyseScheduler {
-    scheduler: Scheduler,
     redis: redis::Client,
     db: Database,
+    stats_internal: SharedSchedulerInternalStats,
+    stats: SharedSchedulerStats,
 }
 
 impl ServiceAnalyseScheduler {
     pub async fn new(db: &Database, redis_url: &str) -> Result<Self, SimpleError> {
         let client = redis::Client::open(redis_url)?;
+        let internal_stats = SharedSchedulerInternalStats::new();
         
         Ok(Self {
-            scheduler: Scheduler::new("analyser", redis_url).await?,
             db: db.clone(),
             redis: client,
+            stats: SharedSchedulerStats::new(),
+            stats_internal: internal_stats.clone(),
         })
     }
-    pub async fn run(&self) -> Result<JoinHandle<()>, SimpleError> {
+    pub async fn run(&self, master_addr: String) -> Result<JoinHandle<()>, SimpleError> {
         let dispatcher = self.clone();
-        Ok(task::spawn(dispatcher.dispatch_tasks()))
+        let scheduler = LocalScheduler::new(master_addr, &GLOBAL_CONFIG.analyser.scheduler);
+        task::spawn(self.clone().stats_mornitor(5.0));
+        Ok(task::spawn(dispatcher.dispatch_tasks(scheduler)))
     }
 
-    async fn dispatch_tasks(mut self)
+    async fn dispatch_tasks(mut self, mut scheduler: LocalScheduler)
     {
         if !GLOBAL_CONFIG.analyser.scheduler.enabled {
             return;
@@ -49,15 +54,13 @@ impl ServiceAnalyseScheduler {
             .map(|_|async { TaskResources::new(self.db.clone(), self.redis.clone()).await.unwrap() })
         ).await;
 
+        let mut task_pool = TaskPool::new(
+            GLOBAL_CONFIG.analyser.scheduler.max_tasks, 
+            self.stats_internal.clone(), 
+            resources_pool);
 
-        let mut task_pool = self.scheduler.new_task_pool(
-            GLOBAL_CONFIG.analyser.scheduler.max_tasks,
-            resources_pool,
-        );
-
-        self.scheduler.recover_tasks().await.log_error_consume("service-analyser");
         loop {
-            match self.try_dispatch_task(&mut task_pool).await {
+            match self.try_dispatch_task(&mut task_pool, &mut scheduler).await {
                 Ok(_) => (),
                 Err(err) => {
                     log::error!("Failed to dispatch service analysing task: {}", err.msg);
@@ -66,33 +69,30 @@ impl ServiceAnalyseScheduler {
             }
         }
     }
+    
+    pub async fn stats(&self) -> SchedulerStats {
+        self.stats.clone_inner().await
+    }
 
-    async fn try_dispatch_task(&mut self, task_pool: &mut TaskPool<TaskResources>) -> Result<(), SimpleError> {
-        let addr = self.scheduler.fetch_task().await?;
+    async fn try_dispatch_task(&mut self, task_pool: &mut TaskPool<TaskResources>, scheduler: &mut LocalScheduler) -> Result<(), SimpleError> {
+        let addr = scheduler.fetch_task().await;
 
         let task = ServiceAnalyseTask {
             addr: addr.to_owned(),
         };
         task.start(task_pool).await;
 
-        self.scheduler.complete_task(&addr).await?;
+        scheduler.complete_task(addr).await;
         Ok(())
     }
-
-    pub async fn enqueue_task_addr(&mut self, addr: &str) -> Result<(), SimpleError> {
-        self.scheduler.enqueue_task(addr).await
-    }
-    pub async fn enqueue_task_list(&mut self, addr_list: Vec<String>) -> Result<(), SimpleError> {
-        self.scheduler.enqueue_task_list(addr_list).await
-    }
-    pub async fn remove_task(&mut self, addr: &str) -> Result<usize, SimpleError>{
-        self.scheduler.remove_task(addr).await
-    }
-    pub async fn clear_tasks(&mut self) -> Result<usize, SimpleError> {
-        self.scheduler.clear_tasks().await
-    }
-    pub async fn stats(&mut self) -> SchedulerStats {
-        self.scheduler.stats().await
+    
+    async fn stats_mornitor(mut self, update_interval: f64) {
+        loop {
+            sleep(Duration::from_secs_f64(update_interval)).await;
+            
+            let stats = self.stats_internal.reset_stats().await;
+            self.stats.update(&stats, update_interval).await;
+        }
     }
 }
 

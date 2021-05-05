@@ -13,7 +13,7 @@ use futures::stream::StreamExt;
 use mongodb::bson::{doc, Document};
 use mongodb::Database;
 use nscn::error::*;
-use nscn::{self, ScannerService};
+use nscn::{self, WorkerService};
 use tokio::{
     self, task,
     time::{sleep, Duration},
@@ -23,7 +23,7 @@ use tokio::{
 async fn main() {
     env_logger::init();
 
-    let scanner = ScannerService::start().await.unwrap();
+    let scanner = WorkerService::start().await.unwrap();
     let mongodb = mongodb::Client::with_uri_str(&scanner.config().mongodb)
         .await
         .unwrap();
@@ -49,8 +49,8 @@ async fn main() {
     // scanner.join().await;
 }
 
-async fn try_dispatch_address(scanner: ScannerService) {
-    let scheduler = scanner.scheculer();
+async fn try_dispatch_address(scanner: WorkerService) {
+    let scheduler = scanner.scanner();
     if !scanner.config().scanner.task.fetch {
         return;
     }
@@ -88,7 +88,7 @@ async fn try_dispatch_address(scanner: ScannerService) {
     }
 }
 
-async fn try_dispatch_analysing(db: Database, scanner: ScannerService) {
+async fn try_dispatch_analysing(db: Database, scanner: WorkerService) {
     let mut scheduler = scanner.analyser();
     let query = doc! {
         "addr": "0.0.0.0",

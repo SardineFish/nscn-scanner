@@ -1,6 +1,6 @@
 use actix_web::{get, web::{Data, ServiceConfig, scope}};
 use serde::{Serialize};
-use nscn::{ScannerService, SchedulerStatsReport, SystemStats, SchedulerStats};
+use nscn::{WorkerService, SchedulerStatsReport, SystemStats, SchedulerStats};
 
 use crate::misc::responder::{ApiResult, Response};
 
@@ -11,14 +11,14 @@ struct AllSchedulerStats {
 }
 
 #[get("/system")]
-async fn get_sys_stats(service: Data<ScannerService>) -> ApiResult<SystemStats>
+async fn get_sys_stats(service: Data<WorkerService>) -> ApiResult<SystemStats>
 {
     let stats = service.sys_stats().await;
     Ok(Response(stats))
 }
 
 #[get("/scheduler")]
-async fn get_scheduler_stats(service: Data<ScannerService>) -> ApiResult<AllSchedulerStats> {
+async fn get_scheduler_stats(service: Data<WorkerService>) -> ApiResult<AllSchedulerStats> {
     let stats = AllSchedulerStats {
         scanner: service.scheduler_stats().await,
         analyser: service.analyser().stats().await,

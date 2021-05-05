@@ -21,7 +21,7 @@ impl SharedSchedulerInternalStats {
     pub fn new()->Self {
         Self(Arc::new(Mutex::new(SchedulerInternalStats::default())))
     }
-    pub(super) async fn reset_stats(&self) -> SchedulerInternalStats {
+    pub async fn reset_stats(&self) -> SchedulerInternalStats {
         let mut stats = SchedulerInternalStats::default();
         let mut guard = self.0.lock().await;
         mem::swap(&mut stats, &mut guard);
@@ -73,7 +73,7 @@ impl SharedSchedulerStats {
     pub fn new() -> Self {
         Self(Arc::new(Mutex::new(SchedulerStats::default())))
     }
-    pub(super) async fn update(&mut self, stats: &SchedulerInternalStats, duration_seconds: f64) {
+    pub async fn update(&mut self, stats: &SchedulerInternalStats, duration_seconds: f64) {
         let mut guard = self.0.lock().await;
         guard.tasks_per_second = stats.completed_tasks as f64 / duration_seconds;
         guard.jobs_per_second = stats.dispatched_jobs as f64 / duration_seconds;
