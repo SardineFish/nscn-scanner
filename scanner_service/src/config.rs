@@ -159,6 +159,8 @@ impl Config {
         if opts.init {
             config.init = Some(true);
         }
+        config.redis = opts.redis.unwrap_or(config.redis);
+        config.mongodb = opts.db.unwrap_or(config.mongodb);
         // let mut env: HashMap<String, String> = env::vars().collect();
         // if let Some(workers) = env.remove("NSCN_WORKERS") {
         //     config.workers = Some(serde_json::from_str::<Vec<String>>(&workers).unwrap());
@@ -194,6 +196,12 @@ struct CliOptions {
 
     #[clap()]
     workers: Vec<String>,
+
+    #[clap(long, env="NSCN_DB")]
+    db: Option<String>,
+
+    #[clap(long, env="NSCN_REDIS")]
+    redis: Option<String>,
 }
 
 lazy_static!{
