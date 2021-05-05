@@ -1,5 +1,5 @@
-use serde::{Serialize, Deserialize};
-use actix_web::{get, post, web::{Data, Json, Path, Query, ServiceConfig, scope}};
+use serde::{Deserialize};
+use actix_web::{post, web::{Data, Json, Path, Query, ServiceConfig, scope}};
 use nscn::{MasterService, WorkerService};
 
 use crate::{error::ServiceError, misc::responder::{ApiResult, Response}};

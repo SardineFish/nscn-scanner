@@ -23,7 +23,7 @@ use futures::future::join_all;
 use proxy::ProxyPool;
 use net_scanner::scheduler::{NetScanner};
 use reqwest::StatusCode;
-use scheduler::master_scheduler::{MasterScheduler, TaskDispatcher};
+use scheduler::master_scheduler::{MasterScheduler};
 use stats_mornitor::{ScannerStatsMornotor, SystemStatsMornitor};
 use tokio::{sync::Mutex, task, time::sleep};
 

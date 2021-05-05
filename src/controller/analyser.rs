@@ -1,5 +1,5 @@
 use actix_web::{post, web::{Data, ServiceConfig, scope}};
-use nscn::{MasterService, WorkerService};
+use nscn::{MasterService};
 use serde::{Serialize};
 use crate::{misc::responder::{ApiResult, Response}, model::Model};
 

@@ -3,11 +3,10 @@ use std::{net::Ipv4Addr, sync::Arc, time::{Duration}};
 use serde::{Serialize};
 use futures::{Future};
 use mongodb::{Database};
-use redis::{AsyncCommands, RedisError, pipe};
-use tokio::{sync::{Mutex, mpsc::{Receiver, Sender, channel}, oneshot::channel}, task::{self, JoinHandle}, time::{sleep}};
+use tokio::{sync::{Mutex, mpsc::{Receiver, Sender, channel}}, task::{self, JoinHandle}, time::{sleep}};
 use async_trait::async_trait;
 
-use crate::{error::*, parse_ipv4_cidr, scheduler::local_scheduler::LocalScheduler};
+use crate::{error::*, scheduler::local_scheduler::LocalScheduler};
 use super::{http_scanner::HttpScanTask, https_scanner::HttpsScanTask, result_handler::ResultHandler, tcp_scanner::scanner::TCPScanTask};
 use crate::config::{GLOBAL_CONFIG};
 use crate::proxy::proxy_pool::ProxyPool;
