@@ -246,7 +246,7 @@ e.g. `GET /api/scan/123.123.123.123/24`
 --------
 
 ## Fetch Tasks
-`POST /api/scheduler/fetch`
+`POST /api/scheduler/{task_key}/fetch?count=10`
 ### Response
 ```json
 [
@@ -258,7 +258,7 @@ e.g. `GET /api/scan/123.123.123.123/24`
 --------
 
 ## Complete Task
-`POST /api/scheduler/complete`
+`POST /api/scheduler/{task_key}/complete`
 ### Request
 ```json
 [

@@ -7,6 +7,7 @@ use crate::{config::WorkerSchedulerOptions, error::{LogError, SimpleError}};
 
 struct WorkerTaskFetcher {
     master_addr: String,
+    task_key: String,
     pending_tasks: Arc<Mutex<Vec<String>>>,
     remote_fetch_count: usize,
     remote_fetch_threshold: usize,
@@ -25,6 +26,7 @@ impl WorkerTaskFetcher {
             self.fetch_remote_tasks().await;
             self.tasks_updated.send(()).log_error_consume("task-updated");
             self.fetch_request.changed().await.log_error_consume("wait-fetch");
+            log::info!("Recv fetch request");
         }
     }
 
@@ -43,7 +45,7 @@ impl WorkerTaskFetcher {
     }
 
     async fn try_fetch_remote_tasks(&self) -> Result<Vec<String>, SimpleError> {
-        let tasks = self.client.post(format!("http://{}/api/scheduler/fetch", self.master_addr))
+        let tasks = self.client.post(format!("http://{}/api/scheduler/{}/fetch?count={}", self.master_addr, self.task_key, self.remote_fetch_count))
             .send()
             .await?
             .json::<Vec<String>>()
@@ -54,6 +56,7 @@ impl WorkerTaskFetcher {
 
 pub struct LocalScheduler {
     enabled: bool,
+    task_key: String,
     master_addr: String,
     request_fetch: watch::Sender<()>,
     tasks_updated: watch::Receiver<()>,
@@ -65,12 +68,13 @@ pub struct LocalScheduler {
 }
 
 impl LocalScheduler {
-    pub fn new(master_addr: String, options: &WorkerSchedulerOptions) -> Self {
+    pub fn new(task_key: String, master_addr: String, options: &WorkerSchedulerOptions) -> Self {
         let (fetch_sender, fetch_receiver) = watch::channel(());
         let (update_sender, update_receiver) = watch::channel(());
 
         let scheduler = Self {
             master_addr,
+            task_key: task_key.to_owned(),
             enabled: options.enabled,
             rng: SmallRng::from_entropy(),
             client: reqwest::Client::new(),
@@ -84,6 +88,7 @@ impl LocalScheduler {
         let fetcher = WorkerTaskFetcher {
             client: scheduler.client.clone(),
             fetch_request: fetch_receiver,
+            task_key,
             master_addr: scheduler.master_addr.clone(),
             pending_tasks: scheduler.pending_tasks.clone(),
             remote_fetch_count: options.fetch_count,
@@ -96,15 +101,21 @@ impl LocalScheduler {
     }
 
     pub async fn fetch_task(&mut self) -> String {
-        let pending_tasks = self.pending_tasks.lock().await;
-        if pending_tasks.len() < self.remote_fetch_threshold {
-            self.request_fetch.send(()).log_error_consume("request-fetch");
-            if pending_tasks.len() <= 0 {
-                drop(pending_tasks);
-                self.tasks_updated.changed().await.log_error_consume("wait-tasks-update");
+        log::info!("try fetch task");
+        {
+            let pending_tasks = self.pending_tasks.lock().await;
+            if pending_tasks.len() < self.remote_fetch_threshold {
+                log::info!("Request fetch");
+                self.request_fetch.send(()).log_error_consume("request-fetch");
+                if pending_tasks.len() <= 0 {
+                    drop(pending_tasks);
+                    log::info!("Wait fetch");
+                    self.tasks_updated.changed().await.log_error_consume("wait-tasks-update");
+                }
             }
         }
 
+        log::info!("fetch task");
         let mut pending_tasks = self.pending_tasks.lock().await;
 
         let idx = self.rng.gen_range(0..pending_tasks.len());
@@ -112,7 +123,7 @@ impl LocalScheduler {
     }
 
     pub async fn complete_task(&self, task: String) {
-        self.client.post(format!("http://{}/api/scheduler/complete", self.master_addr))
+        self.client.post(format!("http://{}/api/scheduler/{}/complete", self.master_addr, self.task_key))
             .json(&vec![task])
             .send()
             .await

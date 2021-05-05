@@ -16,13 +16,15 @@ pub struct MasterScheduler {
 }
 
 impl MasterScheduler {
-    pub async fn start(key: &str, redis: redis::Client) -> Result<Self, SimpleError> {
+    pub async fn start(key: &str, redis_url: &str) -> Result<Self, SimpleError> {
+        let redis = redis::Client::open(redis_url)?;
         let redis_conn = redis.get_async_connection().await?;
+
         let scheduler = Self {
             redis: Arc::new(Mutex::new(redis_conn)),
             key_taskqueue: format!("{}_taskqueue", key),
             key_running_tasks: format!("{}_running_tasks", key),
-            redis_client: redis.clone(),
+            redis_client: redis::Client::open(redis_url)?,
             internal_stats: SharedSchedulerInternalStats::new(),
             stats: SharedSchedulerStats::new(),
         };

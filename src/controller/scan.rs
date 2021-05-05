@@ -225,7 +225,6 @@ async fn request_scan_range(path: Path<(String, String)>, service: Data<MasterSe
 #[post("/list")]
 async fn request_scan_by_list(request: Json<ScanningRequest>, service: Data<MasterService>) -> ApiResult<ScanningRequestResult> {
     let mut tasks = 0;
-    let scheduler = service.scanner();
     if let Some(url_list) = &request.fetch_urls {
         for url in url_list {
             let task_list = service.fetch_address_list(url.as_str()).await
@@ -236,7 +235,7 @@ async fn request_scan_by_list(request: Json<ScanningRequest>, service: Data<Mast
                     .map_err(|_| ApiError(StatusCode::BAD_REQUEST, "Invalid address list format".to_owned()))?;
                 tasks += range.len();
             }
-            service.scanner().dispathcer().enqueue_tasks(task_list);
+            service.scanner().dispathcer().enqueue_tasks(task_list).await?;
         }
     }
     if let Some(list) = request.into_inner().addr_ranges {
@@ -244,7 +243,7 @@ async fn request_scan_by_list(request: Json<ScanningRequest>, service: Data<Mast
             let range = parse_ipv4_cidr(&addr_range)?;
             tasks+=range.len();
         }
-        service.scanner().dispathcer().enqueue_tasks(list).await;
+        service.scanner().dispathcer().enqueue_tasks(list).await?;
     }
 
     Ok(Response(ScanningRequestResult {

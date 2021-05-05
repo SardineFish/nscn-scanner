@@ -4,7 +4,7 @@ use serde::{Serialize};
 use futures::{Future};
 use mongodb::{Database};
 use redis::{AsyncCommands, RedisError, pipe};
-use tokio::{sync::{Mutex, mpsc::{Receiver, Sender, channel}}, task::{self, JoinHandle}, time::{sleep}};
+use tokio::{sync::{Mutex, mpsc::{Receiver, Sender, channel}, oneshot::channel}, task::{self, JoinHandle}, time::{sleep}};
 use async_trait::async_trait;
 
 use crate::{error::*, parse_ipv4_cidr, scheduler::local_scheduler::LocalScheduler};
@@ -78,7 +78,7 @@ pub struct Scheduler {
 impl Scheduler {
     fn new(master_addr: String, resources: &ScannerResources) -> Result<Self, SimpleError> {
         Ok(Self {
-            local_scheduler: LocalScheduler::new(master_addr, &GLOBAL_CONFIG.scanner.scheduler),
+            local_scheduler: LocalScheduler::new("scanner".to_owned(), master_addr, &GLOBAL_CONFIG.scanner.scheduler),
             task_pool: TaskPool::new(GLOBAL_CONFIG.scanner.scheduler.max_tasks, &resources.stats),
             resources: resources.clone(),
         })

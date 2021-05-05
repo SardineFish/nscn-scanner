@@ -6,7 +6,7 @@ use mongodb::{Database, bson};
 use tokio::{task::{self, JoinHandle}, time::sleep};
 use chrono::Utc;
 
-use crate::{SchedulerStats, config::ResultSavingOption, error::*, scheduler::{Scheduler, SharedSchedulerInternalStats, SharedSchedulerStats, TaskPool, local_scheduler::LocalScheduler}, vul_search::VulnerabilitiesSearch};
+use crate::{SchedulerStats, config::ResultSavingOption, error::*, scheduler::{SharedSchedulerInternalStats, SharedSchedulerStats, TaskPool, local_scheduler::LocalScheduler}, vul_search::VulnerabilitiesSearch};
 use crate::config::GLOBAL_CONFIG;
 use crate::net_scanner::result_handler::NetScanRecord;
 
@@ -36,9 +36,9 @@ impl ServiceAnalyseScheduler {
             stats_internal: internal_stats.clone(),
         })
     }
-    pub async fn run(&self, master_addr: String) -> Result<JoinHandle<()>, SimpleError> {
+    pub fn start(&self, master_addr: String) -> Result<JoinHandle<()>, SimpleError> {
         let dispatcher = self.clone();
-        let scheduler = LocalScheduler::new(master_addr, &GLOBAL_CONFIG.analyser.scheduler);
+        let scheduler = LocalScheduler::new("analyser".to_owned(), master_addr, &GLOBAL_CONFIG.analyser.scheduler);
         task::spawn(self.clone().stats_mornitor(5.0));
         Ok(task::spawn(dispatcher.dispatch_tasks(scheduler)))
     }

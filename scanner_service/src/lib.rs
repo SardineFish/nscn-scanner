@@ -49,7 +49,7 @@ pub struct WorkerService {
 }
 
 impl WorkerService {
-    pub async fn start() -> Result<Self, SimpleError>
+    pub async fn new() -> Result<Self, SimpleError>
     {
         let mongodb = mongodb::Client::with_uri_str(&GLOBAL_CONFIG.mongodb).await.unwrap();
         let db = mongodb.database("nscn");
@@ -73,6 +73,14 @@ impl WorkerService {
             scheduler_mornitor: scheduler_mornitor,
         })
     }
+
+    pub fn start(&self, master_addr: String) -> Result<(), SimpleError>{
+        self.scanner.start(master_addr.clone())?;
+        self.analyser.start(master_addr)?;
+
+        Ok(())
+    }
+    
 
     pub fn scanner(&self) -> NetScanner {
         self.scanner.clone()
@@ -110,10 +118,8 @@ pub struct MasterService {
 impl MasterService {
     pub async fn new() -> Result<Self, SimpleError> {
         Ok(Self {
-            scanner_scheduler: MasterScheduler::start("scanner", 
-                redis::Client::open(GLOBAL_CONFIG.redis.as_str())?).await?,
-            analyser_scheduler: MasterScheduler::start("analysser", 
-                redis::Client::open(GLOBAL_CONFIG.redis.as_str())?).await?,
+            scanner_scheduler: MasterScheduler::start("scanner", GLOBAL_CONFIG.redis.as_str()).await?,
+            analyser_scheduler: MasterScheduler::start("analysser", GLOBAL_CONFIG.redis.as_str()).await?,
             workers: Arc::new(Mutex::new(Vec::new())),
             client: reqwest::Client::new(),
         })
@@ -133,7 +139,7 @@ impl MasterService {
             .map(|worker_addr| {
                 let client = self.client.clone();
                 async move {
-                    let response = client.post(format!("{}/api/scheduler/master", worker_addr))
+                    let response = client.post(format!("http://{}/api/scheduler/master", worker_addr))
                     .json(&GLOBAL_CONFIG.listen)
                     .send()
                     .await;

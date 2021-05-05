@@ -23,7 +23,7 @@ use tokio::{
 async fn main() {
     env_logger::init();
 
-    let worker = WorkerService::start().await.unwrap();
+    let worker = WorkerService::new().await.unwrap();
 
     let mongodb = mongodb::Client::with_uri_str(&worker.config().mongodb)
         .await
@@ -53,7 +53,7 @@ async fn main() {
             .wrap(Logger::new("%s - %r %Dms"))
             .configure(controller::config)
     })
-    .bind("127.0.0.1:3000")
+    .bind(&GLOBAL_CONFIG.listen)
     .unwrap()
     .run();
 
