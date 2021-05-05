@@ -16,13 +16,16 @@ mod stats_mornitor;
 #[allow(dead_code)]
 mod redis_pool;
 
+use std::sync::Arc;
+
 use address::fetch_address_list;
+use futures::future::join_all;
 use proxy::ProxyPool;
-use config::GLOBAL_CONFIG;
 use net_scanner::scheduler::{NetScanner};
-use scheduler::master_scheduler::MasterScheduler;
+use reqwest::StatusCode;
+use scheduler::master_scheduler::{MasterScheduler, TaskDispatcher};
 use stats_mornitor::{ScannerStatsMornotor, SystemStatsMornitor};
-use tokio::{task, time::sleep};
+use tokio::{sync::Mutex, task, time::sleep};
 
 use error::*;
 
@@ -35,6 +38,7 @@ pub use net_scanner::{http_scanner::HttpResponseData, https_scanner::HttpsRespon
 pub use stats_mornitor::{SystemStats, SchedulerStatsReport};
 pub use scheduler::SchedulerStats;
 pub use vul_search::VulnInfo;
+pub use config::*;
 
 #[derive(Clone)]
 pub struct WorkerService {
@@ -99,7 +103,8 @@ impl WorkerService {
 pub struct MasterService {
     scanner_scheduler: MasterScheduler,
     analyser_scheduler: MasterScheduler,
-    workers: Vec<String>,
+    workers: Arc<Mutex<Vec<String>>>,
+    client: reqwest::Client,
 }
 
 impl MasterService {
@@ -109,8 +114,62 @@ impl MasterService {
                 redis::Client::open(GLOBAL_CONFIG.redis.as_str())?).await?,
             analyser_scheduler: MasterScheduler::start("analysser", 
                 redis::Client::open(GLOBAL_CONFIG.redis.as_str())?).await?,
-            workers: Vec::new(),
+            workers: Arc::new(Mutex::new(Vec::new())),
+            client: reqwest::Client::new(),
         })
+    }
+    pub fn scanner(&self) -> &MasterScheduler {
+        &self.scanner_scheduler
+    }
+    pub fn analyser(&self) -> &MasterScheduler {
+        &self.analyser_scheduler
+    }
+    pub async fn workers(&self) -> Vec<String> {
+        let guard= self.workers.lock().await;
+        guard.to_owned()
+    }
+    pub async fn update_workers(&self, workers: Vec<String>) {
+        let active_workers: Vec<String> = join_all(workers.into_iter()
+            .map(|worker_addr| {
+                let client = self.client.clone();
+                async move {
+                    let response = client.post(format!("{}/api/scheduler/master", worker_addr))
+                    .json(&GLOBAL_CONFIG.listen)
+                    .send()
+                    .await;
+                    match response {
+                        Ok(response) if response.status() == StatusCode::OK => {
+                            log::info!("Connected worker {}", worker_addr);
+                            Some(worker_addr)
+                        },
+                        Ok(response) => {
+                            log::error!("Failed to connect worker {}: {}", worker_addr, response.status());
+                            None
+                        },
+                        Err(err) => {
+                            log::error!("Failed to connect worker {}: {}", worker_addr, err);
+                            None
+                        }
+                    }
+                }
+            }))
+            .await
+            .into_iter()
+            .filter_map(|t|t)
+            .collect();
+
+        let mut guard = self.workers.lock().await;
+        *guard = active_workers;
+        log::info!("{} active workers", guard.len());
+    }
+    
+
+    pub fn config(&self) -> &'static Config{
+        &GLOBAL_CONFIG
+    }
+
+    pub async fn fetch_address_list(&self, url: &str) -> Result<Vec<String>, SimpleError> {
+        Ok(fetch_address_list(url).await?)
     }
 }
 

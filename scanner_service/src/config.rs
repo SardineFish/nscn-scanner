@@ -25,6 +25,7 @@ pub struct Config {
 pub enum NodeRole {
     Master,
     Worker,
+    Standalone,
 }
 
 #[derive(Deserialize)]

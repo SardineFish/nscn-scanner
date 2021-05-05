@@ -266,3 +266,10 @@ e.g. `GET /api/scan/123.123.123.123/24`
     "192.168.1.0/24",
 ]
 ```
+
+## Register Master
+`POST /api/scheduler/master`
+### Request
+```json
+"localhost:3000"
+```

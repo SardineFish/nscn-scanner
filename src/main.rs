@@ -12,7 +12,7 @@ use actix_web::{middleware::Logger, App};
 use futures::stream::StreamExt;
 use mongodb::bson::{doc, Document};
 use mongodb::Database;
-use nscn::error::*;
+use nscn::{GLOBAL_CONFIG, MasterService, error::*};
 use nscn::{self, WorkerService};
 use tokio::{
     self, task,
@@ -23,46 +23,73 @@ use tokio::{
 async fn main() {
     env_logger::init();
 
-    let scanner = WorkerService::start().await.unwrap();
-    let mongodb = mongodb::Client::with_uri_str(&scanner.config().mongodb)
+    let worker = WorkerService::start().await.unwrap();
+
+    let mongodb = mongodb::Client::with_uri_str(&worker.config().mongodb)
         .await
         .unwrap();
     let db = mongodb.database("nscn");
     let model = Model::new(db.clone());
+    
+    let master = match GLOBAL_CONFIG.role {
+        nscn::NodeRole::Worker => None,
+        nscn::NodeRole::Master | nscn::NodeRole::Standalone => {
+            Some(MasterService::new().await.unwrap())
+        }
+    };
 
-    task::spawn(try_dispatch_address(scanner.clone()));
-    task::spawn(try_dispatch_analysing(db.clone(), scanner.clone()));
+    let moved_master = master.clone();
 
-    actix_web::HttpServer::new(move || {
-        App::new()
-            .data(scanner.clone())
+    let server = actix_web::HttpServer::new(move || {
+        let mut app = App::new();
+        app = match &moved_master {
+            Some(moved_master) => app.data(moved_master.clone()),
+            None => app
+        };
+
+        app
+            .data(worker.clone())
             .data(model.clone())
             .wrap(Logger::new("%s - %r %Dms"))
             .configure(controller::config)
     })
     .bind("127.0.0.1:3000")
     .unwrap()
-    .run()
-    .await
-    .unwrap();
+    .run();
+
+    let join = task::spawn(server);
+
+    if let Some(master) = master {
+        task::spawn(try_dispatch_address(master.clone()));
+        task::spawn(try_dispatch_analysing(db.clone(), master.clone()));
+
+        let mut workers = GLOBAL_CONFIG.workers.clone().unwrap_or(Vec::new());
+        if let nscn::NodeRole::Standalone = GLOBAL_CONFIG.role {
+            workers.push(GLOBAL_CONFIG.listen.to_owned());
+        }
+
+        master.update_workers(workers).await;
+    }
+
+    join.await.unwrap().unwrap();
 
     // scanner.join().await;
 }
 
-async fn try_dispatch_address(scanner: WorkerService) {
-    let scheduler = scanner.scanner();
-    if !scanner.config().scanner.task.fetch {
+async fn try_dispatch_address(service: MasterService) {
+    let dispatcher = service.scanner().dispathcer();
+    if !service.config().scanner.task.fetch {
         return;
     }
     log::info!("Start dispatching http scan address");
-    if scanner.config().scanner.task.clear_old_tasks {
-        if let Err(err) = scheduler.clear_tasks().await {
+    if service.config().scanner.task.clear_old_tasks {
+        if let Err(err) = dispatcher.clear_tasks().await {
             log::error!("Failed to reset task queue: {}", err.msg);
         }
     }
-    for url in &scanner.config().scanner.task.addr_src {
+    for url in &service.config().scanner.task.addr_src {
         let list = loop {
-            match scanner.fetch_address_list(&url).await {
+            match service.fetch_address_list(&url).await {
                 Err(err) => log::error!("Failed to fetch address list from '{}': {}", url, err.msg),
                 Ok(list) => break list,
             };
@@ -80,7 +107,7 @@ async fn try_dispatch_address(scanner: WorkerService) {
                 Ok(range) => range,
             };
             count += range.len();
-            if let Err(err) = scheduler.enqueue_addr_range(&ip_cidr).await {
+            if let Err(err) = dispatcher.enqueue_task(&ip_cidr).await {
                 log::error!("Failed to enqueue http scan task: {}", err.msg);
             }
         }
@@ -88,8 +115,8 @@ async fn try_dispatch_address(scanner: WorkerService) {
     }
 }
 
-async fn try_dispatch_analysing(db: Database, scanner: WorkerService) {
-    let mut scheduler = scanner.analyser();
+async fn try_dispatch_analysing(db: Database, scanner: MasterService) {
+    let dispatcher = scanner.analyser().dispathcer();
     let query = doc! {
         "addr": "0.0.0.0",
         "$or": [
@@ -105,7 +132,7 @@ async fn try_dispatch_analysing(db: Database, scanner: WorkerService) {
         .unwrap();
     while let Some(Ok(doc)) = cursor.next().await {
         let addr = doc.get_str("addr").unwrap();
-        scheduler.enqueue_task_addr(addr).await.unwrap();
+        dispatcher.enqueue_task(addr).await.unwrap();
     }
 }
 

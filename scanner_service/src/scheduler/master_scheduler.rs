@@ -99,6 +99,12 @@ impl TaskDispatcher {
         Ok(())
     }
 
+    pub async fn get_pending_tasks(&self, skip: isize, count: isize) -> Result<Vec<String>, SimpleError> {
+        let result:Vec<String> = self.redis().await?
+            .lrange(&self.key, -skip - count, -skip - 1).await?;
+        Ok(result)
+    }
+
     pub async fn count_tasks(&self) -> Result<usize, SimpleError> {
         let count: usize = self.redis().await?.llen(&self.key).await?;
         

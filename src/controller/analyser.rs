@@ -1,5 +1,5 @@
 use actix_web::{post, web::{Data, ServiceConfig, scope}};
-use nscn::WorkerService;
+use nscn::{MasterService, WorkerService};
 use serde::{Serialize};
 use crate::{misc::responder::{ApiResult, Response}, model::Model};
 
@@ -9,13 +9,13 @@ struct ScheduleResult {
 }
 
 #[post("/all")]
-async fn analyse_all(service: Data<WorkerService>, model: Data<Model>) -> ApiResult<ScheduleResult> {
+async fn analyse_all(service: Data<MasterService>, model: Data<Model>) -> ApiResult<ScheduleResult> {
     let docs = model.get_scaned_addr(0..u32::MAX, 0, 0, true).await?;
     let tasks = docs.len();
     let addrs: Vec<String> = docs.into_iter()
         .map(|doc|doc.addr)
         .collect();
-    service.analyser().enqueue_task_list(addrs).await?;
+    service.analyser().dispathcer().enqueue_tasks(addrs).await?;
     Ok(Response(ScheduleResult {
         tasks,
     }))
