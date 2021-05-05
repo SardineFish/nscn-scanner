@@ -1,2 +1,4 @@
 ./*
-!./target/release/nscn
+!./target/release/nscn-cli
+!./config.json
+!./rules/*
