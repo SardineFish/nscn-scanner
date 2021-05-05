@@ -68,7 +68,15 @@ async fn main() {
             workers.push(GLOBAL_CONFIG.listen.to_owned());
         }
 
-        master.update_workers(workers).await;
+        loop {
+            let count = master.update_workers(workers.clone()).await;
+            if count == workers.len() {
+                log::info!("All workers is active.");
+                break;
+            }
+            log::warn!("{} workers not available, retry in 5s.", workers.len() - count);
+            sleep(Duration::from_secs(1)).await;
+        }
     }
 
     join.await.unwrap().unwrap();

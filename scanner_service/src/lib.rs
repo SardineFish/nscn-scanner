@@ -179,7 +179,7 @@ impl MasterService {
         let guard= self.workers.lock().await;
         guard.to_owned()
     }
-    pub async fn update_workers(&self, workers: Vec<String>) {
+    pub async fn update_workers(&self, workers: Vec<String>) -> usize {
         let active_workers: Vec<String> = join_all(workers.into_iter()
             .map(|worker_addr| {
                 let client = self.client.clone();
@@ -212,6 +212,8 @@ impl MasterService {
         let mut guard = self.workers.lock().await;
         *guard = active_workers;
         log::info!("{} active workers", guard.len());
+
+        guard.len()
     }
     
 
