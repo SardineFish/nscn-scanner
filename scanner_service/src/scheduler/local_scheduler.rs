@@ -1,19 +1,16 @@
-use std::{sync::Arc, time::Duration};
+use std::{time::Duration};
 
 use futures::Future;
-use tokio::{sync::{Mutex, watch}, time::sleep};
-use rand::{Rng, SeedableRng, prelude::SmallRng};
+use tokio::{sync::{mpsc::{Receiver, Sender, channel}}, time::sleep};
 
 use crate::{config::WorkerSchedulerOptions, error::{LogError, SimpleError}};
 
 struct WorkerTaskFetcher {
     master_addr: String,
     task_key: String,
-    pending_tasks: Arc<Mutex<Vec<String>>>,
     remote_fetch_count: usize,
     remote_fetch_threshold: usize,
-    fetch_request: watch::Receiver<()>,
-    tasks_updated: watch::Sender<()>,
+    task_sender: Sender<String>,
     client: reqwest::Client,
 }
 
@@ -24,25 +21,28 @@ impl WorkerTaskFetcher {
 
     async fn fetch_tasks(mut self) {
         loop {
-            self.fetch_remote_tasks().await;
-            self.tasks_updated.send(()).log_error_consume("task-updated");
-            self.fetch_request.changed().await.log_error_consume("wait-fetch");
-            log::info!("Recv fetch request");
+            let task_list = self.fetch_remote_tasks().await;
+            for task in task_list {
+                match self.task_sender.send(task).await {
+                    Ok(_) => (),
+                    Err(err) => {
+                        log::warn!("Failed to send task: {}", err);
+                        return;
+                    }
+                }
+            }
         }
     }
 
-    async fn fetch_remote_tasks(&mut self) {
-        let tasks_list = loop {
+    async fn fetch_remote_tasks(&mut self) -> Vec<String> {
+        loop {
             match self.try_fetch_remote_tasks().await {
-                Ok(tasks) if tasks.len() > 0 => break tasks,
+                Ok(tasks) if tasks.len() > 0 => return tasks,
                 Ok(_) => log::error!("Fetched empty tasks from remote master."),
                 Err(err) => log::error!("Failed to fetch remote task: {}", err.msg),
             }
             sleep(Duration::from_secs(5)).await;
         };
-
-        let mut pending_tasks = self.pending_tasks.lock().await;
-        pending_tasks.extend(tasks_list.into_iter());
     }
 
     async fn try_fetch_remote_tasks(&self) -> Result<Vec<String>, SimpleError> {
@@ -59,10 +59,7 @@ pub struct LocalScheduler {
     enabled: bool,
     task_key: String,
     master_addr: String,
-    request_fetch: watch::Sender<()>,
-    tasks_updated: watch::Receiver<()>,
-    pending_tasks: Arc<Mutex<Vec<String>>>,
-    rng: rand::rngs::SmallRng,
+    task_receiver: Receiver<String>,
     remote_fetch_count: usize,
     remote_fetch_threshold: usize,
     client: reqwest::Client,
@@ -70,56 +67,32 @@ pub struct LocalScheduler {
 
 impl LocalScheduler {
     pub fn start(task_key: String, master_addr: String, options: &WorkerSchedulerOptions) -> (Self, impl Future<Output=()> + Send + 'static) {
-        let (fetch_sender, fetch_receiver) = watch::channel(());
-        let (update_sender, update_receiver) = watch::channel(());
+        let (sender, receiver) = channel(options.fetch_threshold);
 
         let scheduler = Self {
             master_addr,
             task_key: task_key.to_owned(),
             enabled: options.enabled,
-            rng: SmallRng::from_entropy(),
             client: reqwest::Client::new(),
             remote_fetch_count: options.fetch_count,
             remote_fetch_threshold: options.fetch_threshold,
-            request_fetch: fetch_sender,
-            pending_tasks: Arc::new(Mutex::new(Vec::with_capacity(options.fetch_count * 2))),
-            tasks_updated: update_receiver,
+            task_receiver: receiver,
         };
 
         let fetcher = WorkerTaskFetcher {
             client: scheduler.client.clone(),
-            fetch_request: fetch_receiver,
             task_key,
             master_addr: scheduler.master_addr.clone(),
-            pending_tasks: scheduler.pending_tasks.clone(),
             remote_fetch_count: options.fetch_count,
             remote_fetch_threshold: options.fetch_threshold,
-            tasks_updated: update_sender,
+            task_sender: sender,
         };
 
         (scheduler, fetcher.start())
     }
 
     pub async fn fetch_task(&mut self) -> String {
-        log::info!("try fetch task");
-        {
-            let pending_tasks = self.pending_tasks.lock().await;
-            if pending_tasks.len() < self.remote_fetch_threshold {
-                log::info!("Request fetch");
-                self.request_fetch.send(()).log_error_consume("request-fetch");
-                if pending_tasks.len() <= 0 {
-                    drop(pending_tasks);
-                    log::info!("Wait fetch");
-                    self.tasks_updated.changed().await.log_error_consume("wait-tasks-update");
-                }
-            }
-        }
-
-        log::info!("fetch task");
-        let mut pending_tasks = self.pending_tasks.lock().await;
-
-        let idx = self.rng.gen_range(0..pending_tasks.len());
-        pending_tasks.swap_remove(idx)
+        self.task_receiver.recv().await.unwrap()
     }
 
     pub async fn complete_task(&self, task: String) {
