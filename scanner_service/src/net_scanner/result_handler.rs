@@ -102,7 +102,13 @@ pub struct ResultHandler {
 
 impl ResultHandler {
     pub async fn save_scan_results<T: Serialize>(&self, key: &str, ip_addr: &str, task_result: &ScanTaskInfo<T>) {
-        self.try_save(key, ip_addr, task_result).await.log_error_consume("result-saving");
+        let future = self.try_save(key, ip_addr, task_result);
+        match tokio::time::timeout(std::time::Duration::from_secs(300), async move {
+            future.await.log_error_consume("result-saving");
+        }).await {
+            Ok(_) => (),
+            Err(_) => log::error!("Result saving timeout"),
+        }
     }
     pub async fn save_analyse_results(&self, ip_addr: &str, service_key: &str, services: HashMap<String, ServiceAnalyseResult>) -> Result<(), SimpleError> {
         let collecion = self.db.collection::<Document>(&GLOBAL_CONFIG.analyser.save);

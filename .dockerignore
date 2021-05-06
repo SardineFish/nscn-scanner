@@ -2,3 +2,4 @@
 !./target/release/nscn-cli
 !./config.json
 !./rules/*
+!./web/dist/*

@@ -1,0 +1,46 @@
+services:
+  master:
+    image: nscn
+    build: .
+    ports:
+      - "3000:3000"
+    entrypoint: ["/app/nscn", "--init", "worker1:3000", "worker2:3000"]
+    environment: 
+      - RUST_LOG=debug
+      - NSCN_REDIS=redis://redis:6379/0
+      - NSCN_DB=mongodb://mongodb/nscn
+      - NSCN_ROLE=master
+      - NSCN_LISTEN=master:3000
+    depends_on:
+      - redis
+      - mongodb
+  worker1:
+    image: nscn
+    environment:
+      - RUST_LOG=warn
+      - NSCN_REDIS=redis://redis:6379/0
+      - NSCN_DB=mongodb://mongodb/nscn
+      - NSCN_ROLE=worker
+      - NSCN_LISTEN=worker1:3000
+    depends_on:
+      - redis
+      - mongodb
+  worker2:
+    image: nscn
+    environment:
+      - RUST_LOG=warn
+      - NSCN_REDIS=redis://redis:6379/0
+      - NSCN_DB=mongodb://mongodb/nscn
+      - NSCN_ROLE=worker
+      - NSCN_LISTEN=worker2:3000
+    depends_on:
+      - redis
+      - mongodb
+  redis:
+    image: redis
+    logging:
+      driver: none
+  mongodb:
+    image: mongo
+    logging:
+      driver: none
