@@ -22,6 +22,7 @@ impl WorkerTaskFetcher {
     async fn fetch_tasks(mut self) {
         loop {
             let task_list = self.fetch_remote_tasks().await;
+            log::info!("fetched {} tasks", task_list.len());
             for task in task_list {
                 match self.task_sender.send(task).await {
                     Ok(_) => (),
@@ -30,6 +31,7 @@ impl WorkerTaskFetcher {
                         return;
                     }
                 }
+                log::info!("enqueued 1 task1");
             }
         }
     }
