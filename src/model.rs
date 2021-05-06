@@ -430,12 +430,12 @@ impl Model {
                 "total_vulns": { "$sum": "$vulns"}
             }
         });
-        let doc = self.db.collection::<Document>("analyse").aggregate(pipeline, None)
+        let total_vulns = self.db.collection::<Document>("analyse").aggregate(pipeline, None)
             .await?
             .next()
             .await
-            .ok_or(ServiceError::InternalErr("Failed to get total vulns".to_owned()))??;
-        let total_vulns = doc.get_i32("total_vulns")? as usize;
+            .and_then(|doc| doc.ok().and_then(|doc| doc.get_i32("total_vulns").ok()))
+            .unwrap_or(0);
 
         Ok(ScanStats {
             total_scan: total_scan as usize,
