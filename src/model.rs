@@ -62,7 +62,6 @@ impl Model {
                 {
                     "key": {"addr": 1},
                     "name": "addr_1",
-                    "unique": true,
                 },
                 {
                     "key": {"addr_int": 1},
