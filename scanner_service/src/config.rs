@@ -62,6 +62,7 @@ pub struct Socks5ProxyOptions {
     pub fetch: String,
     pub pool_size: usize,
     pub validate: Option<String>,
+    pub servers: Option<Vec<String>>,
 }
 
 #[derive(Deserialize)]

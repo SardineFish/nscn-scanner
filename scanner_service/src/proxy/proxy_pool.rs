@@ -42,6 +42,23 @@ impl ProxyPool {
             };
             socks5_updater.start().await;
             Socks5ProxyUpdater::start_monitor(self);
+            if let Some(servers_list) = &GLOBAL_CONFIG.proxy_pool.socks5.servers {
+                let mut guard = self.socks5_proxy_pool.lock().await;
+                for server in servers_list {
+                    guard.push(Socks5ProxyInfo {
+                        addr: server.clone(),
+                        failure_count: 0,
+                        fetch_time: chrono::Utc::now(),
+                        deadline: chrono::Utc::now(),
+                        http_client: reqwest::Client::builder()
+                            .proxy(reqwest::Proxy::http(format!("socks5://{}", server)).unwrap())
+                            .proxy(reqwest::Proxy::https(format!("socks5://{}", server)).unwrap())
+                            .timeout(std::time::Duration::from_secs(GLOBAL_CONFIG.scanner.http.timeout))
+                            .build()
+                            .unwrap(),
+                    });
+                }
+            }
         }
         if GLOBAL_CONFIG.proxy_pool.update_http_proxy {
             if let Err(err) = updater.try_update().await {
