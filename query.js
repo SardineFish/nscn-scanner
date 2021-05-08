@@ -243,4 +243,43 @@
             }
         }
     }
+];
+
+[
+    {
+        $replaceRoot: {
+            newRoot: {
+                services: {
+                    $map: {
+                        input: {
+                            $concatArrays: [
+                                { $objectToArray: "$web" },
+                                { $objectToArray: "$ssh" },
+                                { $objectToArray: "$ftp" },
+                            ],
+                        },
+                        as: "service",
+                        in: {
+                            name: "$$service.v.name",
+                            version: "$$service.v.version"
+                        }
+                    }
+                }
+            }
+        }
+    },
+    {
+        $unwind: "$services"
+    },
+    {
+        $group: {
+            _id: "$services.name",
+            count: { $sum: 1 }
+        }
+    },
+    {
+        $sort: {
+            count: -1
+        }
+    }
 ]

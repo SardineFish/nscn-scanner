@@ -158,7 +158,7 @@ impl Model {
         let mut pipe = Vec::new();
         pipe.push(doc!{
             "$match": {
-                "addr": "58.49.29.195",
+                "addr_int": addr_int as i64,
             }
         });
         pipe.push(doc!{
