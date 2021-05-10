@@ -11,9 +11,14 @@ pub struct ScannerMasterScheduler {
 impl ScannerMasterScheduler {
     pub async fn new() -> Result<Self, SimpleError> {
         let internal_stats = SharedSchedulerInternalStats::new();
-        let (_, stats) = internal_stats.clone().spawn_mornitor(10.0);
+        let (_, stats) = internal_stats.clone().spawn_mornitor(30.0);
+        let scheduler = MasterScheduler::start("scanner", GLOBAL_CONFIG.redis.as_str()).await?;
+        scheduler.dispathcer().recover_tasks().await?;
+        let task_list = scheduler.dispathcer().get_pending_tasks(0, 0).await?;
+        let count = Self::count_ips(&task_list)?;
+        internal_stats.update_pending_tasks(count).await;
         Ok(Self {
-            scheduler: MasterScheduler::start("scanner", GLOBAL_CONFIG.redis.as_str()).await?,
+            scheduler,
             internal_stats,
             stats,
         })

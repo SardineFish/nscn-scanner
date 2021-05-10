@@ -59,7 +59,8 @@ impl MasterScheduler {
 
     pub fn dispathcer(&self) -> TaskDispatcher {
         TaskDispatcher {
-            key: self.key_taskqueue.clone(),
+            key_taskqueue: self.key_taskqueue.clone(),
+            key_running: self.key_running_tasks.clone(),
             redis_client: self.redis_client.clone(),
             stats: self.internal_stats.clone(),
         }
@@ -77,7 +78,8 @@ impl MasterScheduler {
 
 #[derive(Clone)]
 pub struct TaskDispatcher {
-    key: String,
+    key_taskqueue: String,
+    key_running: String,
     redis_client: redis::Client,
     stats: SharedSchedulerInternalStats,
 }
@@ -87,15 +89,25 @@ impl TaskDispatcher {
         let mut redis = self.redis().await?;
         let count = tasks.len();
         if tasks.len() > 0 {
-            redis.lpush(&self.key, tasks).await?;
+            redis.lpush(&self.key_taskqueue, tasks).await?;
         }
 
         self.stats.add_pending_tasks(count).await;
         Ok(())
     }
 
+    pub async fn recover_tasks(&self) -> Result<(), SimpleError> {
+        let mut redis = self.redis().await?;
+        loop {
+            let result: Option<String> = redis.rpoplpush(&self.key_running, &self.key_taskqueue).await?;
+            if let None = result {
+                return Ok(())
+            }
+        }
+    }
+
     pub async fn enqueue_task(&self, task: &str) -> Result<(), SimpleError> {
-        self.redis().await?.lpush(&self.key, task).await?;
+        self.redis().await?.lpush(&self.key_taskqueue, task).await?;
 
         self.stats.add_pending_tasks(1).await;
         Ok(())
@@ -103,12 +115,12 @@ impl TaskDispatcher {
 
     pub async fn get_pending_tasks(&self, skip: isize, count: isize) -> Result<Vec<String>, SimpleError> {
         let result:Vec<String> = self.redis().await?
-            .lrange(&self.key, -skip - count, -skip - 1).await?;
+            .lrange(&self.key_taskqueue, -skip - count, -skip - 1).await?;
         Ok(result)
     }
 
     pub async fn count_tasks(&self) -> Result<usize, SimpleError> {
-        let count: usize = self.redis().await?.llen(&self.key).await?;
+        let count: usize = self.redis().await?.llen(&self.key_taskqueue).await?;
         
         self.stats.update_pending_tasks(count).await;
         Ok(count)
@@ -116,14 +128,14 @@ impl TaskDispatcher {
 
     pub async fn clear_tasks(&self) -> Result<usize, SimpleError> {
         let count = self.count_tasks().await?;
-        self.redis().await?.del(&self.key).await?;
+        self.redis().await?.del(&self.key_taskqueue).await?;
 
         self.stats.update_pending_tasks(0).await;
         Ok(count)
     }
 
     pub async fn remove_task(&self, task: &str) -> Result<usize, SimpleError> {
-        let count: usize = self.redis().await?.lrem(&self.key, 0, task).await?;
+        let count: usize = self.redis().await?.lrem(&self.key_taskqueue, 0, task).await?;
 
         self.stats.remove_pending_tasks(count).await;
         Ok(count)

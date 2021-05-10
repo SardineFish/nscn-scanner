@@ -24,7 +24,7 @@ const App: React.FC = () =>
                         <Link to="/">HOME</Link>
                     </Menu.Item>
                     <Menu.Item key="tasks">
-                        <Link to="/tasks">TASK</Link>
+                        <Link to="/tasks">DASHBOARD</Link>
                     </Menu.Item>
                 </Menu>
             </Layout.Header>
