@@ -5,35 +5,40 @@ use openssl::ssl::Ssl;
 use tokio::{io::{AsyncRead, AsyncWrite}, time::{timeout}};
 use mongodb::{bson};
 
-use crate::{ScanTaskInfo, config::GLOBAL_CONFIG, net_scanner::scheduler::{ScannerResources, TaskPool}};
+use crate::{ScanTaskInfo, config::GLOBAL_CONFIG, net_scanner::scheduler::{ScannerResources}};
 use crate::error::*;
 use crate::ssl::ssl_context::SSL_CONTEXT;
 use crate::ssl::async_ssl;
 use super::result_handler::ScanResult;
 
-pub struct HttpsScanTask {
+pub struct HttpsScanTask<'r> {
     addr: String,
-    resources: ScannerResources,
+    resources: &'r mut ScannerResources,
 }
-impl HttpsScanTask {
-    pub async fn spawn(addr: &str, resources: &ScannerResources, task_pool: &mut TaskPool) {
+impl<'r> HttpsScanTask<'r> {
+    // pub async fn spawn(addr: &str, resources: &ScannerResources, task_pool: &mut TaskPool) {
+    //     let task = HttpsScanTask {
+    //         addr: addr.to_owned(),
+    //         resources: resources.clone(),
+    //     };
+    //     task_pool.spawn("https", task.run()).await
+    // }
+    pub async fn run(addr: String, resources: &'r mut ScannerResources) {
         let task = HttpsScanTask {
-            addr: addr.to_owned(),
-            resources: resources.clone(),
+            addr,
+            resources,
         };
-        task_pool.spawn("https", task.run()).await
-    }
-    async fn run(self) {
+
         let mut proxy_addr = String::new();
-        let result = match self.try_scan(&mut proxy_addr).await {
+        let result = match task.try_scan(&mut proxy_addr).await {
             Ok(data) => {
-                log::info!("HTTPS is enabled at {}", self.addr);
+                log::info!("HTTPS is enabled at {}", task.addr);
                 ScanResult::Ok(data)
             },
             Err(err) => ScanResult::Err(err.msg), //log::warn!("HTTPS scan failed at {}: {}", self.addr, err.msg),
         };
         let task_result = ScanTaskInfo::with_proxy(proxy_addr, result);
-        self.resources.result_handler.save_scan_results("https", &self.addr, &task_result).await;
+        task.resources.result_handler.save_scan_results("https", &task.addr, &task_result).await;
     }
     async fn try_scan(&self, proxy_addr: &mut String) -> Result<HttpsResponse, SimpleError> {
         let target_addr = format!("{}:443", self.addr);

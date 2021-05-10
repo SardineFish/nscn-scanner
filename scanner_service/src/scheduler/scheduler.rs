@@ -1,9 +1,9 @@
 use std::{mem, sync::{Arc, atomic::AtomicPtr}, time::Duration};
 
 use futures::Future;
-use serde::{Serialize};
+use serde::{Serialize, Deserialize};
 use redis::AsyncCommands;
-use tokio::{sync::{Mutex, mpsc::{Receiver, Sender, channel}}, task, time::sleep};
+use tokio::{sync::{Mutex, mpsc::{Receiver, Sender, channel}}, task::{self, JoinHandle}, time::sleep};
 
 use crate::{error::*};
 
@@ -57,9 +57,27 @@ impl SharedSchedulerInternalStats {
             guard.pending_tasks -= count;
         }
     }
+    pub fn new_mornitor(self, update_interval: f64) -> (impl Future<Output=()> + Send + Sized + 'static, SharedSchedulerStats) {
+        let stats = SharedSchedulerStats::new();
+        (self.start_mornitor(stats.clone(), update_interval), stats)
+    }
+    pub fn start_mornitor(self, stats: SharedSchedulerStats, update_interval: f64) -> impl Future<Output=()> + Send + Sized + 'static {
+        async move {
+            loop {
+                sleep(Duration::from_secs_f64(update_interval)).await;
+                
+                let internal_stats = self.reset_stats().await;
+                stats.update(&internal_stats, update_interval).await;
+            }
+        }
+    }
+    pub fn spawn_mornitor(self, update_interval: f64) -> (JoinHandle<()>, SharedSchedulerStats) {
+        let (future, stats) = self.new_mornitor(update_interval);
+        (task::spawn(future), stats)
+    }
 }
 
-#[derive(Clone, Debug, Serialize, Default)]
+#[derive(Clone, Debug, Serialize, Deserialize, Default, PartialEq)]
 pub struct SchedulerStats {
     pub tasks_per_second: f64,
     pub jobs_per_second: f64,
@@ -73,7 +91,12 @@ impl SharedSchedulerStats {
     pub fn new() -> Self {
         Self(Arc::new(Mutex::new(SchedulerStats::default())))
     }
-    pub async fn update(&mut self, stats: &SchedulerInternalStats, duration_seconds: f64) {
+    pub fn create(update_interval: f64) -> (impl Future<Output=()> + Send + Sized + 'static, SharedSchedulerStats, SharedSchedulerInternalStats) {
+        let internal_stats = SharedSchedulerInternalStats::new();
+        let (future, stats) = internal_stats.clone().new_mornitor(update_interval);
+        (future, stats, internal_stats)
+    }
+    pub async fn update(&self, stats: &SchedulerInternalStats, duration_seconds: f64) {
         let mut guard = self.0.lock().await;
         guard.tasks_per_second = stats.completed_tasks as f64 / duration_seconds;
         guard.jobs_per_second = stats.dispatched_jobs as f64 / duration_seconds;
@@ -209,7 +232,7 @@ impl Scheduler {
     pub fn new_task_pool<T: Send + 'static>(&self, max_tasks: usize, resource_pool: Vec<T>) -> TaskPool<T> {
         TaskPool::new(max_tasks, self.internal_stats.clone(), resource_pool)
     }
-    async fn stats_mornitor(mut self, update_interval: f64) {
+    async fn stats_mornitor(self, update_interval: f64) {
         loop {
             sleep(Duration::from_secs_f64(update_interval)).await;
             

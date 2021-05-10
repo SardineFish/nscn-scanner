@@ -1,35 +1,30 @@
-use actix_web::{get, web::{Data, ServiceConfig, scope}};
-use serde::{Serialize};
-use nscn::{WorkerService, SchedulerStatsReport, SystemStats, SchedulerStats};
+use actix_web::{get, web::{Data, Path, ServiceConfig, scope}};
+use nscn::{MasterService, WorkerService, WorkerStats};
 
-use crate::misc::responder::{ApiResult, Response};
+use crate::{error::ServiceError, misc::responder::{ApiResult, Response}};
 
-#[derive(Serialize)]
-struct AllSchedulerStats {
-    scanner: SchedulerStatsReport,
-    analyser: SchedulerStats,
-}
-
-#[get("/system")]
-async fn get_sys_stats(service: Data<WorkerService>) -> ApiResult<SystemStats>
-{
-    let stats = service.sys_stats().await;
-    Ok(Response(stats))
-}
-
-#[get("/scheduler")]
-async fn get_scheduler_stats(service: Data<WorkerService>) -> ApiResult<AllSchedulerStats> {
-    let stats = AllSchedulerStats {
-        scanner: service.scheduler_stats().await,
+#[get("/all")]
+async fn get_stats(service: Data<WorkerService>) -> ApiResult<WorkerStats> {
+    Ok(Response(WorkerStats {
+        system: service.sys_stats().await,
         analyser: service.analyser().stats().await,
-    };
+        scanner: service.scanner().stats().await,
+    }))
+}
 
-    Ok(Response(stats))
+#[get("/{worker}/all")]
+async fn get_worker_sys_stats(worker_addr: Path<String>, service: Data<MasterService>) -> ApiResult<WorkerStats> {
+    let workers = service.workers().await;
+    if workers.contains(&worker_addr) {
+        Ok(Response(service.get_worker_stats(&worker_addr).await?))
+    } else {
+        Err(ServiceError::DataNotFound)?
+    }
 }
 
 pub fn config(cfg: &mut ServiceConfig){
     cfg.service(scope("/stats")
-        .service(get_sys_stats)
-        .service(get_scheduler_stats)
+        .service(get_stats)
+        .service(get_worker_sys_stats)
     );
 }

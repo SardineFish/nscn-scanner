@@ -2,7 +2,7 @@ use std::{collections::HashMap};
 
 use reqwest::{ Response, header::HeaderMap};
 use serde::{Serialize, Deserialize};
-use crate::{ScanTaskInfo, net_scanner::scheduler::{ScannerResources, TaskPool}, proxy::{http_proxy::HttpProxyClient}};
+use crate::{ScanTaskInfo, net_scanner::scheduler::{ScannerResources}, proxy::{http_proxy::HttpProxyClient}};
 use crate::config::GLOBAL_CONFIG;
 
 use super::result_handler::ScanResult;
@@ -41,27 +41,31 @@ impl SerializeHeaders for HeaderMap {
     }
 }
 
-pub struct HttpScanTask {
+pub struct HttpScanTask<'r> {
     address: String,
-    resources: ScannerResources,
+    resources: &'r mut ScannerResources,
 }
 
-impl HttpScanTask {
-    pub async fn dispatch(addr: &str, resources: &ScannerResources, task_pool: &mut TaskPool) {
-        let task = HttpScanTask {
-            address: addr.to_owned(),
-            resources: resources.clone(),
-        };
-        task_pool.spawn("http", task.run()).await;
-    }
-    async fn run(self) {
+impl<'r> HttpScanTask<'r> {
+    // pub async fn dispatch(addr: &str, resources: &ScannerResources, task_pool: &mut TaskPool) {
+    //     let task = HttpScanTask {
+    //         address: addr.to_owned(),
+    //         resources: resources.clone(),
+    //     };
+    //     task_pool.spawn("http", task.run()).await;
+    // }
+    pub async fn run(addr: String, resources: &'r mut ScannerResources) {
         let mut client = match GLOBAL_CONFIG.scanner.http.socks5 {
-            Some(true) => self.resources.proxy_pool.get_socks5_client().await,
-            _ => self.resources.proxy_pool.get_http_client().await,
+            Some(true) => resources.proxy_pool.get_socks5_client().await,
+            _ => resources.proxy_pool.get_http_client().await,
         };
-        let result = self.scan(&mut client).await;
+        let task = Self {
+            address: addr,
+            resources: resources
+        };
+        let result = task.scan(&mut client).await;
         let task_result = ScanTaskInfo::with_proxy(client.proxy_addr, result);
-        self.resources.result_handler.save_scan_results("http", &self.address, &task_result).await;
+        task.resources.result_handler.save_scan_results("http", &task.address, &task_result).await;
 
 
         // if  let (ScanResult::Ok(_), true) = (&task_result.result, GLOBAL_CONFIG.analyser.analyse_on_scan) {

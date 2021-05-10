@@ -1,30 +1,26 @@
-use std::{net::Ipv4Addr, sync::Arc, time::{Duration}};
+use std::{net::Ipv4Addr};
 
-use serde::{Serialize};
-use futures::{Future, future::join};
+use futures::{future::join, pin_mut};
 use mongodb::{Database};
-use tokio::{sync::{Mutex, mpsc::{Receiver, Sender, channel}}, task::{self, JoinHandle}, time::{sleep}};
-use async_trait::async_trait;
+use tokio::{task::{self, JoinHandle}};
 
-use crate::{error::*, scheduler::local_scheduler::LocalScheduler};
+use crate::{SchedulerStats, error::*, scheduler::{SharedSchedulerInternalStats, SharedSchedulerStats, local_scheduler::LocalScheduler}};
 use super::{http_scanner::HttpScanTask, https_scanner::HttpsScanTask, result_handler::ResultHandler, tcp_scanner::scanner::TCPScanTask};
 use crate::config::{GLOBAL_CONFIG};
 use crate::proxy::proxy_pool::ProxyPool;
-
-#[async_trait]
-pub trait DispatchScanTask {
-    async fn dispatch(addr: String, task_pool: &mut TaskPool);
-}
 
 #[derive(Clone)]
 pub struct NetScanner {
     redis_url: String,
     db: Database,
     resources: ScannerResources,
+    stats: SharedSchedulerStats,
 }
 
 impl NetScanner {
     pub fn new(redis_url: &str, db: &Database, proxy_pool: &ProxyPool) -> Self {
+        let internal_stats = SharedSchedulerInternalStats::new();
+        let stats = SharedSchedulerStats::new();
         Self {
             redis_url: redis_url.to_owned(),
             db: db.clone(),
@@ -33,43 +29,53 @@ impl NetScanner {
                 result_handler: ResultHandler {
                     db: db.clone(),
                 },
-                stats: Arc::new(Mutex::new(SchedulerStats::default())),
+                stats: internal_stats,
                 // analyser: ServiceAnalyser::new().unwrap(),
                 // vuln_searcher: VulnerabilitiesSearch::new(),
-            }
+            },
+            stats,
         }
     }
     pub fn start(&self, master_addr: String) -> Result<JoinHandle<()>, SimpleError> {
-        Ok(task::spawn(Scheduler::start(master_addr, self.resources.clone())))
+        let scheduler = Scheduler::start(master_addr, self.resources.clone());
+        let mornitor = self.resources.stats.clone().start_mornitor(self.stats.clone(), 5.0);
+        Ok(task::spawn(async move {
+            pin_mut!(scheduler);
+            pin_mut!(mornitor);
+            join(scheduler, mornitor).await;
+        }))
     }
-    pub fn stats(&self) -> Arc<Mutex<SchedulerStats>> {
-        self.resources.stats.clone()
+    pub fn clone_stats(&self) -> SharedSchedulerStats {
+        self.stats.clone()
+    }
+    pub async fn stats(&self) -> SchedulerStats {
+        self.stats.clone_inner().await
     }
 }
 
-#[derive(Clone, Debug, Default, Serialize)]
-pub struct SchedulerStats { 
-    pub dispatched_addrs: usize,
-    pub dispatched_tasks: usize,
-    pub pending_address: usize,
-    // pub http_time: f64,
-    // pub http_tasks: usize,
-    // pub https_time: f64,
-    // pub https_tasks: usize,
-    // pub ftp_time: f64,
-    // pub ftp_tasks: usize,
-    // pub ssh_time: f64,
-    // pub ssh_tasks: usize,
-    // pub task_time: f64,
-    // pub spawn_time: f64,
-    // pub active_tasks: usize,
-    // pub send_time: f64,
-}
+// #[derive(Clone, Debug, Default, Serialize)]
+// pub struct SchedulerStats { 
+//     pub dispatched_addrs: usize,
+//     pub dispatched_tasks: usize,
+//     pub pending_address: usize,
+//     // pub http_time: f64,
+//     // pub http_tasks: usize,
+//     // pub https_time: f64,
+//     // pub https_tasks: usize,
+//     // pub ftp_time: f64,
+//     // pub ftp_tasks: usize,
+//     // pub ssh_time: f64,
+//     // pub ssh_tasks: usize,
+//     // pub task_time: f64,
+//     // pub spawn_time: f64,
+//     // pub active_tasks: usize,
+//     // pub send_time: f64,
+// }
 
 
 pub struct Scheduler {
     local_scheduler: LocalScheduler,
-    task_pool: TaskPool,
+    task_pool: crate::scheduler::TaskPool<ScannerResources>,
     resources: ScannerResources,
     // pub proxy_pool: ProxyPool,
 }
@@ -77,10 +83,18 @@ impl Scheduler {
     async fn start(master_addr: String, resources: ScannerResources) {
         let (local_scheduler, fetch_task)= 
             LocalScheduler::start("scanner".to_owned(), master_addr, &GLOBAL_CONFIG.scanner.scheduler);
+        
+        let resource_pool = vec![resources.clone(); GLOBAL_CONFIG.scanner.scheduler.max_tasks];
+
+        let task_pool = crate::scheduler::TaskPool::new(
+            GLOBAL_CONFIG.scanner.scheduler.max_tasks, 
+            resources.stats.clone(), 
+            resource_pool);
+
         let scheduler = Self {
             local_scheduler,
             resources: resources.clone(),
-            task_pool: TaskPool::new(GLOBAL_CONFIG.scanner.scheduler.max_tasks, &resources.stats)
+            task_pool: task_pool
         };
         join(scheduler.schedule_loop(), fetch_task).await;
     }
@@ -98,7 +112,7 @@ impl Scheduler {
         match crate::address::parse_ipv4_cidr(cidr) {
             Err(err) => log::error!("Failed to parse CIDR ip range: {}", err.msg),
             Ok(range) => {
-                // log::info!("Scanning {} with {} IPs", cidr, range.len());
+                self.resources.stats.update_pending_tasks(range.len()).await;
                 for ip_32 in range {
                     let addr = Ipv4Addr::from(ip_32).to_string();
                     self.dispatch(&addr).await;
@@ -109,79 +123,17 @@ impl Scheduler {
     }
     async fn dispatch(&mut self, addr: &str) {
         if GLOBAL_CONFIG.scanner.http.enabled {
-            HttpScanTask::dispatch(addr, &self.resources, &mut self.task_pool).await;
+            self.task_pool.spawn("http-scan", HttpScanTask::run, addr.to_owned()).await;
         }
         if GLOBAL_CONFIG.scanner.https.enabled {
-            HttpsScanTask::spawn(addr, &self.resources, &mut self.task_pool).await;
+            self.task_pool.spawn("https-scan", HttpsScanTask::run, addr.to_owned()).await;
         }
         if GLOBAL_CONFIG.scanner.tcp.enabled {
-            TCPScanTask::dispatch(addr, &self.resources, &mut self.task_pool).await;
+            TCPScanTask::dispatch(addr.to_owned(), &mut self.task_pool).await;
         }
-        {
-            let mut guard = self.resources.stats.lock().await;
-            guard.dispatched_addrs += 1;
-            if guard.pending_address > 0 {
-                guard.pending_address -=1;   
-            }
-        }
+        self.resources.stats.dispatch_tasks(1).await;
     }
 }
-
-pub struct TaskPool {
-    interval_jitter: bool,
-    max_tasks: usize,
-    running_tasks: usize,
-    complete_sender: Sender<()>,
-    complete_receiver: Receiver<()>,
-    stats: Arc<Mutex<SchedulerStats>>,
-}
-impl TaskPool {
-    pub fn new(max_tasks: usize, stats: &Arc<Mutex<SchedulerStats>>,) -> Self {
-        let (sender, receiver) = channel(max_tasks * 2);
-        Self {
-            max_tasks,
-            interval_jitter: true,
-            running_tasks: 0,
-            complete_sender: sender,
-            complete_receiver: receiver,
-            stats: stats.clone(),
-        }
-    }
-    pub async fn spawn<T>(&mut self, _name: &'static str, future: T) where T : Future + Send + 'static, T::Output: Send + 'static {
-        if self.running_tasks >= self.max_tasks {
-            if self.interval_jitter {
-                self.interval_jitter = false;
-            }
-
-            match self.complete_receiver.recv().await {
-                Some(_) => {
-                    self.running_tasks -= 1
-                },
-                None => panic!("Scheduler channel closed."),
-            }
-        }
-        if self.interval_jitter {
-            let interval = 5.0 / (GLOBAL_CONFIG.scanner.scheduler.max_tasks as f64);
-            sleep(Duration::from_secs_f64(interval)).await;
-        }
-        
-        self.running_tasks += 1;
-        let complete_sender = self.complete_sender.clone();
-        task::spawn(async move {
-            future.await;
-            // if let Err(_) = timeout(Duration::from_secs(300), future).await {
-            //     log::error!("Task {} suspedned over 300s", name);
-            // }
-            // sleep(Duration::from_secs(5)).await;
-            complete_sender.send(()).await.log_warn_consume("scan-scheduler");
-        });
-        {
-            let mut guard = self.stats.lock().await;
-            guard.dispatched_tasks += 1;
-        }
-    }
-}
-
 
 enum ScanTask {
     ClearTasks,
@@ -192,124 +144,11 @@ enum ScanTask {
 const KEY_TASK_QUEUE: &str = "task_queue";
 const KEY_RUNNING_TASKS: &str = "running_tasks";
 
-// pub struct SchedulerController {
-//     redis: redis::Client,
-//     join_scheduler: Option<JoinHandle<()>>,
-//     // join_receiver: Option<JoinHandle<()>>,
-//     task_sender: Sender<ScanTask>,
-//     scheduler_stats: Arc<Mutex<SchedulerStats>>,
-// }
-
-// impl SchedulerController {
-//     pub fn start_scheduler(master_addr: String) {
-//         let scheduler = Scheduler::new(master_addr, resources)
-//     }
-//     // pub async fn enqueue_addr(&self, addr: &str) -> Result<(), SimpleError> {
-//     //     self.task_sender.send(ScanTask::IPCIDR(addr.to_owned())).await?;
-//     //     Ok(())
-//     // }
-//     // pub async fn enqueue_range(&self, ip_range: Range<u32>) -> Result<(), SimpleError> {
-//     //     self.task_sender.send(ScanTask::IPRange(ip_range)).await?;
-//     //     Ok(())
-//     // }
-//     // pub async fn enqueue_addr_range(&self, cidr_addr: &str) -> Result<(), SimpleError> {
-//     //     self.task_sender.send(ScanTask::IPCIDR(cidr_addr.to_owned())).await?;
-//     //     Ok(())
-//     // }
-//     pub async fn join(self) {
-//         match self.join_scheduler {
-//             Some(join) => join.await.log_error_consume("join-task-receiver"),
-//             _ => log::warn!("Cannot join from copies of controller."),
-//         }
-//     }
-//     pub fn stats(&self) -> Arc<Mutex<SchedulerStats>> {
-//         self.scheduler_stats.clone()
-//     }
-//     // pub async fn reset_stats(&self) -> SchedulerStats {
-//     //     let mut stats = SchedulerStats::default();
-//     //     {
-//     //         let mut guard = self.scheduler_stats.lock().await;
-//     //         mem::swap(&mut stats, &mut guard);
-//     //         guard.pending_address = stats.pending_address;
-//     //     }
-//     //     stats
-//     // }
-//     // pub async fn get_pending_tasks(&self, skip: isize, count: isize) -> Result<Vec<String>, SimpleError> {
-//     //     let mut redis = self.redis.get_async_connection().await?;
-//     //     let result:Vec<String> = redis.lrange(KEY_TASK_QUEUE, -skip - count, -skip - 1).await?;
-
-//     //     Ok(result)
-//     // }
-//     // pub async fn clear_tasks(&self) -> Result<usize, SimpleError> {
-//     //     let mut redis = self.redis.get_async_connection().await?;
-//     //     let count: usize = redis.llen(KEY_TASK_QUEUE).await?;
-
-//     //     self.task_sender.send(ScanTask::ClearTasks).await?;
-
-//     //     Ok(count)
-//     // }
-//     // pub async fn remove_task(&self, task: &str) -> Result<usize, SimpleError> {
-//     //     let mut redis = self.redis.get_async_connection().await?;
-//     //     let count: usize = redis.lrem(KEY_TASK_QUEUE, -1, task).await?;
-
-//     //     let range = parse_ipv4_cidr(&task)?;
-
-//     //     let mut guard = self.scheduler_stats.lock().await;
-//     //     if guard.pending_address < range.len() {
-//     //         guard.pending_address = 0;
-//     //     } else {
-//     //         guard.pending_address -= range.len() * count;
-//     //     }
-
-//     //     Ok(count)
-//     // }
-
-//     // async fn receive_task(redis: redis::Client, mut receiver: Receiver<ScanTask>, stats: Arc<Mutex<SchedulerStats>>) {
-//     //     let mut redis = redis.get_async_connection().await.unwrap();
-//     //     while let Some(task) = receiver.recv().await {
-//     //         match task {
-//     //             ScanTask::IPCIDR(addr) => {
-//     //                 pipe().lpush(KEY_TASK_QUEUE, &addr).ignore()
-//     //                 .query_async::<_, ()>(&mut redis)
-//     //                 .await
-//     //                 .log_error_consume("task-receiver");
-
-//     //                 if let Ok(range) = parse_ipv4_cidr(&addr).log_error("task-receiver") {
-//     //                     let mut guard = stats.lock().await;
-//     //                     guard.pending_address += range.len();
-//     //                 }
-//     //             },
-//     //             ScanTask::ClearTasks => {
-//     //                 pipe().del(KEY_TASK_QUEUE).ignore()
-//     //                 .query_async::<_, ()>(&mut redis)
-//     //                 .await
-//     //                 .log_error_consume("task-receiver");
-
-//     //                 let mut guard = stats.lock().await;
-//     //                 guard.pending_address = 0;
-
-//     //             },
-//     //         }
-            
-//     //     }
-//     // }
-// }
-
-// impl Clone for SchedulerController {
-//     fn clone(&self) -> Self {
-//         Self {
-//             redis: self.redis.clone(),
-//             join_scheduler: None,
-//             scheduler_stats: self.scheduler_stats.clone(),
-//             task_sender: self.task_sender.clone(),
-//         }
-//     }
-// }
-
 #[derive(Clone)]
 pub struct ScannerResources {
     pub proxy_pool: ProxyPool,
     pub result_handler: ResultHandler,
-    pub stats: Arc<Mutex<SchedulerStats>>,
+    pub stats: SharedSchedulerInternalStats,
+    // pub stats: Arc<Mutex<SchedulerStats>>,
     // pub analyser: ServiceAnalyser,
 }

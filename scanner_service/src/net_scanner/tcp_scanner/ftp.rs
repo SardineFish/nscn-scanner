@@ -12,13 +12,12 @@ use super::async_reader::AsyncBufReader;
 pub struct FTPScanTask {
     pub host: String,
     pub port: u16,
-    pub resources: ScannerResources,
 }
 impl FTPScanTask {
-    pub async fn start(self) {
+    pub async fn start(self, resources: &mut ScannerResources) {
         let proxy_addr;
         let result = if GLOBAL_CONFIG.scanner.ftp.use_proxy {
-            let proxy = self.resources.proxy_pool.get_socks5_proxy().await;
+            let proxy = resources.proxy_pool.get_socks5_proxy().await;
             proxy_addr = proxy.addr.clone();
             self.scan_with_proxy(proxy).await
         } else {
@@ -34,7 +33,7 @@ impl FTPScanTask {
         };
         
         let task_result = ScanTaskInfo::with_proxy(proxy_addr, result);
-        self.resources.result_handler.save_scan_results(&format!("tcp.{}.ftp", self.port), &self.host, &task_result).await;
+        resources.result_handler.save_scan_results(&format!("tcp.{}.ftp", self.port), &self.host, &task_result).await;
 
         // if let (ScanResult::Ok(_), true) = (&task_result.result, GLOBAL_CONFIG.analyser.analyse_on_scan) {
         //     let mut services = HashMap::<String, ServiceAnalyseResult>::new();

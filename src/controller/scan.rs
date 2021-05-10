@@ -172,7 +172,7 @@ struct TaskRemoveResult {
 #[get("/stats")]
 async fn get_stats(service: Data<WorkerService>, model: Data<Model>) -> ApiResult<ScanStats> {
     let mut stats = model.get_stats().await?;
-    stats.scan_per_seconds = service.scheduler_stats().await.ip_per_second;
+    stats.scan_per_seconds = service.scanner().stats().await.tasks_per_second;
 
     Ok(Response(stats))
 }
@@ -203,7 +203,7 @@ async fn get_range_by_cidr(path: Path<(String, String)>, query: Query<QueryParam
 
 #[post("/{addr}")]
 async fn request_scan(addr_str: Path<String>, service: Data<MasterService>) -> ApiResult<ScanningRequestResult> {
-    service.scanner().dispathcer().enqueue_task(&format!("{}/32", addr_str)).await?;
+    service.scanner().enqueue_addr_list(vec![format!("{}/32", addr_str)]).await?;
 
     Ok(Response(ScanningRequestResult {
         tasks: 1
@@ -215,7 +215,7 @@ async fn request_scan_range(path: Path<(String, String)>, service: Data<MasterSe
     let (addr_str, cidr) = path.into_inner();
     let range = parse_ipv4_cidr(&format!("{}/{}", addr_str, cidr))
         .map_err(|_|ApiError(StatusCode::BAD_REQUEST, "Invalid CIDR notation format".to_owned()))?;
-    service.scanner().dispathcer().enqueue_task(&format!("{}/{}", addr_str, cidr)).await?;
+    service.scanner().enqueue_addr_list(vec![format!("{}/{}", addr_str, cidr)]).await?;
 
     Ok(Response(ScanningRequestResult {
         tasks: range.len()
@@ -230,20 +230,11 @@ async fn request_scan_by_list(request: Json<ScanningRequest>, service: Data<Mast
             let task_list = service.fetch_address_list(url.as_str()).await
                 .map_err(|err|ApiError(StatusCode::BAD_REQUEST, format!("Faild to fetch address list from '{}': {}", url, err.msg)))?;
 
-            for addr in &task_list {
-                let range = parse_ipv4_cidr(&addr)
-                    .map_err(|_| ApiError(StatusCode::BAD_REQUEST, "Invalid address list format".to_owned()))?;
-                tasks += range.len();
-            }
-            service.scanner().dispathcer().enqueue_tasks(task_list).await?;
+            tasks += service.scanner().enqueue_addr_list(task_list).await?;
         }
     }
     if let Some(list) = request.into_inner().addr_ranges {
-        for addr_range in &list {
-            let range = parse_ipv4_cidr(&addr_range)?;
-            tasks+=range.len();
-        }
-        service.scanner().dispathcer().enqueue_tasks(list).await?;
+        tasks += service.scanner().enqueue_addr_list(list).await?;
     }
 
     Ok(Response(ScanningRequestResult {
@@ -253,14 +244,14 @@ async fn request_scan_by_list(request: Json<ScanningRequest>, service: Data<Mast
 
 #[get("/task")]
 async fn request_pending_tasks(query: Query<QueryParameters>, service: Data<MasterService>) -> ApiResult<Vec<String>> {
-    let tasks = service.scanner().dispathcer().get_pending_tasks(query.skip as isize, query.count as isize).await?;
+    let tasks = service.scanner().scheduler().dispathcer().get_pending_tasks(query.skip as isize, query.count as isize).await?;
 
     Ok(Response(tasks))
 }
 
 #[delete("/task/{ip}")]
 async fn remove_pending_task_ip(ip: Path<String>, service: Data<MasterService>) -> ApiResult<TaskRemoveResult> {
-    let count = service.scanner().dispathcer().remove_task(&format!("{}/32", ip)).await?;
+    let count = service.scanner().remove_tasks(vec![format!("{}/32", ip)]).await?;
 
     Ok(Response(TaskRemoveResult {
         removed_tasks: count
@@ -271,7 +262,7 @@ async fn remove_pending_task_ip(ip: Path<String>, service: Data<MasterService>) 
 async fn remove_pending_task(path: Path<(String, String)>, service: Data<MasterService>) -> ApiResult<TaskRemoveResult> {
     let (ip, cidr) = path.into_inner();
     let addr = format!("{}/{}", ip, cidr);
-    let count = service.scanner().dispathcer().remove_task(&addr).await?;
+    let count = service.scanner().remove_tasks(vec![addr]).await?;
 
     Ok(Response(TaskRemoveResult{
         removed_tasks: count,
@@ -280,7 +271,7 @@ async fn remove_pending_task(path: Path<(String, String)>, service: Data<MasterS
 
 #[delete("/task/all")]
 async fn clear_pending_tasks(service: Data<MasterService>) -> ApiResult<TaskRemoveResult> {
-    let count = service.scanner().dispathcer().clear_tasks().await?;
+    let count = service.scanner().clear_tasks().await?;
 
     Ok(Response(TaskRemoveResult{
         removed_tasks: count

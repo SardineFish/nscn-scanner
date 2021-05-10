@@ -1,12 +1,12 @@
-use std::{mem, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 
-use serde::{Serialize};
+use serde::{Serialize, Deserialize};
 use sysinfo::{ProcessorExt, System, SystemExt, NetworkExt, NetworksExt};
 use tokio::{sync::Mutex, task, time::sleep};
 
-use crate::{GLOBAL_CONFIG, net_scanner::scheduler::SchedulerStats};
+use crate::{GLOBAL_CONFIG};
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct SystemStats {
     cpu_usage: f32,
     total_memory_kb: u64,
@@ -75,54 +75,6 @@ impl SystemStatsMornitor {
                 sys.refresh_cpu();
                 sys.refresh_memory();
                 sys.refresh_networks();
-            }
-        }
-    }
-}
-
-#[derive(Serialize, Debug, Default, PartialEq)]
-pub struct SchedulerStatsReport {
-    pub pending_addrs: usize,
-    pub tasks_per_second: f64,
-    pub ip_per_second: f64,
-}
-
-#[derive(Clone)]
-pub struct ScannerStatsMornotor {
-    src_stats: Arc<Mutex<SchedulerStats>>,
-    last_stats:  Arc<Mutex<SchedulerStats>>,
-}
-
-impl ScannerStatsMornotor {
-    pub fn start(stats: Arc<Mutex<SchedulerStats>>) -> Self {
-        let mornitor = Self {
-            src_stats: stats,
-            last_stats: Arc::new(Mutex::new(SchedulerStats::default())),
-        };
-
-        task::spawn(mornitor.clone().update());
-        mornitor
-    }
-
-    pub async fn get_stats(&self) -> SchedulerStatsReport {
-        let stats = self.last_stats.lock().await.clone();
-        SchedulerStatsReport {
-            pending_addrs: stats.pending_address,
-            ip_per_second: stats.dispatched_addrs as f64 / (GLOBAL_CONFIG.stats.scheduler_update_interval as f64 / 1000.0),
-            tasks_per_second: stats.dispatched_tasks as f64 /  (GLOBAL_CONFIG.stats.scheduler_update_interval as f64 / 1000.0),
-        }
-    }
-
-    async fn update(self){
-        loop {
-            sleep(Duration::from_millis(GLOBAL_CONFIG.stats.scheduler_update_interval)).await;
-            {
-                let mut last_stats = self.last_stats.lock().await;
-                let mut src_stats = self.src_stats.lock().await;
-
-                *last_stats = mem::replace(&mut src_stats, SchedulerStats::default());
-
-                src_stats.pending_address = last_stats.pending_address;
             }
         }
     }

@@ -11,17 +11,16 @@ use super::async_reader::AsyncBufReader;
 pub struct SSHScanTask {
     pub host: String,
     pub port: u16,
-    pub resources: ScannerResources,
 }
 
 const SSH_PROTOCOL_VERSION: &[u8] = b"SSH-2.0-OpenSSH_for_Windows_7.7\r\n";
 
 impl SSHScanTask {
-    pub async fn start(self) {
+    pub async fn start(self, resources: &mut ScannerResources) {
         // log::debug!("Scan SSH for {}:{}", self.host, self.port);
         let proxy_addr;
         let result = if GLOBAL_CONFIG.scanner.ssh.use_proxy {
-            let proxy = self.resources.proxy_pool.get_socks5_proxy().await;
+            let proxy = resources.proxy_pool.get_socks5_proxy().await;
             proxy_addr = proxy.addr.clone();
             // log::info!("SSH proxy {}", proxy.addr);
             
@@ -39,7 +38,7 @@ impl SSHScanTask {
         };
 
         let task_result = ScanTaskInfo::with_proxy(proxy_addr, result);
-        self.resources.result_handler.save_scan_results(&format!("tcp.{}.ssh", self.port), &self.host, &task_result).await;
+        resources.result_handler.save_scan_results(&format!("tcp.{}.ssh", self.port), &self.host, &task_result).await;
 
         // if let (ScanResult::Ok(_), true) = (&task_result.result, GLOBAL_CONFIG.analyser.analyse_on_scan) {
         //     let mut services = HashMap::<String, ServiceAnalyseResult>::new();

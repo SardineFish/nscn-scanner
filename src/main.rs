@@ -97,7 +97,7 @@ async fn connect_workers(master: MasterService) {
 }
 
 async fn try_dispatch_address(service: MasterService) {
-    let dispatcher = service.scanner().dispathcer();
+    let dispatcher = service.scanner().scheduler().dispathcer();
     if !service.config().scanner.task.fetch {
         return;
     }

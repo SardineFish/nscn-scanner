@@ -18,13 +18,14 @@ mod redis_pool;
 
 use std::{mem, sync::Arc};
 
+use serde::{Serialize, Deserialize};
 use address::fetch_address_list;
 use futures::future::join_all;
 use proxy::ProxyPool;
-use net_scanner::scheduler::{NetScanner};
+use net_scanner::{scanner_master::ScannerMasterScheduler, scheduler::{NetScanner}};
 use reqwest::StatusCode;
-use scheduler::master_scheduler::{MasterScheduler};
-use stats_mornitor::{ScannerStatsMornotor, SystemStatsMornitor};
+use scheduler::{SharedSchedulerStats, master_scheduler::{MasterScheduler}};
+use stats_mornitor::{SystemStatsMornitor};
 use tokio::{sync::{Mutex}, task::{self, JoinHandle}, time::sleep};
 
 use error::*;
@@ -35,7 +36,7 @@ pub use net_scanner::result_handler::NetScanRecord;
 pub use address::{parse_ipv4_cidr};
 pub use net_scanner::tcp_scanner::ftp::FTPAccess;
 pub use net_scanner::{http_scanner::HttpResponseData, https_scanner::HttpsResponse, result_handler::ScanTaskInfo, tcp_scanner::{ftp::FTPScanResult, ssh::SSHScannResult}};
-pub use stats_mornitor::{SystemStats, SchedulerStatsReport};
+pub use stats_mornitor::{SystemStats};
 pub use scheduler::SchedulerStats;
 pub use vul_search::VulnInfo;
 pub use config::*;
@@ -62,7 +63,6 @@ pub struct WorkerService {
     scanner: NetScanner,
     analyser: ServiceAnalyseScheduler,
     sys_mornitor: SystemStatsMornitor,
-    scheduler_mornitor: ScannerStatsMornotor,
 
     current_state: Arc<Mutex<Option<WorkerState>>>
 }
@@ -77,9 +77,7 @@ impl WorkerService {
         proxy_pool.start().await;
         let scanner = NetScanner::new(&GLOBAL_CONFIG.redis, &db, &proxy_pool);
         
-        
-        let scheduler_mornitor = ScannerStatsMornotor::start(scanner.stats());
-        stats_log(scheduler_mornitor.clone());
+        stats_log(scanner.clone_stats());
         
 
         let analyser_scheduler = ServiceAnalyseScheduler::new(&db, &GLOBAL_CONFIG.redis).await.unwrap();
@@ -89,7 +87,6 @@ impl WorkerService {
             scanner: scanner,
             analyser: analyser_scheduler,
             sys_mornitor: SystemStatsMornitor::start(),
-            scheduler_mornitor: scheduler_mornitor,
             current_state: Arc::new(Mutex::new(None)),
         })
     }
@@ -146,30 +143,33 @@ impl WorkerService {
     pub async fn sys_stats(&self) -> SystemStats {
         self.sys_mornitor.get_stats().await
     }
-
-    pub async fn scheduler_stats(&self) -> SchedulerStatsReport {
-        self.scheduler_mornitor.get_stats().await
-    }
 }
 
 #[derive(Clone)]
 pub struct MasterService {
-    scanner_scheduler: MasterScheduler,
+    scanner_scheduler: ScannerMasterScheduler,
     analyser_scheduler: MasterScheduler,
     workers: Arc<Mutex<Vec<String>>>,
     client: reqwest::Client,
 }
 
+#[derive(Serialize, Deserialize)]
+pub struct WorkerStats {
+    pub system: SystemStats,
+    pub scanner: SchedulerStats,
+    pub analyser: SchedulerStats,
+}
+
 impl MasterService {
     pub async fn new() -> Result<Self, SimpleError> {
         Ok(Self {
-            scanner_scheduler: MasterScheduler::start("scanner", GLOBAL_CONFIG.redis.as_str()).await?,
+            scanner_scheduler: ScannerMasterScheduler::new().await?,
             analyser_scheduler: MasterScheduler::start("analysser", GLOBAL_CONFIG.redis.as_str()).await?,
             workers: Arc::new(Mutex::new(Vec::new())),
             client: reqwest::Client::new(),
         })
     }
-    pub fn scanner(&self) -> &MasterScheduler {
+    pub fn scanner(&self) -> &ScannerMasterScheduler {
         &self.scanner_scheduler
     }
     pub fn analyser(&self) -> &MasterScheduler {
@@ -178,6 +178,13 @@ impl MasterService {
     pub async fn workers(&self) -> Vec<String> {
         let guard= self.workers.lock().await;
         guard.to_owned()
+    }
+    pub async fn get_worker_stats(&self, addr: &str) -> Result<WorkerStats, SimpleError> {
+        Ok(self.client.get(format!("http://{}/api/stats/all", addr))
+            .send()
+            .await?
+            .json::<WorkerStats>()
+            .await?)
     }
     pub async fn update_workers(&self, workers: Vec<String>) -> usize {
         let active_workers: Vec<String> = join_all(workers.into_iter()
@@ -226,17 +233,17 @@ impl MasterService {
     }
 }
 
-fn stats_log(mornitor: ScannerStatsMornotor) {
+fn stats_log(mornitor: SharedSchedulerStats) {
     let interval = 10.0;
     task::spawn(async move {
-        let mut last_stats = SchedulerStatsReport::default();
+        let mut last_stats = SchedulerStats::default();
         loop {
             sleep(tokio::time::Duration::from_secs_f64(interval)).await;
-            let stats = mornitor.get_stats().await;
+            let stats = mornitor.clone_inner().await;
             if last_stats == stats {
                 continue;
             }
-            log::info!("Scan speed: {:.2} IP/s, {:.2} Tasks/s, {} IPs pending", stats.ip_per_second, stats.tasks_per_second, stats.pending_addrs);
+            log::info!("Scan speed: {:.2} IP/s, {:.2} Tasks/s, {} IPs pending", stats.tasks_per_second, stats.jobs_per_second, stats.pending_tasks);
             last_stats = stats;
             
         }

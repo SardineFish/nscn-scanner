@@ -14,7 +14,7 @@ async fn fetch_tasks(path: Path<String>, query: Query<FecthCount>, service: Data
     log::info!("Fetch {}", path.as_str());
     let task = match path.as_str() {
         "scanner" => {
-            service.scanner().fetch_tasks(query.count).await?
+            service.scanner().scheduler().fetch_tasks(query.count).await?
         },
         "analyser" => {
             service.analyser().fetch_tasks(query.count).await?
@@ -31,10 +31,10 @@ async fn fetch_tasks(path: Path<String>, query: Query<FecthCount>, service: Data
 async fn complete_task(path: Path<String>, data: Json<Vec<String>>, service: Data<MasterService>) -> ApiResult<()> {
     match path.as_str() {
         "scanner" => {
-            service.scanner().completed_tasks(data.into_inner()).await?
+            service.scanner().complete_addr_list(data.into_inner()).await?;
         },
         "analyser" => {
-            service.analyser().completed_tasks(data.into_inner()).await?
+            service.analyser().completed_tasks(data.into_inner()).await?;
         },
         _ => {
             Err(ServiceError::DataNotFound)?

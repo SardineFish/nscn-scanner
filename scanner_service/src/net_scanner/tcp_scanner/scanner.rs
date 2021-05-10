@@ -1,7 +1,7 @@
 
 use serde::{Serialize, Deserialize};
 
-use crate::{net_scanner::{result_handler::NetScanResultSet, scheduler::{ScannerResources, TaskPool}}};
+use crate::{net_scanner::{result_handler::NetScanResultSet, scheduler::{ScannerResources}}};
 use crate::config::GLOBAL_CONFIG;
 
 use super::{ftp::{FTPScanResult, FTPScanTask}, ssh::{SSHScanTask, SSHScannResult}};
@@ -12,7 +12,7 @@ pub struct TCPScanTask {
 }
 
 impl TCPScanTask {
-    pub async fn dispatch(addr: &str, resources: &ScannerResources, task_pool: &mut TaskPool) {
+    pub async fn dispatch(addr: String, task_pool: &mut crate::scheduler::TaskPool<ScannerResources>) {
         for (port, scanners) in &GLOBAL_CONFIG.scanner.tcp.ports {
             for scanner in scanners {
                 match scanner.as_str() {
@@ -20,17 +20,15 @@ impl TCPScanTask {
                         let task = FTPScanTask {
                             host: addr.to_owned(),
                             port: *port,
-                            resources: resources.clone()
                         };
-                        task_pool.spawn("ftp", task.start()).await;
+                        task_pool.spawn("ftp-scan", FTPScanTask::start, task).await;
                     },
                     "ssh" if GLOBAL_CONFIG.scanner.ssh.enabled => {
                         let task = SSHScanTask {
                             host: addr.to_owned(),
                             port: *port,
-                            resources: resources.clone()
                         };
-                        task_pool.spawn("ssh", task.start()).await;
+                        task_pool.spawn("ssh", SSHScanTask::start, task).await;
                     },
                     _ => (),
                 }

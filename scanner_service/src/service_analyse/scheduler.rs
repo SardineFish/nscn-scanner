@@ -92,7 +92,7 @@ impl ServiceAnalyseScheduler {
         Ok(())
     }
     
-    async fn stats_mornitor(mut self, update_interval: f64) {
+    async fn stats_mornitor(self, update_interval: f64) {
         loop {
             sleep(Duration::from_secs_f64(update_interval)).await;
             
