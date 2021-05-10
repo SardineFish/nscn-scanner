@@ -201,34 +201,78 @@ e.g. `GET /api/scan/123.123.123.123/24`
 
 --------
 
-## Get System Stats
-`GET /api/stats/system`
-### Response
+## Get Master Scheduler Stats
+`GET /api/stats/master`
+### Response 
 ```json
 {
-    "cpu_usage": 0,
-    "total_memory_kb": 0,
-    "used_memory_kb": 0,
-    "total_swap_kb": 0,
-    "used_swap_kb": 0,
-    "network_in_bytes": 0,
-    "network_out_bytes": 0,
-    "load_one": 0,
-    "load_five": 0,
-    "load_fifteen": 0
+    "pending_tasks": 0,
+    "tasks_per_second": 0,
+    "jobs_per_second": 0,
 }
 ```
 
 --------
 
-## Get Scheduler Stats
-`GET /api/stats/scheduler`
+## Get Worker Stats
+`GET /api/stats/all`
 ### Response
 ```json
 {
-    "pending_addrs": 0,
-    "tasks_per_second": 0,
-    "ip_per_second": 0,
+    "system": {
+        "cpu_usage": 0,
+        "total_memory_kb": 0,
+        "used_memory_kb": 0,
+        "total_swap_kb": 0,
+        "used_swap_kb": 0,
+        "network_in_bytes": 0,
+        "network_out_bytes": 0,
+        "load_one": 0,
+        "load_five": 0,
+        "load_fifteen": 0
+    },
+    "analyser": {
+        "pending_tasks": 0,
+        "tasks_per_second": 0,
+        "jobs_per_second": 0,
+    },
+    "scanner": {
+        "pending_tasks": 0,
+        "tasks_per_second": 0,
+        "jobs_per_second": 0,
+    }
+}
+```
+
+--------
+
+## Get Specific Worker Stats
+`GET /api/stats/{worker_addr}/all`
+### Response
+```json
+{
+    "system": {
+        "cpu_usage": 0,
+        "total_memory_kb": 0,
+        "used_memory_kb": 0,
+        "total_swap_kb": 0,
+        "used_swap_kb": 0,
+        "network_in_bytes": 0,
+        "network_out_bytes": 0,
+        "load_one": 0,
+        "load_five": 0,
+        "load_fifteen": 0
+    },
+    "analyser": {
+        "pending_tasks": 0,
+        "tasks_per_second": 0,
+        "jobs_per_second": 0,
+    },
+    "scanner": {
+        "pending_tasks": 0,
+        "tasks_per_second": 0,
+        "jobs_per_second": 0,
+    }
 }
 ```
 
@@ -267,9 +311,21 @@ e.g. `GET /api/scan/123.123.123.123/24`
 ]
 ```
 
+--------
+
 ## Register Master
 `POST /api/scheduler/master`
 ### Request
 ```json
 "localhost:3000"
+```
+
+## List workers
+`GET /api/scheduler/workers`
+### Response
+```json
+[
+    "localhost:3000",
+    "172.24.0.2:3000",
+]
 ```

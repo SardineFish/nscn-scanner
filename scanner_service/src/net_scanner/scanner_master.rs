@@ -1,4 +1,4 @@
-use crate::{error::SimpleError, parse_ipv4_cidr, scheduler::{SharedSchedulerInternalStats, SharedSchedulerStats, master_scheduler::MasterScheduler}};
+use crate::{SchedulerStats, error::SimpleError, parse_ipv4_cidr, scheduler::{SharedSchedulerInternalStats, SharedSchedulerStats, master_scheduler::MasterScheduler}};
 use crate::config::GLOBAL_CONFIG;
 
 #[derive(Clone)]
@@ -49,6 +49,10 @@ impl ScannerMasterScheduler {
         self.internal_stats.remove_pending_tasks(count).await;
         self.scheduler.dispathcer().enqueue_tasks(addr_cidr_list).await?;
         Ok(count)
+    }
+
+    pub async fn stats(&self) -> SchedulerStats {
+        self.stats.clone_inner().await
     }
 
     fn count_ips(addr_cidr_list: &Vec<String>) -> Result<usize, SimpleError> {

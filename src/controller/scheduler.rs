@@ -1,5 +1,5 @@
 use serde::{Deserialize};
-use actix_web::{post, web::{Data, Json, Path, Query, ServiceConfig, scope}};
+use actix_web::{get, post, web::{Data, Json, Path, Query, ServiceConfig, scope}};
 use nscn::{MasterService, WorkerService};
 
 use crate::{error::ServiceError, misc::responder::{ApiResult, Response}};
@@ -53,10 +53,16 @@ async fn register_master(data: Json<String>, service: Data<WorkerService>) -> Ap
     Ok(Response(()))
 }
 
+#[get("/workers")]
+async fn get_workers(service: Data<MasterService>) -> ApiResult<Vec<String>> {
+    Ok(Response(service.workers().await))
+}
+
 pub fn config(cfg: &mut ServiceConfig) {
     cfg.service(scope("/scheduler")
         .service(fetch_tasks)
         .service(complete_task)
         .service(register_master)
+        .service(get_workers)
     );
 }

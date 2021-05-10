@@ -152,14 +152,15 @@
     }
 
 
-    .sys-stats {
-        display: flex;
-        flex-flow: row nowrap;
-        padding: 2em;
-        background-color: white;
+    .worker-stats {
+        margin-bottom: 2em;
 
-        & > * {
-            margin-right: 2em;
+        .ant-card-body {
+            margin-right: 0;
+        }
+
+        .ant-statistic-content {
+            font-size: 1.6em;
         }
 
         .stats {

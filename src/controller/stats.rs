@@ -1,5 +1,5 @@
 use actix_web::{get, web::{Data, Path, ServiceConfig, scope}};
-use nscn::{MasterService, WorkerService, WorkerStats};
+use nscn::{MasterService, SchedulerStats, WorkerService, WorkerStats};
 
 use crate::{error::ServiceError, misc::responder::{ApiResult, Response}};
 
@@ -22,9 +22,15 @@ async fn get_worker_sys_stats(worker_addr: Path<String>, service: Data<MasterSer
     }
 }
 
+#[get("/master")]
+async fn get_master_stats(service: Data<MasterService>) -> ApiResult<SchedulerStats> {
+    Ok(Response(service.scanner().stats().await))
+}
+
 pub fn config(cfg: &mut ServiceConfig){
     cfg.service(scope("/stats")
         .service(get_stats)
+        .service(get_master_stats)
         .service(get_worker_sys_stats)
     );
 }

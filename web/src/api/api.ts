@@ -107,16 +107,16 @@ export interface SystemStats
 
 export interface SchedulerStats
 {
-    scanner: {
-        pending_addrs: number,
-        tasks_per_second: number,
-        ip_per_second: number,
-    },
-    analyser: {
-        tasks_per_second: number,
-        jobs_per_second: number,
-        pending_tasks: number,
-    }
+    tasks_per_second: number,
+    jobs_per_second: number,
+    pending_tasks: number,
+}
+
+export interface WorkerStats
+{
+    system: SystemStats,
+    scanner: SchedulerStats,
+    analyser: SchedulerStats
 }
 
 const QueryParams = DeclareQuery({
@@ -193,10 +193,19 @@ export const API = {
             .response<BreifResult[]>(),
     },
     stats: {
-        getSysStats: api("GET", "/api/stats/system")
-            .response<SystemStats>(),
-        getSchedulerStats: api("GET", "/api/stats/scheduler")
-            .response<SchedulerStats>(),
+        getWorkerStats: api("GET", "/api/stats/{worker}/all")
+            .path({ worker: "string" })
+            .response<WorkerStats>(),
+        getMasterSchedulerStats: api("GET", "/api/stats/master")
+            .response<{
+                tasks_per_second: number,
+                jobs_per_second: number,
+                pending_tasks: number,
+            }>(),
+    },
+    scheduler: {
+        getWorkers: api("GET", "/api/scheduler/workers")
+            .response<string[]>(),
     },
     analyser: {
         requestFullAnalyse: api("POST", "/api/analyse/all")

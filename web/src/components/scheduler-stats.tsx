@@ -8,23 +8,21 @@ import { NewScanTask } from "./new-scan-task";
 export function SchedulerStatsPanel()
 {
     const [stats, setStats] = useState<SchedulerStats>({
-        analyser: {
-            jobs_per_second: 0,
-            pending_tasks: 0,
-            tasks_per_second: 0,
-        },
-        scanner: {
-            ip_per_second: 0,
-            pending_addrs: 0,
-            tasks_per_second: 0,
-        }
+        tasks_per_second: 0,
+        pending_tasks: 0,
+        jobs_per_second: 0,
     });
+    const [worker, setWorkers] = useState<string[]>([]);
 
     useEffect(() =>
     {
+        (async () =>
+        {
+            setWorkers(await API.scheduler.getWorkers({}));
+        })();
         const interval = setInterval(async () =>
         {
-            const stats = await API.stats.getSchedulerStats({});
+            const stats = await API.stats.getMasterSchedulerStats({});
             setStats(stats);
         }, 3000);
         return () => clearInterval(interval);
@@ -64,12 +62,9 @@ export function SchedulerStatsPanel()
                 <Descriptions.Item label="Tasks Limit">2400</Descriptions.Item>
             </Descriptions>
             <Space direction="horizontal" size={60}>
-                <Statistic title="Pending Scan IP" value={stats.scanner.pending_addrs} />
-                <Statistic title="Scaned Speed" value={stats.scanner.ip_per_second} suffix="/s"/>
-                <Statistic title="Scheduled Scanning Tasks" value={stats.scanner.tasks_per_second} suffix="/s"/>
-                <Statistic title="Pending Analyse IP" value={stats.analyser.pending_tasks} />
-                <Statistic title="Analyse Speed" value={stats.analyser.tasks_per_second} suffix="/s" />
-                <Statistic title="Scheduled Analysing Tasks" value={stats.analyser.jobs_per_second} suffix="/s"/>
+                <Statistic title="Active Workers" value={worker.length}/>
+                <Statistic title="Pending Scan IP" value={stats.pending_tasks} />
+                <Statistic title="Scaned Speed" value={stats.tasks_per_second} suffix="/s"/>
             </Space>
             <Space direction="horizontal" size={30}>
                 <NewScanTask/>
