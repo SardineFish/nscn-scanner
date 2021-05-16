@@ -55,7 +55,10 @@ type ApiFunction<Path extends ParamsDeclare, Query extends ParamsDeclare, Data e
     = Data extends undefined
     ? (params: ValueType<Path> & ValueType<Query>) => Promise<Response>
     : Data extends ParamsDeclare ? (params: ValueType<Path> & ValueType<Query>, body: ValueType<Data & ParamsDeclare>) => Promise<Response>
-    : (params: ValueType<Path> & ValueType<Query>, body: Data) => Promise<Response>
+    : (params: ValueType<Path> & ValueType<Query>, body: Data) => Promise<Response>;
+
+type UrlBuilder<Path extends ParamsDeclare, Query extends ParamsDeclare>
+    = (params: ValueType<Path> & ValueType<Query>) => string;
 
 function validateByPass<T>(_: string, value: T)
 {
@@ -183,39 +186,47 @@ class ApiBuilder<Method extends HTTPMethods, Path extends ParamsDeclare, Query e
         this.redirectOption = redirect;
         return this;
     }
+    urlBuilder(): UrlBuilder<Path, Query>
+    {
+        return (params) =>
+        {
+            let url = this.url;
+            for (const key in this.pathInfo)
+            {
+                const value = (params as ValueType<Path> as any)[key];
+                if (value === undefined)
+                {
+                    if (this.pathInfo[key].optional)
+                    {
+                        url = url.replace(`{${key}}`, "");
+                        continue;
+                    }
+                    throw new APIError(ClientErrorCode.InvalidParameter, `Missing path '${key}'`);
+                }
+                url = url.replace(`{${key}}`, this.pathInfo[key].validator(key, value as never).toString());
+            }
+            const queryParams = [];
+            for (const key in this.queryInfo) 
+            {
+                const value = (params as Partial<ValueType<Query>> as any)[key];
+                if (value === undefined && !this.queryInfo[key].optional)
+                    throw new APIError(ClientErrorCode.InvalidParameter, `Missing query param '${key}'`);
+                else if (value !== undefined)
+                    queryParams.push(`${key}=${encodeURIComponent(this.queryInfo[key].validator(key, value as never).toString())}`);
+            }
+            if (queryParams.length > 0)
+                url = url + "?" + queryParams.join("&");
+            return url;
+        };
+    }
     response<Response>(): ApiFunction<Path, Query, Data, Response>
     {
         const builder = new ApiBuilder<Method, Path, Query, Data, Response>(this.method, this.url, this.pathInfo, this.queryInfo, this.dataInfo);
         return builder.send.bind(builder) as ApiFunction<Path, Query, Data, Response>;
     }
-    private async send(params: ValueType<Path> | ValueType<Query>, data: ValueType<Data & ParamsDeclare>): Promise<Response>
+    private async send(params: ValueType<Path> & ValueType<Query>, data: ValueType<Data & ParamsDeclare>): Promise<Response>
     {
-        let url = this.url;
-        for (const key in this.pathInfo)
-        {
-            const value = (params as ValueType<Path> as any)[key];
-            if (value === undefined)
-            {
-                if (this.pathInfo[key].optional)
-                {
-                    url = url.replace(`{${key}}`, "");
-                    continue;
-                }
-                throw new APIError(ClientErrorCode.InvalidParameter, `Missing path '${key}'`);
-            }
-            url = url.replace(`{${key}}`, this.pathInfo[key].validator(key, value as never).toString());
-        }
-        const queryParams = [];
-        for (const key in this.queryInfo) 
-        {
-            const value = (params as Partial<ValueType<Query>> as any)[key];
-            if (value === undefined && !this.queryInfo[key].optional)
-                throw new APIError(ClientErrorCode.InvalidParameter, `Missing query param '${key}'`);
-            else if (value !== undefined)
-                queryParams.push(`${key}=${encodeURIComponent(this.queryInfo[key].validator(key, value as never).toString())}`);
-        }
-        if (queryParams.length > 0)
-            url = url + "?" + queryParams.join("&");
+        const url = this.urlBuilder()(params as ValueType<Path> & ValueType<Query>);
 
         if (this.dataInfo !== undefined && this.dataInfo !== null)
         {

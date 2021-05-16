@@ -1,18 +1,19 @@
-import { Button, Checkbox, List, message, Spin, Tag } from "antd";
+import { Button, Checkbox, List, message, Space, Spin, Tag } from "antd";
 import Search from "antd/lib/input/Search";
 import React, { useEffect, useState } from "react";
 import { API, BreifResult } from "../api/api";
-import { DatabaseOutlined, ExclamationCircleOutlined } from "@ant-design/icons";
+import { DatabaseOutlined, DownloadOutlined, ExclamationCircleOutlined } from "@ant-design/icons";
 import InfiniteScroll from "react-infinite-scroller";
 import { CheckboxChangeEvent } from "antd/lib/checkbox";
 import { ScanResultDetail } from "./result-detail";
 
-type LoadFunc = (skip: number, onlineOnly?: boolean) => Promise<BreifResult[]>;
+type LoadFunc = (skip: number, count: number, onlineOnly?: boolean) => Promise<BreifResult[]>;
 
 export const ResultSearch: React.FC = () =>
 {
     const [data, setData] = useState([] as BreifResult[]);
-    const [searchFn, setSearch] = useState(() => search("0.0.0.0/0", 10)[1]);
+    const [searchFn, setSearch] = useState(() => search("0.0.0.0/0")[1]);
+    const [searchValue, setSearchValue] = useState("0.0.0.0/0");
     const [skip, setSkip] = useState(0);
     const [loading, setLoading] = useState(false);
     const [hasMore, setHasMore] = useState(true);
@@ -23,8 +24,9 @@ export const ResultSearch: React.FC = () =>
     {
         try
         {
-            const [hasMore, loadFunc] = search(value, 10);
+            const [hasMore, loadFunc] = search(value);
             setSearch(() => loadFunc);
+            setSearchValue(value);
             setHasMore(hasMore);
             setSkip(0);
             setData([]);
@@ -44,7 +46,7 @@ export const ResultSearch: React.FC = () =>
         try
         {
             setLoading(true);
-            const list = await load(skip, onlineOnly);
+            const list = await load(skip, 10, onlineOnly);
             setData([...oldData, ...list]);
             setSkip(skip + list.length);
             setLoading(false);
@@ -72,6 +74,18 @@ export const ResultSearch: React.FC = () =>
         }
     }
 
+    const exportResults = async () =>
+    {
+        const url = searchLoadUrl(searchValue)(0, 0, onlineOnly);
+        // const json = JSON.stringify(result);
+        // const file = new Blob([json], { type: "application/json" });
+        const a = document.createElement("a");
+        // a.href = URL.createObjectURL(file);
+        a.href = url;
+        a.download = `result-${searchValue}.json`;
+        a.click();
+    };
+
 
     return (
         <section className="result-search">
@@ -81,7 +95,10 @@ export const ResultSearch: React.FC = () =>
                 allowClear
                 enterButton size="large"
                 onSearch={onSearch} />
-            <Checkbox className="search-online-only" checked={onlineOnly} onChange={onlineOnlyChange}>Online Only</Checkbox>
+            <Space style={{width: "100%", justifyContent:"flex-end"}}>
+                <Checkbox className="search-online-only" checked={onlineOnly} onChange={onlineOnlyChange}>Online Only</Checkbox>
+                <Button type="link" icon={<DownloadOutlined />} onClick={exportResults}>Export</Button>
+            </Space>
             <InfiniteScroll
                 className="scan-results"
                 initialLoad={true}
@@ -140,10 +157,10 @@ const patterns = {
     serviceVersion: /^(.+?)(?:\s+(\d+(?:.\d+)*))?$/,
     empty: /^\s+$|^$/
 }
-function search(input: string, count: number): [boolean, LoadFunc]
+function search(input: string): [boolean, LoadFunc]
 {
     if (patterns.empty.test(input))
-        return search("0.0.0.0/0", count);
+        return search("0.0.0.0/0");
     let matches = patterns.ip.exec(input);
     if (matches)
     {
@@ -151,15 +168,15 @@ function search(input: string, count: number): [boolean, LoadFunc]
         let cidr = parseInt(matches[2]);
         if (!isNaN(cidr))
         {
-            return [true, (skip: number, onlineOnly = false) => API.scan.getByIpRange({ ip: ip, cidr: cidr, skip, count, online_only: onlineOnly? 1: 0})];
+            return [true, (skip, count, onlineOnly = false) => API.scan.getByIpRange({ ip: ip, cidr: cidr, skip, count, online_only: onlineOnly? 1: 0})];
         }
         else
-            return [false, (_: number, onlineOnly = false) => API.scan.getByIpRange({ ip: ip, cidr: 32, skip: 0, count, online_only: onlineOnly ? 1 : 0})];
+            return [false, (_, count, onlineOnly = false) => API.scan.getByIpRange({ ip: ip, cidr: 32, skip: 0, count, online_only: onlineOnly ? 1 : 0})];
     }
     else if (patterns.port.test(input))
     {
         const port = parseInt(input);
-        return [true, (skip: number, onlineOnly = false) => API.search.searchPort({ port: port, skip: skip, count, online_only: onlineOnly ? 1 : 0})];
+        return [true, (skip, count, onlineOnly = false) => API.search.searchPort({ port: port, skip: skip, count, online_only: onlineOnly ? 1 : 0})];
     }
     matches = patterns.serviceVersion.exec(input);
     if (matches)
@@ -171,18 +188,65 @@ function search(input: string, count: number): [boolean, LoadFunc]
             switch (service.toLowerCase())
             {
                 case "http":
-                    return search("80", count);
+                    return search("80");
                 case "https":
-                    return search("443", count);
+                    return search("443");
                 case "ftp":
-                    return search("21", count);
+                    return search("21");
                 case "ssh":
-                    return search("22", count);
+                    return search("22");
             }
-            return [true, (skip: number, onlineOnly = false) => API.search.searchService({ service, skip: skip, count, online_only: onlineOnly ? 1 : 0 })];
+            return [true, (skip, count, onlineOnly = false) => API.search.searchService({ service, skip: skip, count, online_only: onlineOnly ? 1 : 0 })];
         }
         else
-            return [true, (skip: number, onlineOnly = false) => API.search.searchServiceVersion({ service, version, skip, count, online_only: onlineOnly ? 1 : 0 })];
+            return [true, (skip, count, onlineOnly = false) => API.search.searchServiceVersion({ service, version, skip, count, online_only: onlineOnly ? 1 : 0 })];
+    }
+    throw new Error(`Invalid search pattern`);
+}
+
+function searchLoadUrl(input: string): (skip: number, count: number, onlineOnly?: boolean) => string
+{
+    if (patterns.empty.test(input))
+        return searchLoadUrl("0.0.0.0/0");
+    let matches = patterns.ip.exec(input);
+    if (matches)
+    {
+        const ip = matches[1];
+        let cidr = parseInt(matches[2]);
+        if (!isNaN(cidr))
+        {
+            return (skip, count, onlineOnly = false) => API.scan.getByIpRangeUrl({ ip: ip, cidr: cidr, skip, count, online_only: onlineOnly ? 1 : 0 });
+        }
+        else
+            return (_, count, onlineOnly = false) => API.scan.getByIpRangeUrl({ ip: ip, cidr: 32, skip: 0, count, online_only: onlineOnly ? 1 : 0 });
+    }
+    else if (patterns.port.test(input))
+    {
+        const port = parseInt(input);
+        return (skip, count, onlineOnly = false) => API.search.searchPortUrl({ port: port, skip: skip, count, online_only: onlineOnly ? 1 : 0 });
+    }
+    matches = patterns.serviceVersion.exec(input);
+    if (matches)
+    {
+        const service = matches[1];
+        const version = matches[2];
+        if (!version)
+        {
+            switch (service.toLowerCase())
+            {
+                case "http":
+                    return searchLoadUrl("80");
+                case "https":
+                    return searchLoadUrl("443");
+                case "ftp":
+                    return searchLoadUrl("21");
+                case "ssh":
+                    return searchLoadUrl("22");
+            }
+            return (skip, count, onlineOnly = false) => API.search.searchServiceUrl({ service, skip: skip, count, online_only: onlineOnly ? 1 : 0 });
+        }
+        else
+            return (skip, count, onlineOnly = false) => API.search.searchServiceVersionUrl({ service, version, skip, count, online_only: onlineOnly ? 1 : 0 });
     }
     throw new Error(`Invalid search pattern`);
 }

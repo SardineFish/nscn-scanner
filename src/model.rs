@@ -359,9 +359,11 @@ impl Model {
         pipeline.push(doc! {
             "$skip": skip as i64,
         });
-        pipeline.push(doc! {
-            "$limit": count as i64,
-        });
+        if count > 0 {
+            pipeline.push(doc! {
+                "$limit": count as i64,
+            });
+        }
         pipeline.push(doc! {
             "$project": {
                 "analyse": "$$ROOT",

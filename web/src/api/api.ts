@@ -190,6 +190,10 @@ export const API = {
             .path({ ip: IPV4Field, cidr: "number" })
             .query(QueryParams)
             .response<BreifResult[]>(),
+        getByIpRangeUrl: api("GET", "/api/scan/{ip}/{cidr}")
+            .path({ ip: IPV4Field, cidr: "number" })
+            .query(QueryParams)
+            .urlBuilder(),
         requestScanIp: api("POST", "/api/scan/{ip}")
             .path({ ip: IPV4Field })
             .response(),
@@ -227,14 +231,27 @@ export const API = {
             .path({ service: "string" })
             .query(QueryParams)
             .response<BreifResult[]>(),
+        searchServiceUrl: api("GET", "/api/search/service/{service}")
+            .path({ service: "string" })
+            .query(QueryParams)
+            .urlBuilder(),
         searchServiceVersion: api("GET", "/api/search/service/{service}/{version}")
             .path({ service: "string", version: "string" })
             .query(QueryParams)
             .response<BreifResult[]>(),
+        searchServiceVersionUrl: api("GET", "/api/search/service/{service}/{version}")
+            .path({ service: "string", version: "string" })
+            .query(QueryParams)
+            .urlBuilder(),
         searchPort: api("GET", "/api/search/port/{port}")
             .path({ port: "number" })
             .query(QueryParams)
             .response<BreifResult[]>(),
+        searchPortUrl: api("GET", "/api/search/port/{port}")
+            .path({ port: "number" })
+            .query(QueryParams)
+            .urlBuilder(),
+        
     },
     stats: {
         getWorkerStats: api("GET", "/api/stats/{worker}/all")
