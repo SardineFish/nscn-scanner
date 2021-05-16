@@ -119,6 +119,50 @@ export interface WorkerStats
     analyser: SchedulerStats
 }
 
+export interface WorkerConfig
+{
+    master_addr: string,
+    scanner: {
+        http: {
+            enabled: boolean,
+            use_proxy: boolean,
+            socks5: boolean,
+            timeout: number
+        },
+        https: {
+            enabled: boolean,
+            use_proxy: boolean,
+            socks5: boolean,
+            timeout: number
+        },
+        ftp: {
+            enabled: boolean,
+            use_proxy: boolean,
+            timeout: number
+        },
+        ssh: {
+            enabled: boolean,
+            use_proxy: boolean,
+            timeout: number
+        },
+        scheduler: {
+            enabled: boolean,
+            max_tasks: number,
+            fetch_count: number,
+            fetch_threshold: number
+        },
+    },
+    analyser: {
+        scheduler: {
+            enabled: boolean,
+            max_tasks: number,
+            fetch_count: number,
+            fetch_threshold: number
+        },
+    }
+
+}
+
 const QueryParams = DeclareQuery({
     skip: "number",
     count: "number",
@@ -206,6 +250,13 @@ export const API = {
     scheduler: {
         getWorkers: api("GET", "/api/scheduler/workers")
             .response<string[]>(),
+        setupWorkerConfig: api("POST", "/api/scheduler/{worker}/setup")
+            .path({ worker: "string" })
+            .body<WorkerConfig>()
+            .response(),
+        getWorkerConfig: api("GET", "/api/scheduler/{worker}/status")
+            .path({ worker: "string" })
+            .response<WorkerConfig | null>()
     },
     analyser: {
         requestFullAnalyse: api("POST", "/api/analyse/all")

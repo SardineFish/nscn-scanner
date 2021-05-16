@@ -7,8 +7,22 @@ import { formatbytes } from "../utils/utils";
 import Text from "antd/lib/typography/Text";
 import Title from "antd/lib/typography/Title";
 import { ArrowDownOutlined, ArrowUpOutlined } from "@ant-design/icons";
+import { WorkerConfig } from "./worker-config";
 
 export function WorkerStats(props: {worker: string})
+{
+    const tile = (<>
+        {props.worker}
+        <WorkerConfig workerAddr={props.worker} />
+    </>)
+
+    return (<Card title={tile} className="worker-stats">
+        <Stats worker={props.worker} />
+    </Card>)
+}
+
+
+function Stats(props: {worker: string})
 {
     const [stats, setStats] = useState<WorkerStats>({
         system: {
@@ -48,10 +62,7 @@ export function WorkerStats(props: {worker: string})
     const usedRAM = `${formatbytes(stats.system.used_memory_kb * 1024, 1)} / ${formatbytes(stats.system.total_memory_kb * 1024, 1)}`;
     const usedSwap = `${formatbytes(stats.system.used_swap_kb * 1024, 1)} / ${formatbytes(stats.system.total_swap_kb * 1024, 1)}`;
     const memUsage = stats.system.used_memory_kb / stats.system.total_memory_kb;
-
-
-    return (<Card title={props.worker} className="worker-stats">
-        <Row gutter={24} wrap={false}>
+    return (<Row gutter={24} wrap={false}>
             <Col flex="120px">
                 <RingProgress
                     percent={stats.system.cpu_usage / 100}
@@ -131,6 +142,5 @@ export function WorkerStats(props: {worker: string})
                     </Col>
                 </Row>
             </Col>
-        </Row>
-    </Card>)
+        </Row>);
 }
