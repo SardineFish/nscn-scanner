@@ -1,6 +1,6 @@
 use serde::{Serialize, Deserialize};
 use actix_web::{get, post, web::{Data, Json, Path, Query, ServiceConfig, scope}};
-use nscn::{GLOBAL_CONFIG, MasterService, UniversalScannerOption, WorkerSchedulerOptions, WorkerService, error::{LogError}};
+use nscn::{GLOBAL_CONFIG, MasterService, ScannerConfig, ServiceAnalyserOptions, UniversalScannerOption, WorkerSchedulerOptions, WorkerService, error::{LogError, SimpleError}};
 
 use crate::{error::ServiceError, misc::responder::{ApiResult, Response}};
 
@@ -20,19 +20,11 @@ struct WorkerSetupConfig {
 }
 
 fn default_scanner_config() -> WorkerScannerConfig {
-    WorkerScannerConfig {
-        ftp: GLOBAL_CONFIG.scanner.ftp.clone(),
-        http: GLOBAL_CONFIG.scanner.http.clone(),
-        https: GLOBAL_CONFIG.scanner.https.clone(),
-        scheduler: GLOBAL_CONFIG.scanner.scheduler.clone(),
-        ssh: GLOBAL_CONFIG.scanner.ssh.clone(),
-    }
+    WorkerScannerConfig::from(GLOBAL_CONFIG.scanner.clone())
 }
 
 fn default_analyser_config() -> WorkerAnalyserConfig {
-    WorkerAnalyserConfig {
-        scheduler: GLOBAL_CONFIG.analyser.scheduler.clone(),
-    }
+    WorkerAnalyserConfig::from(GLOBAL_CONFIG.analyser.clone())
 }
 
 #[derive(Deserialize, Serialize)]
@@ -44,9 +36,29 @@ struct WorkerScannerConfig {
     scheduler: WorkerSchedulerOptions,
 }
 
+impl From<ScannerConfig> for WorkerScannerConfig {
+    fn from(config: ScannerConfig) -> Self {
+        Self {
+            ftp: config.ftp,
+            http: config.http,
+            https: config.https,
+            scheduler: config.scheduler,
+            ssh: config.ssh,
+        }
+    }
+}
+
 #[derive(Deserialize, Serialize)]
 struct WorkerAnalyserConfig {
     scheduler: WorkerSchedulerOptions,
+}
+
+impl From<ServiceAnalyserOptions> for WorkerAnalyserConfig {
+    fn from(config: ServiceAnalyserOptions) -> Self {
+        Self {
+            scheduler: config.scheduler,
+        }
+    }
 }
 
 #[post("{task_key}/fetch")]
@@ -120,6 +132,29 @@ async fn get_workers(service: Data<MasterService>) -> ApiResult<Vec<String>> {
     Ok(Response(service.workers().await))
 }
 
+#[get("/status")]
+async fn get_worker_status(service: Data<WorkerService>) -> ApiResult<Option<WorkerSetupConfig>> {
+    let config = service.current_state().await
+        .map(|state| WorkerSetupConfig {
+            master_addr: state.master_addr,
+            analyser: state.analyser_config.into(),
+            scanner: state.scanner_config.into()
+        });
+    Ok(Response(config))
+}
+
+#[get("/{worker_addr}/status")]
+async fn get_specific_worker_status(path: Path<String>, service: Data<MasterService>) -> ApiResult<Option<WorkerSetupConfig>> {
+    let response = service.http_client().get(format!("http://{}/api/scheduler/status", path))
+        .send()
+        .await
+        .map_err(SimpleError::from)?;
+    let config = response.json::<Option<WorkerSetupConfig>>()
+        .await
+        .map_err(SimpleError::from)?;
+    Ok(Response(config))
+}
+
 pub fn config(cfg: &mut ServiceConfig) {
     cfg.service(scope("/scheduler")
         .service(fetch_tasks)
@@ -127,5 +162,7 @@ pub fn config(cfg: &mut ServiceConfig) {
         .service(register_master)
         .service(setup_specific_worker)
         .service(get_workers)
+        .service(get_worker_status)
+        .service(get_specific_worker_status)
     );
 }

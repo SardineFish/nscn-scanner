@@ -42,12 +42,24 @@ pub use scheduler::SchedulerStats;
 pub use vul_search::VulnInfo;
 pub use config::*;
 
-struct WorkerState {
-    master_addr: String,
+pub struct WorkerState {
+    pub master_addr: String,
     scanner_handeler: Option<JoinHandle<()>>,
     analyser_handler: Option<JoinHandle<()>>,
-    scanner_config: ScannerConfig,
-    analyser_config: ServiceAnalyserOptions,
+    pub scanner_config: ScannerConfig,
+    pub analyser_config: ServiceAnalyserOptions,
+}
+
+impl Clone for WorkerState {
+    fn clone(&self) -> Self {
+        Self {
+            master_addr: self.master_addr.clone(),
+            analyser_config: self.analyser_config.clone(),
+            scanner_config: self.scanner_config.clone(),
+            analyser_handler: None,
+            scanner_handeler: None,
+        }
+    }
 }
 
 impl WorkerState {
@@ -154,6 +166,10 @@ impl WorkerService {
 
     pub fn config(&self) -> &'static Config{
         &GLOBAL_CONFIG
+    }
+
+    pub async fn current_state(&self) -> Option<WorkerState> {
+        self.current_state.lock().await.clone()
     }
 
     pub async fn fetch_address_list(&self, url: &str) -> Result<Vec<String>, SimpleError> {

@@ -382,3 +382,13 @@ See above
     "172.24.0.2:3000",
 ]
 ```
+
+--------
+
+## Get Worker Scheduler State
+`GET /api/scheduler/status`
+
+--------
+
+## Get Specific Scheduler State
+`GET /api/scheduler/{worker_addr}/status`
