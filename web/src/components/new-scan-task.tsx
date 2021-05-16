@@ -1,6 +1,9 @@
-import { PlusOutlined } from "@ant-design/icons";
-import { Button, message, Modal } from "antd";
+import { PlusOutlined, UploadOutlined } from "@ant-design/icons";
+import { Button, message, Modal, Upload } from "antd";
 import TextArea, { TextAreaRef } from "antd/lib/input/TextArea";
+import Text from "antd/lib/typography/Text";
+import { RcFile } from "antd/lib/upload";
+import Dragger from "antd/lib/upload/Dragger";
 import React, { ChangeEvent, ChangeEventHandler, useRef, useState } from "react";
 import { API } from "../api/api";
 
@@ -36,6 +39,7 @@ export function NewScanTask()
 
             setLoading(false);
             setModalVisible(false);
+            setText("");
         }
         catch (err)
         {
@@ -50,7 +54,14 @@ export function NewScanTask()
     const onChange = (ev: ChangeEvent<HTMLTextAreaElement>) =>
     {
         setText(ev.target.value);
-    }
+    };
+    const upload = async (file: RcFile, files: RcFile[]) =>
+    {
+        setLoading(true);
+        const text = (await Promise.all(files.map(f => f.text()))).join("\r\n");
+        setText(text);
+        return false;
+    };
 
     return (<>
         <Button type="primary" size="large" icon={<PlusOutlined />} onClick={()=>setModalVisible(true)}>New Scan Task</Button>
@@ -61,12 +72,30 @@ export function NewScanTask()
             onCancel={cancel}
             confirmLoading={loading}
             cancelButtonProps={{ disabled: loading }}
+            footer={[
+                <Button key="back" onClick={() => setModalVisible(false)}>Cancel</Button>,
+                <Upload key="upload" beforeUpload={upload} style={{display: "inline-block"}} showUploadList={false}>
+                    <Button icon={<UploadOutlined />}>Upload</Button>
+                </Upload>,
+                <Button key="submit" type="primary" onClick={ok}>Dispatch</Button>,
+            ]}
         >
-            <TextArea
-                rows={12}
-                value={text}
-                onChange={onChange}
-                placeholder={`# Input IP ranges to be scaned.
+            <Dragger
+                className="task-upload-dragger"
+                beforeUpload={upload}
+                multiple={true}
+                openFileDialogOnClick={false}
+                showUploadList={false}
+            >
+                <div className="drag-hint">
+                    <UploadOutlined size={32}/>
+                    <Text>Drop to Upload</Text>
+                </div>
+                <TextArea
+                    rows={12}
+                    value={text}
+                    onChange={onChange}
+                    placeholder={`# Input IP ranges to be scaned.
 e.g.
 10.1.0.0/16
 192.168.1.0/24
@@ -76,7 +105,8 @@ e.g.
 https://raw.githubusercontent.com/metowolf/iplist/master/data/cncity/420100.txt
 
 `}
-            />
+                />
+            </Dragger>
         </Modal>
     </>);
 }

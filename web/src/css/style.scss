@@ -178,3 +178,45 @@
         }
     }
 }
+
+.ant-modal-footer > * {
+    display: inline-block;
+    margin-left: .5em;
+}
+
+.task-upload-dragger {
+
+    &.ant-upload.ant-upload-drag .ant-upload {
+        border: none 0;
+        background-color: transparent;
+        padding: 0;
+    }
+
+    &.ant-upload {
+        padding: 0;
+        border: none 0;
+        background-color: transparent;
+    }
+
+    .drag-hint {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        display: none;
+        flex-flow: column nowrap;
+        align-items: center;
+        justify-content: center;
+        background-color: rgba(0, 0, 0, 0.1);
+        pointer-events: none;
+        z-index: 1;
+    }
+    .ant-upload-drag-container {
+        position: relative;
+    }
+
+}
+.task-upload-dragger.ant-upload-drag-hover .drag-hint {
+    display: flex;
+}

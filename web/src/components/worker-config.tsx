@@ -66,6 +66,7 @@ export function WorkerConfig(props: { workerAddr: string })
                             <Space>
                                 <Text strong>Net Scanner: </Text>
                                 <Switch
+                                    disabled={!config.scanner.scheduler.enabled}
                                     checked={config.scanner.scheduler.enabled}
                                     checkedChildren="On"
                                     unCheckedChildren="Off"

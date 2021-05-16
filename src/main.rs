@@ -8,7 +8,7 @@ use model::Model;
 
 use std::{ops::Range, str::FromStr};
 
-use actix_web::{middleware::Logger, App};
+use actix_web::{App, middleware::Logger, web::{self, JsonConfig}};
 use futures::stream::StreamExt;
 use mongodb::bson::{doc, Document};
 use mongodb::Database;
@@ -58,6 +58,8 @@ async fn main() {
         app
             .data(worker.clone())
             .data(model.clone())
+            .data(web::PayloadConfig::new(100 * 1024 * 1024))
+            .data(JsonConfig::default().limit(100 * 1024 * 1024))
             .wrap(Logger::new("%s - %r %Dms"))
             .configure(controller::config)
     })

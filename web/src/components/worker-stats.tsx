@@ -13,7 +13,7 @@ export function WorkerStats(props: {worker: string})
 {
     const tile = (<>
         {props.worker}
-        <WorkerConfig workerAddr={props.worker} />
+        <WorkerConfig workerAddr={props.worker}/>
     </>)
 
     return (<Card title={tile} className="worker-stats">
