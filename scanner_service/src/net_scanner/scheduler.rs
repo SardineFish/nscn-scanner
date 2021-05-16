@@ -4,9 +4,8 @@ use futures::{future::join, pin_mut};
 use mongodb::{Database};
 use tokio::{task::{self, JoinHandle}};
 
-use crate::{SchedulerStats, error::*, scheduler::{SharedSchedulerInternalStats, SharedSchedulerStats, local_scheduler::LocalScheduler}};
+use crate::{ScannerConfig, SchedulerStats, config, error::*, scheduler::{SharedSchedulerInternalStats, SharedSchedulerStats, local_scheduler::LocalScheduler}};
 use super::{http_scanner::HttpScanTask, https_scanner::HttpsScanTask, result_handler::ResultHandler, tcp_scanner::scanner::TCPScanTask};
-use crate::config::{GLOBAL_CONFIG};
 use crate::proxy::proxy_pool::ProxyPool;
 
 #[derive(Clone)]
@@ -36,8 +35,8 @@ impl NetScanner {
             stats,
         }
     }
-    pub fn start(&self, master_addr: String) -> Result<JoinHandle<()>, SimpleError> {
-        let scheduler = Scheduler::start(master_addr, self.resources.clone());
+    pub fn start(&self, master_addr: String, config: ScannerConfig) -> Result<JoinHandle<()>, SimpleError> {
+        let scheduler = Scheduler::start(master_addr, self.resources.clone(), config);
         let mornitor = self.resources.stats.clone().start_mornitor(self.stats.clone(), 5.0);
         Ok(task::spawn(async move {
             pin_mut!(scheduler);
@@ -50,6 +49,10 @@ impl NetScanner {
     }
     pub async fn stats(&self) -> SchedulerStats {
         self.stats.clone_inner().await
+    }
+    
+    pub async fn reset_stats(&self) {
+        self.stats.reset().await
     }
 }
 
@@ -77,29 +80,31 @@ pub struct Scheduler {
     local_scheduler: LocalScheduler,
     task_pool: crate::scheduler::TaskPool<ScannerResources>,
     resources: ScannerResources,
+    config: config::ScannerConfig,
     // pub proxy_pool: ProxyPool,
 }
 impl Scheduler {
-    async fn start(master_addr: String, resources: ScannerResources) {
+    async fn start(master_addr: String, resources: ScannerResources, config: config::ScannerConfig) {
         let (local_scheduler, fetch_task)= 
-            LocalScheduler::start("scanner".to_owned(), master_addr, &GLOBAL_CONFIG.scanner.scheduler);
+            LocalScheduler::start("scanner".to_owned(), master_addr, &config.scheduler);
         
-        let resource_pool = vec![resources.clone(); GLOBAL_CONFIG.scanner.scheduler.max_tasks];
+        let resource_pool = vec![resources.clone(); config.scheduler.max_tasks];
 
         let task_pool = crate::scheduler::TaskPool::new(
-            GLOBAL_CONFIG.scanner.scheduler.max_tasks, 
+            config.scheduler.max_tasks, 
             resources.stats.clone(), 
             resource_pool);
 
         let scheduler = Self {
             local_scheduler,
             resources: resources.clone(),
-            task_pool: task_pool
+            task_pool: task_pool,
+            config,
         };
         join(scheduler.schedule_loop(), fetch_task).await;
     }
     async fn schedule_loop(mut self) {
-        if !GLOBAL_CONFIG.scanner.scheduler.enabled {
+        if !self.config.scheduler.enabled {
             return ;
         }
         loop {
@@ -122,13 +127,13 @@ impl Scheduler {
         }
     }
     async fn dispatch(&mut self, addr: &str) {
-        if GLOBAL_CONFIG.scanner.http.enabled {
+        if self.config.http.enabled {
             self.task_pool.spawn("http-scan", HttpScanTask::run, addr.to_owned()).await;
         }
-        if GLOBAL_CONFIG.scanner.https.enabled {
+        if self.config.https.enabled {
             self.task_pool.spawn("https-scan", HttpsScanTask::run, addr.to_owned()).await;
         }
-        if GLOBAL_CONFIG.scanner.tcp.enabled {
+        if self.config.tcp.enabled {
             TCPScanTask::dispatch(addr.to_owned(), &mut self.task_pool).await;
         }
         self.resources.stats.dispatch_tasks(1).await;

@@ -1,12 +1,52 @@
-use serde::{Deserialize};
+use serde::{Serialize, Deserialize};
 use actix_web::{get, post, web::{Data, Json, Path, Query, ServiceConfig, scope}};
-use nscn::{MasterService, WorkerService};
+use nscn::{GLOBAL_CONFIG, MasterService, UniversalScannerOption, WorkerSchedulerOptions, WorkerService, error::{LogError}};
 
 use crate::{error::ServiceError, misc::responder::{ApiResult, Response}};
 
 #[derive(Debug, Deserialize)]
 struct FecthCount {
     count: usize,
+}
+
+#[derive(Deserialize, Serialize)]
+struct WorkerSetupConfig {
+    #[serde(default = "String::default")]
+    master_addr: String,
+    #[serde(default = "default_scanner_config")]
+    scanner: WorkerScannerConfig,
+    #[serde(default = "default_analyser_config")]
+    analyser: WorkerAnalyserConfig,
+}
+
+fn default_scanner_config() -> WorkerScannerConfig {
+    WorkerScannerConfig {
+        ftp: GLOBAL_CONFIG.scanner.ftp.clone(),
+        http: GLOBAL_CONFIG.scanner.http.clone(),
+        https: GLOBAL_CONFIG.scanner.https.clone(),
+        scheduler: GLOBAL_CONFIG.scanner.scheduler.clone(),
+        ssh: GLOBAL_CONFIG.scanner.ssh.clone(),
+    }
+}
+
+fn default_analyser_config() -> WorkerAnalyserConfig {
+    WorkerAnalyserConfig {
+        scheduler: GLOBAL_CONFIG.analyser.scheduler.clone(),
+    }
+}
+
+#[derive(Deserialize, Serialize)]
+struct WorkerScannerConfig {
+    http: UniversalScannerOption,
+    https: UniversalScannerOption,
+    ssh: UniversalScannerOption,
+    ftp: UniversalScannerOption,
+    scheduler: WorkerSchedulerOptions,
+}
+
+#[derive(Deserialize, Serialize)]
+struct WorkerAnalyserConfig {
+    scheduler: WorkerSchedulerOptions,
 }
 
 #[post("{task_key}/fetch")]
@@ -44,11 +84,33 @@ async fn complete_task(path: Path<String>, data: Json<Vec<String>>, service: Dat
     Ok(Response(()))
 }
 
-#[post("/master")]
-async fn register_master(data: Json<String>, service: Data<WorkerService>) -> ApiResult<()> {
-    log::info!("Received connection from master {}", data);
-    service.start(data.into_inner()).await?;
+#[post("/setup")]
+async fn register_master(data: Json<WorkerSetupConfig>, service: Data<WorkerService>) -> ApiResult<()> {
+    let config = data.into_inner();
+    log::info!("Received connection from master {}", config.master_addr);
+    let mut scanner_config = service.config().scanner.clone();
+    let mut analyser_config = service.config().analyser.clone();
+    scanner_config.http = config.scanner.http;
+    scanner_config.https = config.scanner.https;
+    scanner_config.ftp = config.scanner.ftp;
+    scanner_config.ssh = config.scanner.ssh;
+    scanner_config.scheduler = config.scanner.scheduler;
+    analyser_config.scheduler = config.analyser.scheduler;
+    service.start(config.master_addr, scanner_config, analyser_config).await?;
     log::info!("Worker started.");
+
+    Ok(Response(()))
+}
+
+#[post("/{worker_addr}/setup")]
+async fn setup_specific_worker(data: Json<WorkerSetupConfig>, path: Path<String>, service: Data<MasterService>) -> ApiResult<()> {
+    let mut config = data.into_inner();
+    config.master_addr = GLOBAL_CONFIG.listen.clone();
+    service.http_client().post(format!("http://{}/api/scheduler/setup", path))
+        .json(&config)
+        .send()
+        .await
+        .log_error_consume("setup-specific-worker");
 
     Ok(Response(()))
 }
@@ -63,6 +125,7 @@ pub fn config(cfg: &mut ServiceConfig) {
         .service(fetch_tasks)
         .service(complete_task)
         .service(register_master)
+        .service(setup_specific_worker)
         .service(get_workers)
     );
 }

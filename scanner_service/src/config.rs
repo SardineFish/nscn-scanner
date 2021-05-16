@@ -2,12 +2,12 @@ use std::{collections::HashMap, fmt::{self, Display, Formatter}};
 
 use clap::{Clap, AppSettings};
 use lazy_static::lazy_static;
-use serde::{Deserialize};
+use serde::{Deserialize, Serialize};
 use crate::error::*;
 
 
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 pub struct Config {
     pub mongodb: String,
     pub redis: String,
@@ -22,7 +22,7 @@ pub struct Config {
     pub test: Option<HashMap<String, String>>,
 }
 
-#[derive(Deserialize, Clap, Debug, PartialEq)]
+#[derive(Deserialize, Clap, Debug, PartialEq, Clone)]
 pub enum NodeRole {
     Master,
     Worker,
@@ -39,14 +39,14 @@ impl Display for NodeRole {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 pub struct StatsConfig {
     pub net_interface: Option<String>,
     pub sys_update_interval: u64, //ms
     pub scheduler_update_interval: u64, // ms
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 pub struct ProxyPoolConfig {
     pub update_http_proxy: bool,
     pub fetch_addr: String,
@@ -56,7 +56,7 @@ pub struct ProxyPoolConfig {
     pub socks5: Socks5ProxyOptions,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 pub struct Socks5ProxyOptions {
     pub enabled: bool,
     pub fetch: String,
@@ -65,7 +65,7 @@ pub struct Socks5ProxyOptions {
     pub servers: Option<Vec<String>>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize, Clone, PartialEq, Eq)]
 pub struct WorkerSchedulerOptions {
     pub enabled: bool,
     pub max_tasks: usize,
@@ -73,14 +73,14 @@ pub struct WorkerSchedulerOptions {
     pub fetch_threshold: usize,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone, PartialEq, Eq)]
 #[serde(untagged)]
 pub enum ResultSavingOption {
     SingleCollection(String),
     Independent{http: String, https: String, tcp: String, },
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone, PartialEq, Eq)]
 pub struct ScannerConfig {
     pub http: UniversalScannerOption,
     pub https: UniversalScannerOption,
@@ -92,20 +92,20 @@ pub struct ScannerConfig {
     pub save: ResultSavingOption,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone, PartialEq, Eq)]
 pub struct TCPScannerOptions {
     pub enabled: bool,
     pub ports: HashMap<u16, Vec<String>>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize, Clone, PartialEq, Eq)]
 pub struct UniversalScannerOption {
     pub enabled: bool,
     pub use_proxy: bool,
     pub socks5: Option<bool>,
     pub timeout: u64,
 }
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone, PartialEq, Eq)]
 pub struct TaskOptions {
     pub fetch: bool,
     pub clear_old_tasks: bool,
@@ -113,7 +113,7 @@ pub struct TaskOptions {
     pub proxy: Option<String>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone, PartialEq, Eq)]
 pub struct ServiceAnalyserOptions {
     pub analyse_on_scan: bool,
     pub rules: ServiceAnalyserRules,
@@ -122,19 +122,19 @@ pub struct ServiceAnalyserOptions {
     pub vuln_search: VulnerabilitiesSearchConfig,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone, PartialEq, Eq)]
 pub struct ServiceAnalyserRules {
     pub wappanalyser: String,
     pub ftp: String,
     pub ssh: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone, PartialEq, Eq)]
 pub struct VulnerabilitiesSearchConfig {
     pub exploitdb: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 #[serde(untagged)]
 pub enum ProxyVerify {
     Plain(String),

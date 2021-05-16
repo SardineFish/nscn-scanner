@@ -6,7 +6,7 @@ use mongodb::{Database, bson};
 use tokio::{task::{self, JoinHandle}, time::sleep};
 use chrono::Utc;
 
-use crate::{SchedulerStats, config::ResultSavingOption, error::*, scheduler::{SharedSchedulerInternalStats, SharedSchedulerStats, TaskPool, local_scheduler::LocalScheduler}, vul_search::VulnerabilitiesSearch};
+use crate::{SchedulerStats, config::{self, ResultSavingOption}, error::*, scheduler::{SharedSchedulerInternalStats, SharedSchedulerStats, TaskPool, local_scheduler::LocalScheduler}, vul_search::VulnerabilitiesSearch};
 use crate::config::GLOBAL_CONFIG;
 use crate::net_scanner::result_handler::NetScanRecord;
 
@@ -36,12 +36,13 @@ impl ServiceAnalyseScheduler {
             stats_internal: internal_stats.clone(),
         })
     }
-    pub fn start(&self, master_addr: String) -> Result<JoinHandle<()>, SimpleError> {
+    pub fn start(&self, master_addr: String, config: config::ServiceAnalyserOptions) -> Result<JoinHandle<()>, SimpleError> {
         let dispatcher = self.clone();
-        let (scheduler, fetch_task) = LocalScheduler::start("analyser".to_owned(), master_addr, &GLOBAL_CONFIG.analyser.scheduler);
+        let (scheduler, fetch_task) = 
+            LocalScheduler::start("analyser".to_owned(), master_addr, &config.scheduler);
         let future = join3(
             self.clone().stats_mornitor(5.0), 
-            dispatcher.dispatch_tasks(scheduler),
+            dispatcher.dispatch_tasks(scheduler, config),
             fetch_task
         );
         Ok(task::spawn(async move {
@@ -49,19 +50,19 @@ impl ServiceAnalyseScheduler {
         }))
     }
 
-    async fn dispatch_tasks(mut self, mut scheduler: LocalScheduler)
+    async fn dispatch_tasks(mut self, mut scheduler: LocalScheduler, config: config::ServiceAnalyserOptions)
     {
-        if !GLOBAL_CONFIG.analyser.scheduler.enabled {
+        if !config.scheduler.enabled {
             return;
         }
         let resources_pool: Vec<TaskResources> = join_all(
-            (0..GLOBAL_CONFIG.analyser.scheduler.max_tasks)
+            (0..config.scheduler.max_tasks)
             .into_iter()
             .map(|_|async { TaskResources::new(self.db.clone(), self.redis.clone()).await.unwrap() })
         ).await;
 
         let mut task_pool = TaskPool::new(
-            GLOBAL_CONFIG.analyser.scheduler.max_tasks, 
+            config.scheduler.max_tasks, 
             self.stats_internal.clone(), 
             resources_pool);
 
@@ -78,6 +79,10 @@ impl ServiceAnalyseScheduler {
     
     pub async fn stats(&self) -> SchedulerStats {
         self.stats.clone_inner().await
+    }
+
+    pub async fn reset_stats(&self) {
+        self.stats.reset().await
     }
 
     async fn try_dispatch_task(&mut self, task_pool: &mut TaskPool<TaskResources>, scheduler: &mut LocalScheduler) -> Result<(), SimpleError> {

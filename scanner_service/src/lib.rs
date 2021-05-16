@@ -25,6 +25,7 @@ use proxy::ProxyPool;
 use net_scanner::{scanner_master::ScannerMasterScheduler, scheduler::{NetScanner}};
 use reqwest::StatusCode;
 use scheduler::{SharedSchedulerStats, master_scheduler::{MasterScheduler}};
+use serde_json::json;
 use stats_mornitor::{SystemStatsMornitor};
 use tokio::{sync::{Mutex}, task::{self, JoinHandle}, time::sleep};
 
@@ -45,6 +46,8 @@ struct WorkerState {
     master_addr: String,
     scanner_handeler: Option<JoinHandle<()>>,
     analyser_handler: Option<JoinHandle<()>>,
+    scanner_config: ScannerConfig,
+    analyser_config: ServiceAnalyserOptions,
 }
 
 impl WorkerState {
@@ -91,18 +94,35 @@ impl WorkerService {
         })
     }
 
-    pub async fn start(&self, master_addr: String) -> Result<(), SimpleError>{
-        let current_master = {
+    pub async fn start(&self, master_addr: String, scanner_config: ScannerConfig, analyser_config: ServiceAnalyserOptions) -> Result<(), SimpleError>{
+        let should_restart = {
             let guard = self.current_state.lock().await;
-            guard.as_ref().map(|state| state.master_addr.to_owned()).unwrap_or(String::new())
+            match guard.as_ref() {
+                Some(state)  
+                    if state.master_addr != master_addr 
+                    || state.scanner_config != scanner_config 
+                    || state.analyser_config != analyser_config => true,
+                None => true,
+                _ => false,
+            }
         };
-        if current_master != master_addr {
+        if should_restart {
             self.abort().await;
 
+            self.scanner.reset_stats().await;
+            self.analyser.reset_stats().await;
             let state = WorkerState {
-                analyser_handler: self.analyser.start(master_addr.clone()).log_error("start-analyser").ok(),
-                scanner_handeler: self.scanner.start(master_addr.clone()).log_error("start-scanner").ok(),
-                master_addr: master_addr
+                analyser_handler: match analyser_config.scheduler.enabled {
+                    true => self.analyser.start(master_addr.clone(), analyser_config.clone()).log_error("start-analyser").ok(),
+                    false => None,
+                },
+                scanner_handeler: match scanner_config.scheduler.enabled {
+                    true => self.scanner.start(master_addr.clone(), scanner_config.clone()).log_error("start-scanner").ok(),
+                    false => None,
+                },
+                master_addr,
+                scanner_config,
+                analyser_config
             };
 
             let mut guard = self.current_state.lock().await;
@@ -191,8 +211,8 @@ impl MasterService {
             .map(|worker_addr| {
                 let client = self.client.clone();
                 async move {
-                    let response = client.post(format!("http://{}/api/scheduler/master", worker_addr))
-                    .json(&GLOBAL_CONFIG.listen)
+                    let response = client.post(format!("http://{}/api/scheduler/setup", worker_addr))
+                    .json(&json!({"master_addr": &GLOBAL_CONFIG.listen}))
                     .send()
                     .await;
                     match response {
@@ -226,6 +246,10 @@ impl MasterService {
 
     pub fn config(&self) -> &'static Config{
         &GLOBAL_CONFIG
+    }
+
+    pub fn http_client(&self) -> &reqwest::Client {
+        &self.client
     }
 
     pub async fn fetch_address_list(&self, url: &str) -> Result<Vec<String>, SimpleError> {

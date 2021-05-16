@@ -102,6 +102,10 @@ impl SharedSchedulerStats {
         guard.jobs_per_second = stats.dispatched_jobs as f64 / duration_seconds;
         guard.pending_tasks = stats.pending_tasks;
     }
+    pub async fn reset(&self) {
+        let mut guard = self.0.lock().await;
+        *guard = SchedulerStats::default();
+    }
     pub async fn clone_inner(&self) -> SchedulerStats {
         let guard = self.0.lock().await;
         guard.clone()

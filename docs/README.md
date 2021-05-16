@@ -313,12 +313,65 @@ e.g. `GET /api/scan/123.123.123.123/24`
 
 --------
 
-## Register Master
-`POST /api/scheduler/master`
+## Setup Worker Scheduler State
+`POST /api/scheduler/setup`
 ### Request
 ```json
-"localhost:3000"
+{
+    "master_addr": "localhost:3000",
+    "scanner": {
+        "http": {
+            "enabled": true,
+            "use_proxy": true,
+            "socks5": true,
+            "timeout": 5
+        },
+        "https": {
+            "enabled": true,
+            "use_proxy": true,
+            "socks5": true,
+            "timeout": 5
+        },
+        "ftp": {
+            "enabled": true,
+            "use_proxy": true,
+            "timeout": 5
+        },
+        "ssh": {
+            "enabled": true,
+            "use_proxy": true,
+            "timeout": 5
+        },
+        "scheduler": {
+            "enabled": true,
+            "max_tasks": 400,
+            "fetch_count": 5,
+            "fetch_threshold": 3
+        },
+    },
+    "analyser": {
+        "scheduler": {
+            "enabled": true,
+            "max_tasks": 1,
+            "fetch_count": 5,
+            "fetch_threshold": 3
+        },
+    }
+    
+}
+
 ```
+
+--------
+
+## Setup Specific Worker Scheduler Config 
+`POST /api/scheduler/{worker_addr}/setup`
+### Request
+```
+See above
+```
+
+--------
 
 ## List workers
 `GET /api/scheduler/workers`
