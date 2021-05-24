@@ -7,7 +7,7 @@ use crate::error::SimpleError;
 
 #[derive(Clone)]
 pub struct IP2Geo {
-    geo_data: Arc<HashMap<i32, GeoData>>,
+    geo_data: Arc<HashMap<String, GeoData>>,
 }
 
 impl IP2Geo {
@@ -20,10 +20,10 @@ impl IP2Geo {
     pub fn search_ip(&self, ip: &str) -> Option<IPGeoData> {
         let info = ip2region::memory_search(ip).ok()?;
         let mut geo = IPGeoData::from(info);
-        if let Some(city) = self.geo_data.get(&geo.citycode) {
+        if let Some(city) = self.geo_data.get(&geo.city) {
             geo.coord = Some(city.center.clone());
         } else {
-            log::warn!("Unknown IP Geo {}:{}>{}>{}>{}", geo.citycode, geo.country, geo.region, geo.province, geo.city);
+            // log::warn!("Unknown IP Geo {}:{}>{}>{}>{}", geo.citycode, geo.country, geo.region, geo.province, geo.city);
         }
         Some(geo)
     }
