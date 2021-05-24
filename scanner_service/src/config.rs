@@ -116,7 +116,7 @@ pub struct TaskOptions {
 #[derive(Deserialize, Clone, PartialEq, Eq)]
 pub struct ServiceAnalyserOptions {
     pub analyse_on_scan: bool,
-    pub rules: ServiceAnalyserRules,
+    pub externals: ServiceAnalyserRules,
     pub scheduler: WorkerSchedulerOptions,
     pub save: String,
     pub vuln_search: VulnerabilitiesSearchConfig,
@@ -124,9 +124,10 @@ pub struct ServiceAnalyserOptions {
 
 #[derive(Deserialize, Clone, PartialEq, Eq)]
 pub struct ServiceAnalyserRules {
-    pub wappanalyser: String,
-    pub ftp: String,
-    pub ssh: String,
+    pub wappanalyser_rules: String,
+    pub ftp_rules: String,
+    pub ssh_rules: String,
+    pub city_coords: String,
 }
 
 #[derive(Deserialize, Clone, PartialEq, Eq)]

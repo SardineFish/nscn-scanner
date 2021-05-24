@@ -10,7 +10,7 @@ use crate::{SchedulerStats, config::{self, ResultSavingOption}, error::*, schedu
 use crate::config::GLOBAL_CONFIG;
 use crate::net_scanner::result_handler::NetScanRecord;
 
-use super::{ftp::FTPServiceAnalyser, ssh::SSHServiceAnalyser, web::WebServiceAnalyser};
+use super::{ftp::FTPServiceAnalyser, ip_geo::IP2Geo, ssh::SSHServiceAnalyser, web::WebServiceAnalyser};
 use super::ServiceAnalyseResult;
 
 const KEY_ANALYSE_TASKQUEUE: &str = "analyse_taskqueue";
@@ -111,6 +111,7 @@ struct TaskResources {
     web_analyser: WebServiceAnalyser,
     ftp_analyser: FTPServiceAnalyser,
     ssh_analyser: SSHServiceAnalyser,
+    ip_geo: IP2Geo,
     db: Database,
     redis: redis::Client,
 }
@@ -119,16 +120,19 @@ impl TaskResources {
     async fn new(db: Database, redis: redis::Client) -> Result<Self, SimpleError>  {
         Ok(Self {
             ftp_analyser: FTPServiceAnalyser::from_json(
-                &GLOBAL_CONFIG.analyser.rules.ftp, 
+                &GLOBAL_CONFIG.analyser.externals.ftp_rules, 
                 VulnerabilitiesSearch::new(redis.clone(), db.clone()).await?
             )?,
             ssh_analyser: SSHServiceAnalyser::from_json(
-                &GLOBAL_CONFIG.analyser.rules.ssh, 
+                &GLOBAL_CONFIG.analyser.externals.ssh_rules, 
                 VulnerabilitiesSearch::new(redis.clone(), db.clone()).await?
             )?,
             web_analyser: WebServiceAnalyser::init_from_json(
-                &GLOBAL_CONFIG.analyser.rules.wappanalyser,
+                &GLOBAL_CONFIG.analyser.externals.wappanalyser_rules,
                 VulnerabilitiesSearch::new(redis.clone(), db.clone()).await?
+            )?,
+            ip_geo: IP2Geo::from_json(
+                &GLOBAL_CONFIG.analyser.externals.city_coords
             )?,
             db: db,
             redis: redis,
@@ -192,6 +196,8 @@ impl ServiceAnalyseTask {
             _ => panic!("Unimplement"),
         }
 
+        let geo = resource.ip_geo.search_ip(&self.addr);
+
         let time: bson::DateTime = Utc::now().into();
         let collection = resource.db.collection::<Document>(&GLOBAL_CONFIG.analyser.save);
         let query = doc! {
@@ -204,6 +210,7 @@ impl ServiceAnalyseTask {
                 "web": bson::to_bson(&web_services)?,
                 "ftp": bson::to_bson(&ftp_services)?,
                 "ssh": bson::to_bson(&ssh_services)?,
+                "geo": bson::to_bson(&geo)?,
             }
         };
         let mut opts = mongodb::options::UpdateOptions::default();

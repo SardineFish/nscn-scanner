@@ -1058,6 +1058,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "ip2region"
+version = "0.2.0"
+dependencies = [
+ "lazy_static",
+]
+
+[[package]]
 name = "ipconfig"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1321,6 +1328,7 @@ dependencies = [
  "env_logger",
  "futures",
  "httparse",
+ "ip2region",
  "lazy_static",
  "log",
  "mongodb",

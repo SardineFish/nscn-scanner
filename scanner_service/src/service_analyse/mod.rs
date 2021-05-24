@@ -2,6 +2,7 @@ pub mod web;
 pub mod scheduler;
 pub mod ftp;
 pub mod ssh;
+pub mod ip_geo;
 
 use serde::{Deserialize, Serialize};
 
