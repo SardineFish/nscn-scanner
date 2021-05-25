@@ -283,3 +283,13 @@
         }
     }
 ]
+
+[
+    {
+        $group: {
+            _id: "$geo.location",
+            count: { $sum: 1 },
+            geo: { $first: "$geo" },
+        }
+    }
+]

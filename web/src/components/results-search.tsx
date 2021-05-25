@@ -1,11 +1,12 @@
 import { Button, Checkbox, List, message, Space, Spin, Tag } from "antd";
 import Search from "antd/lib/input/Search";
 import React, { useEffect, useState } from "react";
-import { API, BreifResult } from "../api/api";
+import { API, BreifResult, GeoStats } from "../api/api";
 import { DatabaseOutlined, DownloadOutlined, ExclamationCircleOutlined } from "@ant-design/icons";
 import InfiniteScroll from "react-infinite-scroller";
 import { CheckboxChangeEvent } from "antd/lib/checkbox";
 import { ScanResultDetail } from "./result-detail";
+import { ResultMap } from "./result-map";
 
 type LoadFunc = (skip: number, count: number, onlineOnly?: boolean) => Promise<BreifResult[]>;
 
@@ -19,7 +20,15 @@ export const ResultSearch: React.FC = () =>
     const [hasMore, setHasMore] = useState(true);
     const [onlineOnly, setOnlineOnly] = useState(true);
     const [showDetail, setShowDetail] = useState("");
+    const [geoStats, setGeoStats] = useState<GeoStats[]>([]);
 
+    useEffect(() =>
+    {
+        (async () =>
+        {
+            setGeoStats(await searchGeoStats("0.0.0.0/0"));
+        })();
+    }, []);
     const onSearch = async (value: string) =>
     {
         try
@@ -30,6 +39,7 @@ export const ResultSearch: React.FC = () =>
             setHasMore(hasMore);
             setSkip(0);
             setData([]);
+            setGeoStats(await searchGeoStats(value));
             // loadMore({ ip: ip, cidr: cidr }, [], true);
         }
         catch (err)
@@ -89,6 +99,7 @@ export const ResultSearch: React.FC = () =>
 
     return (
         <section className="result-search">
+            <ResultMap data={geoStats}/>
             <Search
                 className="search-input"
                 placeholder="123.123.123.123 or 123.123.123.0/24"
@@ -247,6 +258,53 @@ function searchLoadUrl(input: string): (skip: number, count: number, onlineOnly?
         }
         else
             return (skip, count, onlineOnly = false) => API.search.searchServiceVersionUrl({ service, version, skip, count, online_only: onlineOnly ? 1 : 0 });
+    }
+    throw new Error(`Invalid search pattern`);
+}
+
+function searchGeoStats(input: string): Promise<GeoStats[]>
+{
+    if (patterns.empty.test(input))
+        return API.geoStats.all({});
+    let matches = patterns.ip.exec(input);
+    if (matches)
+    {
+        const ip = matches[1];
+        let cidr = parseInt(matches[2]);
+        if (!isNaN(cidr))
+        {
+            return API.geoStats.byIpRange({ ip: ip, cidr });
+        }
+        else
+            return API.geoStats.byIpRange({ ip, cidr: 32 });
+    }
+    else if (patterns.port.test(input))
+    {
+        const port = parseInt(input);
+        return API.geoStats.byPort({ port });
+    }
+    matches = patterns.serviceVersion.exec(input);
+    if (matches)
+    {
+        const service = matches[1];
+        const version = matches[2];
+        if (!version)
+        {
+            switch (service.toLowerCase())
+            {
+                case "http":
+                    return searchGeoStats("80");
+                case "https":
+                    return searchGeoStats("443");
+                case "ftp":
+                    return searchGeoStats("21");
+                case "ssh":
+                    return searchGeoStats("22");
+            }
+            return API.geoStats.byServiceName({ service });
+        }
+        else
+            return API.geoStats.byServiceVersion({ service, version });
     }
     throw new Error(`Invalid search pattern`);
 }

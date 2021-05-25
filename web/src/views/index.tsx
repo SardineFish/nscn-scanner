@@ -14,6 +14,7 @@ import { TaskPage } from "./task-page";
 
 const rootElement = document.querySelector("#root");
 
+
 const App: React.FC = () =>
 {
     return (<Router>

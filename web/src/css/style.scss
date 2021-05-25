@@ -1,12 +1,20 @@
+@import '~antd/dist/antd.dark.css';
 
+.ant-layout-header {
+    z-index: 10;
+}
 
 .scan-stats {
-    height: 400px;
     display: flex;
     flex-flow: row nowrap;
     align-items: center;
     justify-content: center;
     user-select: none;
+    z-index: 10;
+    position: relative;
+    pointer-events: none;
+    margin-top: 40vh;
+    margin-bottom: 5em;
 
     .ant-statistic {
         margin: 0 5em;
@@ -17,14 +25,31 @@
     }
 }
 
+// .ant-tag-green {
+//     background: #6abe3924;
+// }
+
+.ant-layout {
+    background-color: #132230;
+}
+
 .result-search {
     width: 800px;
     margin: auto;
     display: flex;
     flex-flow: column nowrap;
     align-items: center;
+    z-index: 10;
+    position: relative;
+    & > .map {
+        position: fixed;
+    }
+    & > * {
+        position: relative;
+    }
     .search-input {
         width: 800px;
+        background-color: rgba(0, 0, 0, 0.3);
     }
     .scan-results {
         margin-top: 2em;
@@ -34,10 +59,12 @@
         
 
         .ant-list-item {
-            background-color: white;
+            background-color: #334554;
+            background-color: #0d263c;
             padding: 1em;
             margin: 1em 0;
-            box-shadow: 0 0 20px rgba(0,0,0,0.02);
+            box-shadow: 0 0 20px rgb(0 0 0 / 30%);
+            border: none;
         }
         .ant-list-item-meta {
             margin-bottom: 0;
@@ -85,6 +112,7 @@
     }
     .ant-menu {
         border: none 0;
+        background-color: transparent;
     }
     .ant-page-header {
         padding: 0;
@@ -137,7 +165,6 @@
     flex-flow: column;
     align-items: center;
     justify-content: center;
-    background: gainsboro;
     margin-top: 3em;
 }
 
@@ -219,4 +246,15 @@
 }
 .task-upload-dragger.ant-upload-drag-hover .drag-hint {
     display: flex;
+}
+
+.map {
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 0;
+    cursor: default;
+    pointer-events: none;
 }

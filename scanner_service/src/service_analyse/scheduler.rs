@@ -1,4 +1,4 @@
-use std::{collections::HashMap, time::Duration};
+use std::{collections::HashMap, str::FromStr, time::Duration};
 use bson::{Document, doc};
 use futures::future::{join3, join_all};
 use serde::{Serialize, Deserialize};
@@ -203,9 +203,11 @@ impl ServiceAnalyseTask {
         let query = doc! {
             "addr": &self.addr,
         };
+        let addr_int: u32 = std::net::Ipv4Addr::from_str(&self.addr)?.into();
         let update = doc! {
             "$set": {
                 "addr": &self.addr,
+                "addr_int": addr_int as i64,
                 "last_update": bson::to_bson(&time)?,
                 "web": bson::to_bson(&web_services)?,
                 "ftp": bson::to_bson(&ftp_services)?,

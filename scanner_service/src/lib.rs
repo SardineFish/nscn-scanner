@@ -31,7 +31,7 @@ use tokio::{sync::{Mutex}, task::{self, JoinHandle}, time::sleep};
 
 use error::*;
 
-pub use service_analyse::{scheduler::ServiceAnalyseScheduler, scheduler::ServiceRecord, ServiceAnalyseResult};
+pub use service_analyse::{scheduler::ServiceAnalyseScheduler, scheduler::ServiceRecord, ServiceAnalyseResult, ip_geo::IPGeoData};
 pub use config::Config;
 pub use net_scanner::result_handler::NetScanRecord;
 pub use address::{parse_ipv4_cidr};

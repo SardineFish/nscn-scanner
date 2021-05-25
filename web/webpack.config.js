@@ -1,5 +1,6 @@
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 const Path = require("path");
+const webpack = require('webpack');
 
 /** @typedef {import("webpack").Configuration} */
 
@@ -73,6 +74,11 @@ module.exports = {
             inject: true,
             minify: true,
             chunks: ["index"],
+        }),
+        new webpack.DefinePlugin({
+            "process.env.NODE_ENV": '"production"',
+            "process.env.NODE_DEBUG": '0',
+            "global": "window",
         })
     ]
 }

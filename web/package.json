@@ -30,9 +30,13 @@
   "dependencies": {
     "@ant-design/charts": "^1.1.2",
     "@ant-design/icons": "^4.6.2",
+    "@antv/l7": "^2.3.10",
+    "@antv/l7-maps": "^2.3.10",
+    "@antv/l7-react": "^2.3.0",
     "@sardinefish/asn1": "^1.0.4",
     "@sardinefish/x509": "^1.2.1",
     "antd": "^4.15.2",
+    "assert": "^2.0.0",
     "buffer": "^6.0.3",
     "events": "^3.3.0",
     "react": "^16.0.0",

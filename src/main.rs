@@ -168,6 +168,9 @@ pub fn parse_ipv4_cidr(cidr: &str) -> Result<Range<u32>, SimpleError> {
 
         let cidr: i32 = slices[1].parse().unwrap();
         let offset = 32 - cidr;
+        if cidr == 0 {
+            return Ok(0..u32::MAX);
+        }
         Ok(base_ip..base_ip + (1 << offset))
     }
 }

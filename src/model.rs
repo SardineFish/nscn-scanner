@@ -2,7 +2,7 @@ use std::{collections::HashMap, ops::Range};
 
 use serde::{Deserialize, Serialize};
 use mongodb::{Database, bson::{self, doc,  Document}, options::{FindOptions, Hint}};
-use nscn::{NetScanRecord, ServiceRecord, VulnInfo, error::SimpleError};
+use nscn::{IPGeoData, NetScanRecord, ServiceRecord, VulnInfo, error::SimpleError};
 use futures::StreamExt;
 
 use crate::error::ServiceError;
@@ -48,6 +48,12 @@ pub struct AnalyseVulnDetails {
 }
 
 
+#[derive(Serialize, Deserialize)]
+pub struct AnalyseGeometryStats {
+    pub geo: IPGeoData,
+    pub count: i64,
+}
+
 impl Model {
     pub fn new(db: Database) -> Self {
         Self {
@@ -87,6 +93,10 @@ impl Model {
                     "key": {"addr_int": 1},
                     "name": "addr_int_1",
                     "unique": true,
+                },
+                {
+                    "key": {"geo.location": "2dsphere"},
+                    "name": "geo_location",
                 },
             ]
         }, None).await?;
@@ -147,8 +157,7 @@ impl Model {
         Ok(docs)
     }
 
-    pub async fn get_details_by_ip(&self, addr_int: u32) -> Result<ScanAnalyseResult, ServiceError>
-    {
+    pub async fn get_details_by_ip(&self, addr_int: u32) -> Result<ScanAnalyseResult, ServiceError> {
         let query = doc! {
             "addr_int": addr_int as i64
         };
@@ -317,6 +326,97 @@ impl Model {
         self.query_union_analyse_with_scan(pipeline, skip, count).await
     }
 
+    pub async fn geo_stats_by_ip_range(&self, range: Range<u32>) -> Result<Vec<AnalyseGeometryStats>, ServiceError> {
+        self.geo_count(vec![
+            doc! {
+                "$match": {
+                    "addr_int": {
+                        "$gte": range.start as i64,
+                        "$lt": range.end as i64,
+                    }
+                }
+            }
+        ]).await
+    }
+
+    pub async fn geo_stats_by_service_name(&self, service_name: &str) -> Result<Vec<AnalyseGeometryStats>, ServiceError> {
+        let web_key = format!("web.{}", service_name);
+        let ftp_key = format!("ftp.{}", service_name);
+        let ssh_key = format!("ssh.{}", service_name);
+
+        self.geo_count(vec![
+            doc!{
+                "$match": {
+                    "$or": [
+                        {
+                            web_key: { "$gt": {} },
+                        },
+                        {
+                            ftp_key: { "$gt": {} },
+                        },
+                        {
+                            ssh_key: { "$gt": {} },
+                        }
+
+                    ]
+                }
+            }
+        ]).await
+    }
+
+    pub async fn geo_stats_by_service_version(&self, service_name: &str, version: &str) -> Result<Vec<AnalyseGeometryStats>, ServiceError> {
+        let web_key = format!("web.{}.version", service_name);
+        let ftp_key = format!("ftp.{}.version", service_name);
+        let ssh_key = format!("ssh.{}.version", service_name);
+
+        self.geo_count(vec![
+            doc! {
+                "$match": {
+                    "$or": [
+                        {
+                            web_key: version,
+                        },
+                        {
+                            ftp_key: version,
+                        },
+                        {
+                            ssh_key: version,
+                        }
+
+                    ]
+                }
+            }
+        ]).await
+    }
+
+    pub async fn geo_stats_by_scanner(&self, scanner: &str) -> Result<Vec<AnalyseGeometryStats>, ServiceError> {
+        self.geo_count(vec![
+            doc! {
+                "$match": {
+                    "any_available": true,
+                    format!("scan.{}.success", scanner): {"$gt": 0}
+                }
+            }
+        ]).await
+    }
+
+    async fn geo_count(&self, mut pipeline: Vec<Document>) -> Result<Vec<AnalyseGeometryStats>, ServiceError> {
+        pipeline.push(doc! {
+            "$group": {
+                "_id": "$geo.location",
+                "count": {"$sum": 1},
+                "geo": {"$first": "$geo"},
+            }
+        });
+        let result: Vec<AnalyseGeometryStats> = self.db.collection::<Document>("analyse").aggregate(pipeline, None)
+            .await?
+            .filter_map(|doc| async move {doc.ok().and_then(|doc|bson::from_document::<AnalyseGeometryStats>(doc).ok())})
+            .collect()
+            .await;
+
+        Ok(result)
+    }
+
     async fn query_union_scan_with_analyse(&self, mut pipeline: Vec<Document>, skip: usize, count: usize) -> Result<Vec<ScanAnalyseResult>, ServiceError> {
         pipeline.push(doc! {
             "$skip": skip as i64,
@@ -354,6 +454,7 @@ impl Model {
             .await;
         Ok(results)
     }
+
 
     async fn query_union_analyse_with_scan(&self, mut pipeline: Vec<Document>, skip: usize, count: usize) -> Result<Vec<ScanAnalyseResult>, ServiceError> {
         pipeline.push(doc! {

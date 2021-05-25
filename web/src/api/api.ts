@@ -163,6 +163,23 @@ export interface WorkerConfig
 
 }
 
+export interface GeoStats
+{
+    count: number,
+    geo: {
+        citycode: number,
+        city: string,
+        province: string,
+        region: string,
+        country: string,
+        isp: string,
+        location: {
+            type: "Point",
+            coordinates: [number, number],
+        }
+    }
+}
+
 const QueryParams = DeclareQuery({
     skip: "number",
     count: "number",
@@ -177,6 +194,7 @@ const SkipCountParams = DeclareQuery({
     skip: "number",
     count: "number",
 });
+
 
 
 export const API = {
@@ -252,6 +270,22 @@ export const API = {
             .query(QueryParams)
             .urlBuilder(),
         
+    },
+    geoStats: {
+        all: api("GET", "/api/search/geo_stats/all")
+            .response<GeoStats[]>(),
+        byIpRange: api("GET", "/api/search/geo_stats/{ip}/{cidr}")
+            .path({ ip: IPV4Field, cidr: "number" })
+            .response<GeoStats[]>(),
+        byServiceName: api("GET", "/api/serach/geo_stats/service/{service}")
+            .path({ service: "string" })
+            .response<GeoStats[]>(),
+        byServiceVersion: api("GET", "/api/search/geo_stats/service/{service}/{version}")
+            .path({ service: "string", version: "string" })
+            .response<GeoStats[]>(),
+        byPort: api("GET", "/api/search/geo_stats/port/{port}")
+            .path({ port: "number" })
+            .response<GeoStats[]>(),
     },
     stats: {
         getWorkerStats: api("GET", "/api/stats/{worker}/all")
