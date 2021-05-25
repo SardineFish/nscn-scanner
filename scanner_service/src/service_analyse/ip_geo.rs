@@ -21,7 +21,7 @@ impl IP2Geo {
         let info = ip2region::memory_search(ip).ok()?;
         let mut geo = IPGeoData::from(info);
         if let Some(city) = self.geo_data.get(&geo.city) {
-            geo.coordinates = Some(city.center.clone());
+            geo.location = GeoJSON::Point{ coordinates: city.center.clone() };
         } else {
             // log::warn!("Unknown IP Geo {}:{}>{}>{}>{}", geo.citycode, geo.country, geo.region, geo.province, geo.city);
         }
@@ -38,11 +38,16 @@ struct GeoData {
 }
 
 #[derive(Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum GeoJSON {
+    Point{coordinates: [f64; 2]},
+}
+
+
+#[derive(Serialize, Deserialize)]
 pub struct IPGeoData {
     pub citycode: i32,
-    #[serde(rename = "type")]
-    pub geo_json_type: &'static str,
-    pub coordinates: Option<[f64; 2]>,
+    pub location: GeoJSON,
     pub country: String,
     pub province: String,
     pub isp: String,
@@ -54,8 +59,7 @@ impl<'s> From<IpInfo<'s>> for IPGeoData {
         Self {
             citycode: info.city_id as i32,
             city: info.city.to_owned(),
-            geo_json_type: "Point",
-            coordinates: Some([0.0, 0.0]),
+            location: GeoJSON::Point{ coordinates: [0.0, 0.0] },
             country: info.country.to_owned(),
             isp: info.ISP.to_owned(),
             province: info.province.to_owned(),
