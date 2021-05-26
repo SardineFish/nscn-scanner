@@ -277,7 +277,7 @@ export const API = {
         byIpRange: api("GET", "/api/search/geo_stats/{ip}/{cidr}")
             .path({ ip: IPV4Field, cidr: "number" })
             .response<GeoStats[]>(),
-        byServiceName: api("GET", "/api/serach/geo_stats/service/{service}")
+        byServiceName: api("GET", "/api/search/geo_stats/service/{service}")
             .path({ service: "string" })
             .response<GeoStats[]>(),
         byServiceVersion: api("GET", "/api/search/geo_stats/service/{service}/{version}")

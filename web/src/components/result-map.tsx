@@ -36,7 +36,7 @@ export function ResultMap(props: {data: GeoStats[]})
         className="map"
         onSceneLoaded={onload}
         map={{
-            center: [104.052044, 31.765476],
+            center: [104.052044, 28],
             zoom: 4.05,
             style: "amap://styles/ec237c7c388e464ef756af612f42523f",
             token: "157ffbd8ba3f68fcb611c1a067ef5bc7",
@@ -50,7 +50,8 @@ export function ResultMap(props: {data: GeoStats[]})
             shape={{ values: "circle" }}
             size={{
                 field: "count",
-                values: [1, 30],
+                values: [4, 30],
+                scale: "log",
             }}
             color={{
                 values: "#9dff8052"
