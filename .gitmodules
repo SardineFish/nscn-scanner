@@ -3,4 +3,4 @@
 	url = git@github.com:lionsoul2014/ip2region.git
 [submodule "thirdparty/exploitdb"]
 	path = thirdparty/exploitdb
-	url = https://github.com/offensive-security/exploitdb.git
+	url = git@github.com:offensive-security/exploitdb.git
