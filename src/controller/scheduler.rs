@@ -63,7 +63,7 @@ impl From<ServiceAnalyserOptions> for WorkerAnalyserConfig {
 
 #[post("{task_key}/fetch")]
 async fn fetch_tasks(path: Path<String>, query: Query<FecthCount>, service: Data<MasterService>) -> ApiResult<Vec<String>> {
-    log::info!("Fetch {}", path.as_str());
+    // log::info!("Fetch {}", path.as_str());
     let task = match path.as_str() {
         "scanner" => {
             service.scanner().scheduler().fetch_tasks(query.count).await?

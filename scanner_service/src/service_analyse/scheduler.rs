@@ -154,7 +154,7 @@ impl ServiceAnalyseTask {
     }
 
     async fn analyse(self, resource: & mut TaskResources) -> Result<(), SimpleError> {
-        log::info!("Analyse {}", self.addr);
+        // log::info!("Analyse {}", self.addr);
 
         let mut web_services: HashMap::<String, ServiceAnalyseResult> = HashMap::new();
         let mut ftp_services: HashMap::<String, ServiceAnalyseResult> = HashMap::new();
