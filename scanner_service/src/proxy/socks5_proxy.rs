@@ -1,4 +1,5 @@
 use std::{sync::Arc, time};
+use futures::{future::join_all};
 use serde::{Deserialize};
 
 use chrono::{DateTime, NaiveDateTime, TimeZone, Utc};
@@ -56,8 +57,12 @@ pub struct Socks5ProxyUpdater {
 }
 impl Socks5ProxyUpdater {
     pub async fn start(self) {
-        for _ in 0..GLOBAL_CONFIG.proxy_pool.socks5.pool_size {
-            self.fetch_new_proxy().await;
+        if let Some(fetch_url) = &GLOBAL_CONFIG.proxy_pool.socks5.first_fetch {
+            self.fetch_new_proxy(fetch_url).await;
+        } else {
+            for _ in 0..GLOBAL_CONFIG.proxy_pool.socks5.pool_size {
+                self.fetch_new_proxy(&GLOBAL_CONFIG.proxy_pool.socks5.fetch).await;
+            }
         }
     }
     pub fn start_monitor(proxy_pool: &ProxyPool) {
@@ -88,18 +93,22 @@ impl Socks5ProxyUpdater {
             sleep(std::time::Duration::from_millis(duration.num_milliseconds() as u64)).await;
             log::info!("{} expired", addr);
 
-            self.fetch_new_proxy().await;
+            self.fetch_new_proxy(&GLOBAL_CONFIG.proxy_pool.socks5.fetch).await;
 
             let mut guard = self.pool.lock().await;
             guard.iter().position(|proxy| proxy.addr == addr)
                 .map(|idx| guard.remove(idx))
                 .map(|proxy| log::info!("Proxy {} expired", proxy.addr));
+            
+            // if guard.len() < GLOBAL_CONFIG.proxy_pool.socks5.pool_size {
+            //     self.fetch_new_proxy().await;
+            // }
         });
     }
-    async fn fetch_new_proxy(&self) {
+    async fn fetch_new_proxy(&self, addr: &str) {
         loop {
-            match self.fecth_proxy().await {
-                Ok(proxy) => {
+            match self.fecth_proxy(addr).await {
+                Ok(proxy_list) => for proxy in proxy_list {
                     log::info!("Fetched socks5 proxy {}", proxy.addr);
                     self.clone().manage_expire(proxy.addr.clone(), proxy.deadline);
                     let mut guard = self.pool.lock().await;
@@ -111,8 +120,8 @@ impl Socks5ProxyUpdater {
             sleep(time::Duration::from_secs(1)).await;
         }
     }
-    async fn fecth_proxy(&self) -> Result<Socks5ProxyInfo, SimpleError> {
-        let data = reqwest::get(GLOBAL_CONFIG.proxy_pool.socks5.fetch.as_str())
+    async fn fecth_proxy(&self, addr: &str) -> Result<Vec<Socks5ProxyInfo>, SimpleError> {
+        let data = reqwest::get(addr)
             .await?
             .json::<FetchResponse>()
             .await?;
@@ -124,27 +133,42 @@ impl Socks5ProxyUpdater {
         if data.data.len() < 1 {
             Err("Empty proxy")?
         }
-        let time = NaiveDateTime::parse_from_str(&data.data[0].expire_time, "%Y-%m-%d %H:%M:%S")?;
-        let deadline = chrono_tz::Asia::Shanghai
-            .from_local_datetime(&time)
-            .single()
-            .ok_or("Time converting failed")?
-            .with_timezone(&Utc);
 
-        let proxy_addr = format!("{}:{}", data.data[0].ip, data.data[0].port);
-        let client = reqwest::Client::builder()
-            .proxy(reqwest::Proxy::http(format!("socks5://{}", proxy_addr))?)
-            .proxy(reqwest::Proxy::https(format!("socks5://{}", proxy_addr))?)
-            .timeout(std::time::Duration::from_secs(GLOBAL_CONFIG.scanner.http.timeout))
-            .build()?;
+        let proxy_list: Vec<Socks5ProxyInfo> = join_all(data.data.into_iter()
+            .map(|data| async move {
+                let time = NaiveDateTime::parse_from_str(&data.expire_time, "%Y-%m-%d %H:%M:%S")?;
+                let deadline = chrono_tz::Asia::Shanghai
+                    .from_local_datetime(&time)
+                    .single()
+                    .ok_or("Time converting failed")?
+                    .with_timezone(&Utc);
 
-        Ok(Socks5ProxyInfo {
-            addr: format!("{}:{}", data.data[0].ip, data.data[0].port),
-            failure_count: 0,
-            fetch_time: Utc::now(),
-            deadline,
-            http_client: client,
-        })
+                let proxy_addr = format!("{}:{}", data.ip, data.port);
+                let client = reqwest::Client::builder()
+                    .proxy(reqwest::Proxy::http(format!("socks5://{}", proxy_addr))?)
+                    .proxy(reqwest::Proxy::https(format!("socks5://{}", proxy_addr))?)
+                    .timeout(std::time::Duration::from_secs(GLOBAL_CONFIG.scanner.http.timeout))
+                    .build()?;
+
+                Result::<Socks5ProxyInfo, SimpleError>::Ok(Socks5ProxyInfo {
+                    addr: format!("{}:{}", data.ip, data.port),
+                    failure_count: 0,
+                    fetch_time: Utc::now(),
+                    deadline,
+                    http_client: client,
+                })
+            })).await
+            .into_iter()
+            .filter_map(|proxy| match proxy {
+                Ok(proxy) => Some(proxy),
+                Err(err) => {
+                    log::error!("Failed to create proxy info {}", err.msg);
+                    None
+                },
+            })
+            .collect();
+
+        Ok(proxy_list)
     }
 }
 

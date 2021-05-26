@@ -59,6 +59,7 @@ pub struct ProxyPoolConfig {
 #[derive(Deserialize, Clone)]
 pub struct Socks5ProxyOptions {
     pub enabled: bool,
+    pub first_fetch: Option<String>,
     pub fetch: String,
     pub pool_size: usize,
     pub validate: Option<String>,
