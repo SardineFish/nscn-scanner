@@ -78,7 +78,7 @@ pub struct WorkerService {
     scanner: NetScanner,
     analyser: ServiceAnalyseScheduler,
     sys_mornitor: SystemStatsMornitor,
-
+    runtime: Arc<tokio::runtime::Runtime>,
     current_state: Arc<Mutex<Option<WorkerState>>>
 }
 
@@ -96,6 +96,10 @@ impl WorkerService {
         
 
         let analyser_scheduler = ServiceAnalyseScheduler::new(&db, &GLOBAL_CONFIG.redis).await.unwrap();
+        let rt = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()?;
+            
         // let _ = analyser_scheduler.run().await.unwrap();
 
         Ok(Self {
@@ -103,10 +107,12 @@ impl WorkerService {
             analyser: analyser_scheduler,
             sys_mornitor: SystemStatsMornitor::start(),
             current_state: Arc::new(Mutex::new(None)),
+            runtime: Arc::new(rt),
         })
     }
 
     pub async fn start(&self, master_addr: String, scanner_config: ScannerConfig, analyser_config: ServiceAnalyserOptions) -> Result<(), SimpleError>{
+        let _guard = self.runtime.enter();
         let should_restart = {
             let guard = self.current_state.lock().await;
             match guard.as_ref() {
