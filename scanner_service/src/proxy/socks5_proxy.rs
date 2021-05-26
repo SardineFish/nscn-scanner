@@ -113,11 +113,14 @@ impl Socks5ProxyUpdater {
                     self.clone().manage_expire(proxy.addr.clone(), proxy.deadline);
                     let mut guard = self.pool.lock().await;
                     guard.push(proxy);
-                    break;
                 },
-                err => err.log_error_consume("socks5-fetch"),
+                err => {
+                    err.log_error_consume("socks5-fetch");
+                    sleep(time::Duration::from_secs(1)).await;
+                    continue;
+                },
             }
-            sleep(time::Duration::from_secs(1)).await;
+            break;
         }
     }
     async fn fecth_proxy(&self, addr: &str) -> Result<Vec<Socks5ProxyInfo>, SimpleError> {
@@ -133,6 +136,7 @@ impl Socks5ProxyUpdater {
         if data.data.len() < 1 {
             Err("Empty proxy")?
         }
+
 
         let proxy_list: Vec<Socks5ProxyInfo> = join_all(data.data.into_iter()
             .map(|data| async move {
