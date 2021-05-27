@@ -64,7 +64,7 @@ export function SchedulerStatsPanel()
             <Space direction="horizontal" size={60}>
                 <Statistic title="Active Workers" value={worker.length}/>
                 <Statistic title="Pending Scan IP" value={stats.pending_tasks} />
-                <Statistic title="Scaned Speed" value={stats.tasks_per_second} suffix="/s"/>
+                <Statistic title="Scaned Speed" value={stats.tasks_per_second} suffix="/s" precision={2}/>
             </Space>
             <Space direction="horizontal" size={30}>
                 <NewScanTask/>

@@ -114,6 +114,12 @@ async fn register_master(data: Json<WorkerSetupConfig>, service: Data<WorkerServ
     Ok(Response(()))
 }
 
+#[post("/worker")]
+async fn register_worker(data: Json<String>, service: Data<MasterService>) -> ApiResult<()> {
+    service.add_worker(data.0).await?;
+    Ok(Response(()))
+}
+
 #[post("/{worker_addr}/setup")]
 async fn setup_specific_worker(data: Json<WorkerSetupConfig>, path: Path<String>, service: Data<MasterService>) -> ApiResult<()> {
     let mut config = data.into_inner();
@@ -161,6 +167,7 @@ pub fn config(cfg: &mut ServiceConfig) {
         .service(complete_task)
         .service(register_master)
         .service(setup_specific_worker)
+        .service(register_worker)
         .service(get_workers)
         .service(get_worker_status)
         .service(get_specific_worker_status)

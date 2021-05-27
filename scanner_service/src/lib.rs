@@ -162,6 +162,17 @@ impl WorkerService {
         }
     }
 
+    pub async fn connect_master(&self, master_addr: &str) -> Result<(), SimpleError> {
+        let response = reqwest::Client::new().post(format!("http://{}/api/scheduler/worker", master_addr))
+            .json(&GLOBAL_CONFIG.listen)
+            .send()
+            .await?;
+        match response.status() {
+            StatusCode::OK => Ok(()),
+            status => Err(format!("Failed to connect master: {}", status))?,
+        }
+    }
+
     pub fn scanner(&self) -> NetScanner {
         self.scanner.clone()
     }
@@ -263,6 +274,28 @@ impl MasterService {
         log::info!("{} active workers", guard.len());
 
         guard.len()
+    }
+    pub async fn add_worker(&self, worker_addr: String) -> Result<(), SimpleError> {
+        let response = self.client.post(format!("http://{}/api/scheduler/setup", worker_addr))
+            .json(&json!({"master_addr": &GLOBAL_CONFIG.listen}))
+            .send()
+            .await;
+        match response {
+            Ok(response) if response.status() == StatusCode::OK => {
+                log::info!("Connected worker {}", worker_addr);
+                let mut guard = self.workers.lock().await;
+                guard.push(worker_addr);
+                Ok(())
+            },
+            Ok(response) => {
+                log::error!("Failed to connect worker {}: {}", worker_addr, response.status());
+                Err(format!("Failed to connect worker {}: {}", worker_addr, response.status()))?
+            },
+            Err(err) => {
+                log::error!("Failed to connect worker {}: {}", worker_addr, err);
+                Err(format!("Failed to connect worker {}: {}", worker_addr, err))?
+            }
+        }
     }
     
 

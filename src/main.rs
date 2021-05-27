@@ -37,6 +37,7 @@ async fn main() {
     }
 
     let worker = WorkerService::new().await.unwrap();
+    let moved_worker = worker.clone();
 
     
     let master = match GLOBAL_CONFIG.role {
@@ -56,7 +57,7 @@ async fn main() {
         };
 
         app
-            .data(worker.clone())
+            .data(moved_worker.clone())
             .data(model.clone())
             .data(web::PayloadConfig::new(100 * 1024 * 1024))
             .data(JsonConfig::default().limit(100 * 1024 * 1024))
@@ -74,10 +75,28 @@ async fn main() {
         task::spawn(try_dispatch_analysing(db.clone(), master.clone()));
         task::spawn(connect_workers(master));
     }
+    task::spawn(connect_master(worker.clone()));
 
     join.await.unwrap().unwrap();
 
     // scanner.join().await;
+}
+
+async fn connect_master(worker: WorkerService) {
+    if let Some(master_addr) = &GLOBAL_CONFIG.master {
+        loop {
+            match worker.connect_master(master_addr).await {
+                Ok(()) => {
+                    log::info!("Connected to master node {}", master_addr);
+                    break;
+                }
+                Err(err) => {
+                    log::error!("Failed to connect master node: {}", err.msg);
+                }
+            }
+            sleep(Duration::from_secs(5)).await;
+        }
+    }
 }
 
 async fn connect_workers(master: MasterService) {

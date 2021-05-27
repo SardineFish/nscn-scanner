@@ -138,7 +138,7 @@ function Stats(props: {worker: string})
                         <Statistic title="Pending Analyser" value={stats.analyser.pending_tasks} />
                     </Col>
                     <Col span={6}>
-                        <Statistic title="Analyse Speed" value={stats.analyser.tasks_per_second} suffix="/s" />
+                        <Statistic title="Analyse Speed" value={stats.analyser.jobs_per_second} suffix="/s" />
                     </Col>
                 </Row>
             </Col>

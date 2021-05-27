@@ -14,6 +14,7 @@ pub struct Config {
     pub listen: String,
     pub role: NodeRole,
     pub workers: Option<Vec<String>>,
+    pub master: Option<String>,
     pub init: Option<bool>,
     pub proxy_pool: ProxyPoolConfig,
     pub scanner: ScannerConfig,
@@ -164,18 +165,9 @@ impl Config {
         }
         config.redis = opts.redis.unwrap_or(config.redis);
         config.mongodb = opts.db.unwrap_or(config.mongodb);
-        // let mut env: HashMap<String, String> = env::vars().collect();
-        // if let Some(workers) = env.remove("NSCN_WORKERS") {
-        //     config.workers = Some(serde_json::from_str::<Vec<String>>(&workers).unwrap());
-
-        // }
-        // config.role = match env.get("NSCN_ROLE").map(|s|s.as_str()) {
-        //     Some("Master") => NodeRole::Master,
-        //     Some("Standalone") => NodeRole::Standalone,
-        //     Some("Worker") => NodeRole::Worker,
-        //     _ => config.role,
-        // };
-        // config.listen = env.remove("NSCN_LISTEN").unwrap_or(config.listen);
+        if let Some(master_addr) = opts.master {
+            config.master = Some(master_addr);
+        }
 
         config
     }
@@ -193,6 +185,9 @@ struct CliOptions {
 
     #[clap(long, arg_enum, env="NSCN_ROLE")]
     role: Option<NodeRole>,
+
+    #[clap(long, env="NSCN_MASTER")]
+    master: Option<String>,
 
     #[clap(long)]
     init: bool,

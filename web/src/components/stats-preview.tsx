@@ -27,7 +27,7 @@ export const StatsPreview: React.FC = () =>
         <Statistic title="Total Scanned" suffix="Ips" value={totalScan} valueStyle={ValueStyle}></Statistic>
         <Statistic title="Available" suffix="Ips" value={allAvailable} valueStyle={ValueStyle}></Statistic>
         <Statistic title="Total Vulnerabilities Found" value={vulns} valueStyle={ValueStyle}></Statistic>
-        <Statistic title="Scan Speed" suffix="/s" value={speed} valueStyle={ValueStyle}></Statistic>
+        <Statistic title="Scan Speed" suffix="/s" value={speed} valueStyle={ValueStyle} precision={2}></Statistic>
     </section>)
 }
 
