@@ -32,8 +32,15 @@ impl Socks5Proxy {
         Ok(socket)
     }
     async fn try_connect(&self, target: &str) -> Result<Socks5Stream<TcpStream>, SimpleError> {
-        let stream = TcpStream::connect(&self.addr).await?;
-        Ok(Socks5Stream::connect_with_socket(stream, target).await?)
+        let start = std::time::Instant::now();
+        let stream = TcpStream::connect(&self.addr).await.map_err(|err| {
+            log::warn!("Failed to connect TCP in {}s: {}", (std::time::Instant::now() - start).as_secs_f64(), err);
+            err
+        })?;
+        Ok(Socks5Stream::connect_with_socket(stream, target).await.map_err(|err| {
+            log::warn!("Failed to connect TCP in {}s: {}", (std::time::Instant::now() - start).as_secs_f64(), err);
+            err
+        })?)
     }
 }
 
