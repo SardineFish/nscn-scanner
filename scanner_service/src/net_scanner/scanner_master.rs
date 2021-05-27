@@ -39,7 +39,7 @@ impl ScannerMasterScheduler {
         let count = Self::count_ips(&addr_cidr_list)?;
         self.internal_stats.remove_pending_tasks(count).await;
         self.internal_stats.dispatch_tasks(count).await;
-        self.scheduler.dispathcer().enqueue_tasks(addr_cidr_list).await?;
+        // self.scheduler.dispathcer().enqueue_tasks(addr_cidr_list).await?;
         Ok(count)
     }
 
@@ -52,7 +52,7 @@ impl ScannerMasterScheduler {
     pub async fn remove_tasks(&self, addr_cidr_list: Vec<String>) -> Result<usize, SimpleError> {
         let count = Self::count_ips(&addr_cidr_list)?;
         self.internal_stats.remove_pending_tasks(count).await;
-        self.scheduler.dispathcer().enqueue_tasks(addr_cidr_list).await?;
+        // self.scheduler.dispathcer().enqueue_tasks(addr_cidr_list).await?;
         Ok(count)
     }
 
