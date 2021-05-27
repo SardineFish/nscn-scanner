@@ -2,7 +2,7 @@
 use rand::{RngCore, SeedableRng};
 use serde::{Deserialize};
 use tokio::{ sync::Mutex, task::{self}, time::{sleep}};
-use std::{collections::{HashMap}, sync::Arc};
+use std::{collections::{HashMap}, sync::Arc, usize};
 
 use crate::{error::*};
 use crate::config::{GLOBAL_CONFIG};
@@ -22,6 +22,7 @@ pub struct ProxyPool {
     tunnel_client_pool: Arc<Mutex<Vec<TunnelProxyClient>>>,
     socks5_proxy_pool: Arc<Mutex<Vec<Socks5ProxyInfo>>>,
     rng: Arc<Mutex<rand::rngs::SmallRng>>,
+    fetch_idx: Arc<Mutex<usize>>,
 }
 
 impl ProxyPool {
@@ -31,6 +32,7 @@ impl ProxyPool {
             tunnel_client_pool: Arc::new(Mutex::new(Vec::new())),
             socks5_proxy_pool: Arc::new(Mutex::new(Vec::new())),
             rng: Arc::new(Mutex::new(rand::rngs::SmallRng::from_entropy())),
+            fetch_idx: Arc::new(Mutex::new(0)),
         }
     }
     pub async fn start(&self) {
@@ -103,15 +105,16 @@ impl ProxyPool {
     }
     pub async fn get_socks5_client(&self) -> HttpProxyClient {
         loop {
-            let t = self.rng.lock().await.next_u32();
-            {
-                let guard = self.socks5_proxy_pool.lock().await;
-                if guard.len() > 0 {
-                    let idx = ((t as u64) * guard.len() as u64 / u32::MAX as u64) % (guard.len() as u64);
-                    break HttpProxyClient {
-                        client: guard[idx as usize].http_client.clone(),
-                        proxy_addr: guard[idx as usize].addr.to_owned(),
-                    }
+            let pool = self.socks5_proxy_pool.lock().await;
+            let mut idx = self.fetch_idx.lock().await;
+            *idx += 1;
+            *idx %= pool.len();
+
+            if pool.len() > 0 {
+                // let idx = ((t as u64) * pool.len() as u64 / u32::MAX as u64) % (pool.len() as u64);
+                break HttpProxyClient {
+                    client: pool[*idx].http_client.clone(),
+                    proxy_addr: pool[*idx].addr.to_owned(),
                 }
             }
             // log::warn!("Proxy pool is empty, retry in {}s", GLOBAL_CONFIG.proxy_pool.update_interval);
@@ -120,13 +123,13 @@ impl ProxyPool {
     }
     pub async fn get_socks5_proxy(&self) -> Socks5Proxy {
         let proxy = loop {
-            let t = self.rng.lock().await.next_u32();
-            {
-                let guard = self.socks5_proxy_pool.lock().await;
-                if guard.len() > 0 {
-                    let idx = ((t as u64) * guard.len() as u64 / u32::MAX as u64) % (guard.len() as u64);
-                    break guard[idx as usize].addr.clone();
-                }
+            let pool = self.socks5_proxy_pool.lock().await;
+            let mut idx = self.fetch_idx.lock().await;
+            *idx += 1;
+            *idx %= pool.len();
+
+            if pool.len() > 0 {
+                break pool[*idx as usize].addr.clone();
             }
             log::warn!("Socks5 proxy pool is empty, retry in {}s", GLOBAL_CONFIG.proxy_pool.update_interval);
             sleep(tokio::time::Duration::from_secs(3)).await;
