@@ -3,50 +3,13 @@ use std::{time::{Duration}};
 use tokio::{io::{AsyncRead, AsyncWrite, AsyncWriteExt}, time::timeout};
 use serde::{Serialize, Deserialize};
 
-use crate::{ScanTaskInfo, error::*, net_scanner::{scanner::ScanTask, scheduler::{ScannerResources}}, proxy::socks5_proxy::Socks5Proxy};
+use crate::{ error::*, net_scanner::{scanner::ScanTask},};
 use crate::config::GLOBAL_CONFIG;
-use super::super::result_handler::ScanResult;
 
 use super::async_reader::AsyncBufReader;
 
 pub struct FTPScanTask;
 impl FTPScanTask {
-    // pub async fn start(self, resources: &mut ScannerResources) {
-    //     let proxy_addr;
-    //     let result = if GLOBAL_CONFIG.scanner.ftp.use_proxy {
-    //         let proxy = resources.proxy_pool.get_socks5_proxy().await;
-    //         proxy_addr = proxy.addr.clone();
-    //         self.scan_with_proxy(proxy).await
-    //     } else {
-    //         panic!("Not implement");
-    //     };
-
-    //     let result =  match result {
-    //         Ok(result) => {
-    //             log::info!("FTP is opened at {}:{}", self.host, self.port);
-    //             ScanResult::Ok(result)
-    //         },
-    //         Err(err) => ScanResult::Err(err.msg),
-    //     };
-        
-    //     let task_result = ScanTaskInfo::with_proxy(proxy_addr, result);
-    //     resources.result_handler.save_scan_results(&format!("tcp.{}.ftp", self.port), &self.host, &task_result).await;
-
-    //     // if let (ScanResult::Ok(_), true) = (&task_result.result, GLOBAL_CONFIG.analyser.analyse_on_scan) {
-    //     //     let mut services = HashMap::<String, ServiceAnalyseResult>::new();
-    //     //     self.resources.analyser.ftp_analyser.analyse(&task_result.result, &mut services).await;
-            
-    //     //     self.resources.vuln_searcher.search_all(&mut services).await;
-            
-    //     //     self.resources.result_handler.save_analyse_results(&self.host, "ftp", services)
-    //     //         .await
-    //     //         .log_error_consume("ftp-result-saving");
-    //     // }
-    // }
-    // async fn scan_with_proxy(&self, proxy: Socks5Proxy) -> Result<FTPScanResult, SimpleError> {
-    //     let mut stream = proxy.connect(&format!("{}:{}", self.host, self.port), GLOBAL_CONFIG.scanner.ftp.timeout).await?;
-    //     Self::scan(&mut stream).await
-    // }
     async fn scan<S: AsyncRead + AsyncWrite + Unpin>(stream: &mut S) -> Result<FTPScanResult, SimpleError> {
         let mut stream = FTPStream(stream);
         let handshake = timeout(

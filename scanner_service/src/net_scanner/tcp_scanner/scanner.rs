@@ -1,7 +1,7 @@
 
 use serde::{Serialize, Deserialize};
 
-use crate::{net_scanner::{result_handler::NetScanResultSet, scanner::{ScanTask, TcpScanTask}, scheduler::{ScannerResources}}, scheduler::TaskPool};
+use crate::{net_scanner::{result_handler::NetScanResultSet, scanner::{TcpScanTask}, scheduler::{ScannerResources}}};
 use crate::config::GLOBAL_CONFIG;
 
 use super::{ftp::{FTPScanResult, FTPScanTask}, ssh::{SSHScanTask, SSHScannResult}};
