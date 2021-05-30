@@ -5,7 +5,7 @@ use mongodb::{Database};
 use tokio::{task::{self, JoinHandle}};
 
 use crate::{ScannerConfig, SchedulerStats, config, error::*, scheduler::{SharedSchedulerInternalStats, SharedSchedulerStats, local_scheduler::LocalScheduler}};
-use super::{http_scanner::HttpScanTask, https_scanner::HttpsScanTask, result_handler::ResultHandler, tcp_scanner::scanner::TCPScanTask};
+use super::{http_scanner::HttpScanTask, https_scanner::HttpsScanTask, result_handler::ResultHandler, scanner::TcpScanTask, tcp_scanner::scanner::TCPScanTask};
 use crate::proxy::proxy_pool::ProxyPool;
 
 #[derive(Clone)]
@@ -128,10 +128,12 @@ impl Scheduler {
     }
     async fn dispatch(&mut self, addr: &str) {
         if self.config.http.enabled {
-            self.task_pool.spawn("http-scan", HttpScanTask::run, addr.to_owned()).await;
+            TcpScanTask::new(addr.to_owned(), 80, HttpScanTask(addr.to_owned(), 80)).schedule(&mut self.task_pool).await;
+            // self.task_pool.spawn("http-scan", HttpScanTask::run, addr.to_owned()).await;
         }
         if self.config.https.enabled {
-            self.task_pool.spawn("https-scan", HttpsScanTask::run, addr.to_owned()).await;
+            TcpScanTask::new(addr.to_owned(), 443, HttpsScanTask).schedule(&mut self.task_pool).await;
+            // self.task_pool.spawn("https-scan", HttpsScanTask::run, addr.to_owned()).await;
         }
         if self.config.tcp.enabled {
             TCPScanTask::dispatch(addr.to_owned(), &mut self.task_pool).await;

@@ -84,6 +84,8 @@ pub enum ResultSavingOption {
 
 #[derive(Deserialize, Clone, PartialEq, Eq)]
 pub struct ScannerConfig {
+    #[serde(flatten)]
+    pub config: HashMap<String, UniversalScannerOption>,
     pub http: UniversalScannerOption,
     pub https: UniversalScannerOption,
     pub ssh: UniversalScannerOption,

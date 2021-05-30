@@ -1,7 +1,7 @@
 
 use serde::{Serialize, Deserialize};
 
-use crate::{net_scanner::{result_handler::NetScanResultSet, scheduler::{ScannerResources}}};
+use crate::{net_scanner::{result_handler::NetScanResultSet, scanner::{ScanTask, TcpScanTask}, scheduler::{ScannerResources}}, scheduler::TaskPool};
 use crate::config::GLOBAL_CONFIG;
 
 use super::{ftp::{FTPScanResult, FTPScanTask}, ssh::{SSHScanTask, SSHScannResult}};
@@ -15,24 +15,18 @@ impl TCPScanTask {
     pub async fn dispatch(addr: String, task_pool: &mut crate::scheduler::TaskPool<ScannerResources>) {
         for (port, scanners) in &GLOBAL_CONFIG.scanner.tcp.ports {
             for scanner in scanners {
-                match scanner.as_str() {
-                    "ftp" if GLOBAL_CONFIG.scanner.ftp.enabled => {
-                        let task = FTPScanTask {
-                            host: addr.to_owned(),
-                            port: *port,
-                        };
-                        task_pool.spawn("ftp-scan", FTPScanTask::start, task).await;
-                    },
-                    "ssh" if GLOBAL_CONFIG.scanner.ssh.enabled => {
-                        let task = SSHScanTask {
-                            host: addr.to_owned(),
-                            port: *port,
-                        };
-                        task_pool.spawn("ssh", SSHScanTask::start, task).await;
-                    },
-                    _ => (),
+                if GLOBAL_CONFIG.scanner.config.contains_key(scanner) {
+                    Self::dispatch_with_scanner(addr.clone(), *port, scanner, task_pool).await;
                 }
             }
+        }
+    }
+
+    async fn dispatch_with_scanner(addr: String, port: u16, scanner: &str, task_pool: &mut crate::scheduler::TaskPool<ScannerResources>) {
+        match scanner {
+            "ftp" => TcpScanTask::new(addr, port, FTPScanTask).schedule(task_pool).await,
+            "ssh" => TcpScanTask::new(addr, port, SSHScanTask).schedule(task_pool).await,
+            _ => (),
         }
     }
 }

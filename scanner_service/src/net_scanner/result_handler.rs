@@ -73,11 +73,18 @@ impl<T> ScanTaskInfo<T> {
             result,
         }
     }
-    pub fn with_proxy(proxy: String, result: ScanResult<T>) -> Self {
+    pub fn with_proxy(proxy: String, result: T) -> Self {
         Self {
-            proxy: proxy.to_owned(),
+            proxy,
             time: Utc::now().into(),
-            result,
+            result: ScanResult::Ok(result),
+        }
+    }
+    pub fn err_with_proxy<E: Into<SimpleError>>(proxy: String, err: E) -> Self {
+        Self {
+            proxy,
+            time: Utc::now().into(),
+            result: ScanResult::Err(<E as Into<SimpleError>>::into(err).msg),
         }
     }
 }
@@ -101,7 +108,7 @@ pub struct ResultHandler {
 }
 
 impl ResultHandler {
-    pub async fn save_scan_results<T: Serialize>(&self, key: &str, ip_addr: &str, task_result: &ScanTaskInfo<T>) {
+    pub async fn save_scan_results<T: Serialize>(&self, key: &str, ip_addr: &str, task_result: ScanTaskInfo<T>) {
         let future = self.try_save(key, ip_addr, task_result);
         match tokio::time::timeout(std::time::Duration::from_secs(300), async move {
             future.await.log_error_consume("result-saving");
@@ -159,7 +166,7 @@ impl ResultHandler {
         Ok(())
 
     }
-    async fn try_save<T: Serialize>(&self, key: &str, ip_addr: &str, task_result: &ScanTaskInfo<T>) -> Result<(), SimpleError> {
+    async fn try_save<T: Serialize>(&self, key: &str, ip_addr: &str, task_result: ScanTaskInfo<T>) -> Result<(), SimpleError> {
         let collection = match &GLOBAL_CONFIG.scanner.save {
             ResultSavingOption::SingleCollection(collection) => self.db.collection::<Document>(&collection),
             _ => panic!("Not implement"),

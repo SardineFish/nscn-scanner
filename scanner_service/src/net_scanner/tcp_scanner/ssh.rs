@@ -3,58 +3,55 @@ use std::{time::{Duration}};
 use tokio::{io::{ AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt}, time::timeout};
 use serde::{Serialize, Deserialize};
 
-use crate::{ScanTaskInfo, error::{LogError, SimpleError}, net_scanner::scheduler::{ScannerResources}, proxy::socks5_proxy::Socks5Proxy};
+use crate::{ScanTaskInfo, error::{LogError, SimpleError}, net_scanner::{scanner::ScanTask, scheduler::{ScannerResources}}, proxy::socks5_proxy::Socks5Proxy};
 use crate::config::GLOBAL_CONFIG;
 use super::super::result_handler::ScanResult;
 use super::async_reader::AsyncBufReader;
 
-pub struct SSHScanTask {
-    pub host: String,
-    pub port: u16,
-}
+pub struct SSHScanTask;
 
 const SSH_PROTOCOL_VERSION: &[u8] = b"SSH-2.0-OpenSSH_for_Windows_7.7\r\n";
 
 impl SSHScanTask {
-    pub async fn start(self, resources: &mut ScannerResources) {
-        // log::debug!("Scan SSH for {}:{}", self.host, self.port);
-        let proxy_addr;
-        let result = if GLOBAL_CONFIG.scanner.ssh.use_proxy {
-            let proxy = resources.proxy_pool.get_socks5_proxy().await;
-            proxy_addr = proxy.addr.clone();
-            // log::info!("SSH proxy {}", proxy.addr);
+    // pub async fn start(self, resources: &mut ScannerResources) {
+    //     // log::debug!("Scan SSH for {}:{}", self.host, self.port);
+    //     let proxy_addr;
+    //     let result = if GLOBAL_CONFIG.scanner.ssh.use_proxy {
+    //         let proxy = resources.proxy_pool.get_socks5_proxy().await;
+    //         proxy_addr = proxy.addr.clone();
+    //         // log::info!("SSH proxy {}", proxy.addr);
             
-            self.scan_with_proxy(&proxy).await
-        } else {
-            panic!("Not implement");
-        };
+    //         self.scan_with_proxy(&proxy).await
+    //     } else {
+    //         panic!("Not implement");
+    //     };
 
-        let result = match result {
-            Ok(result) => {
-                log::info!("SSH is opened at {}:{}", self.host, self.port);
-                ScanResult::Ok(result)
-            },
-            Err(err) => ScanResult::Err(err.msg),
-        };
+    //     let result = match result {
+    //         Ok(result) => {
+    //             log::info!("SSH is opened at {}:{}", self.host, self.port);
+    //             ScanResult::Ok(result)
+    //         },
+    //         Err(err) => ScanResult::Err(err.msg),
+    //     };
 
-        let task_result = ScanTaskInfo::with_proxy(proxy_addr, result);
-        resources.result_handler.save_scan_results(&format!("tcp.{}.ssh", self.port), &self.host, &task_result).await;
+    //     let task_result = ScanTaskInfo::with_proxy(proxy_addr, result);
+    //     resources.result_handler.save_scan_results(&format!("tcp.{}.ssh", self.port), &self.host, &task_result).await;
 
-        // if let (ScanResult::Ok(_), true) = (&task_result.result, GLOBAL_CONFIG.analyser.analyse_on_scan) {
-        //     let mut services = HashMap::<String, ServiceAnalyseResult>::new();
-        //     self.resources.analyser.ssh_analyser.analyse(&task_result.result, &mut services).await;
+    //     // if let (ScanResult::Ok(_), true) = (&task_result.result, GLOBAL_CONFIG.analyser.analyse_on_scan) {
+    //     //     let mut services = HashMap::<String, ServiceAnalyseResult>::new();
+    //     //     self.resources.analyser.ssh_analyser.analyse(&task_result.result, &mut services).await;
             
-        //     self.resources.vuln_searcher.search_all(&mut services).await;
+    //     //     self.resources.vuln_searcher.search_all(&mut services).await;
             
-        //     self.resources.result_handler.save_analyse_results(&self.host, "ssh", services)
-        //         .await
-        //         .log_error_consume("ssh-result-saving");
-        // }
-    }
-    async fn scan_with_proxy(&self, proxy: &Socks5Proxy) -> Result<SSHScannResult, SimpleError> {
-        let mut stream = proxy.connect(&format!("{}:{}", self.host, self.port), GLOBAL_CONFIG.scanner.ssh.timeout).await?;
-        Self::scan(&mut stream).await
-    }
+    //     //     self.resources.result_handler.save_analyse_results(&self.host, "ssh", services)
+    //     //         .await
+    //     //         .log_error_consume("ssh-result-saving");
+    //     // }
+    // }
+    // async fn scan_with_proxy(&self, proxy: &Socks5Proxy) -> Result<SSHScannResult, SimpleError> {
+    //     let mut stream = proxy.connect(&format!("{}:{}", self.host, self.port), GLOBAL_CONFIG.scanner.ssh.timeout).await?;
+    //     Self::scan(&mut stream).await
+    // }
     async fn scan<S: AsyncRead + AsyncWrite + Unpin>(stream: &mut S) -> Result<SSHScannResult, SimpleError> {
         let timeout_duration = Duration::from_secs(GLOBAL_CONFIG.scanner.ssh.timeout);
         // let mut stream = tokio::net::TcpStream::connect((self.host.as_str(), self.port)).await?;
@@ -73,6 +70,17 @@ impl SSHScanTask {
         Ok(result)
     }
 }
+
+#[async_trait::async_trait]
+impl ScanTask<SSHScannResult> for SSHScanTask {
+    fn scanner_name() -> &'static str {
+        "ssh"
+    }
+    async fn scan<S: Send + Sync + AsyncRead + AsyncWrite + Unpin + 'static>(self, stream: &mut S) -> Result<SSHScannResult, SimpleError> {
+        Self::scan(stream).await
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 pub struct SSHScannResult {
     pub protocol: ProtocolVersionMessage,

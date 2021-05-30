@@ -146,12 +146,10 @@ impl WappanalyserRuleParsed {
         if let Some(header_rules) = &self.headers {
             for (name, pattern) in header_rules {
                 let header = name.to_lowercase();
-                if let Some(header_values) = data.headers.get(&header) {
-                    for header_value in header_values {
-                        match pattern.analyse(header_value) {
-                            Some (version) => return Ok(Some(version)),
-                            _ => (),
-                        }
+                if let Some(header_value) = data.headers.get(&header) {
+                    match pattern.analyse(header_value) {
+                        Some (version) => return Ok(Some(version)),
+                        _ => (),
                     }
                 }
             }
