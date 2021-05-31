@@ -52,12 +52,6 @@ impl ProxyPool {
                         failure_count: 0,
                         fetch_time: chrono::Utc::now(),
                         deadline: chrono::Utc::now(),
-                        http_client: reqwest::Client::builder()
-                            .proxy(reqwest::Proxy::http(format!("socks5://{}", server)).unwrap())
-                            .proxy(reqwest::Proxy::https(format!("socks5://{}", server)).unwrap())
-                            .timeout(std::time::Duration::from_secs(GLOBAL_CONFIG.scanner.http.timeout))
-                            .build()
-                            .unwrap(),
                     });
                 }
             }
@@ -101,24 +95,6 @@ impl ProxyPool {
             }
             // log::warn!("Proxy pool is empty, retry in {}s", GLOBAL_CONFIG.proxy_pool.update_interval);
             sleep(tokio::time::Duration::from_secs(GLOBAL_CONFIG.proxy_pool.update_interval)).await;
-        }
-    }
-    pub async fn get_socks5_client(&self) -> HttpProxyClient {
-        loop {
-            let pool = self.socks5_proxy_pool.lock().await;
-            let mut idx = self.fetch_idx.lock().await;
-            *idx += 1;
-            *idx %= pool.len();
-
-            if pool.len() > 0 {
-                // let idx = ((t as u64) * pool.len() as u64 / u32::MAX as u64) % (pool.len() as u64);
-                break HttpProxyClient {
-                    client: pool[*idx].http_client.clone(),
-                    proxy_addr: pool[*idx].addr.to_owned(),
-                }
-            }
-            // log::warn!("Proxy pool is empty, retry in {}s", GLOBAL_CONFIG.proxy_pool.update_interval);
-            sleep(tokio::time::Duration::from_secs(3)).await;
         }
     }
     pub async fn get_socks5_proxy(&self) -> Socks5Proxy {

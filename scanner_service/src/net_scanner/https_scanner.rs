@@ -1,11 +1,9 @@
-use std::time::{Duration};
 
 use serde::{Serialize, Deserialize};
 use openssl::ssl::Ssl;
-use tokio::{io::{AsyncRead, AsyncWrite}, time::{timeout}};
+use tokio::{io::{AsyncRead, AsyncWrite}};
 use mongodb::{bson};
 
-use crate::{config::GLOBAL_CONFIG,};
 use crate::error::*;
 use crate::ssl::ssl_context::SSL_CONTEXT;
 use crate::ssl::async_ssl;
@@ -14,30 +12,23 @@ use super::{result_handler::ScanResult, scanner::ScanTask};
 pub struct HttpsScanTask;
 impl HttpsScanTask {
     async fn scan<S: AsyncRead + AsyncWrite + Unpin>(stream: S) -> Result<HttpsResponse, SimpleError> {
-        // log::info!("Scan HTTPS {} through {}", self.addr, client.proxy_addr);
-        timeout(Duration::from_secs(GLOBAL_CONFIG.scanner.https.timeout), async move {
-            let stream = Self::connect_tls(stream).await?;
-
-            match stream.sync_ssl().peer_certificate() {
-                None => Err("No certificate")?,
-                Some(cert) => {
-                    let pem = cert.to_pem()?;
-                    Ok(HttpsResponse {
-                        cert: std::str::from_utf8(&pem[..])?.to_owned(),
-                    })
-                }
+        let stream = Self::connect_tls(stream).await?;
+        match stream.sync_ssl().peer_certificate() {
+            None => Err("No certificate")?,
+            Some(cert) => {
+                let pem = cert.to_pem()?;
+                Ok(HttpsResponse {
+                    cert: std::str::from_utf8(&pem[..])?.to_owned(),
+                })
             }
-        }).await.map_err(|_|"Timeout")?
+        }
     }
     async fn connect_tls<S: AsyncRead + AsyncWrite + Unpin>(stream: S) -> Result<async_ssl::SslStream<S>, SimpleError> {
         // log::info!("ESTABLISHED");
         let ssl = Ssl::new(&SSL_CONTEXT)?;
         let mut stream = async_ssl::SslStream::new(ssl, stream)?;
-        match timeout(tokio::time::Duration::from_secs(GLOBAL_CONFIG.scanner.https.timeout), stream.connect()).await{
-            Ok(Ok(())) => Ok(stream),
-            Ok(Err(err)) => Err(err)?,
-            Err(_) => Err("SSL Handshake timeout.")?,
-        }
+        stream.connect().await?;
+        Ok(stream)
     }
 }
 

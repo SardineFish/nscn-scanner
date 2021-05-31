@@ -12,23 +12,6 @@ pub struct TCPScanTask {
 }
 
 impl TCPScanTask {
-    pub async fn dispatch(addr: String, task_pool: &mut crate::scheduler::TaskPool<ScannerResources>) {
-        for (port, scanners) in &GLOBAL_CONFIG.scanner.tcp.ports {
-            for scanner in scanners {
-                if GLOBAL_CONFIG.scanner.config.contains_key(scanner) {
-                    Self::dispatch_with_scanner(addr.clone(), *port, scanner, task_pool).await;
-                }
-            }
-        }
-    }
-
-    async fn dispatch_with_scanner(addr: String, port: u16, scanner: &str, task_pool: &mut crate::scheduler::TaskPool<ScannerResources>) {
-        match scanner {
-            "ftp" => TcpScanTask::new(addr, port, FTPScanTask).schedule(task_pool).await,
-            "ssh" => TcpScanTask::new(addr, port, SSHScanTask).schedule(task_pool).await,
-            _ => (),
-        }
-    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]

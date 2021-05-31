@@ -85,9 +85,9 @@ export function WorkerConfig(props: { workerAddr: string })
                                 onChange={p => { config.scanner.http.enabled = p.target.checked, update() }}
                             >HTTP</Checkbox>
                             <Checkbox
-                                checked={config.scanner.https.enabled}
+                                checked={config.scanner.tls.enabled}
                                 disabled={!config.scanner.scheduler.enabled}
-                                onChange={p => { config.scanner.https.enabled = p.target.checked, update() }}
+                                onChange={p => { config.scanner.tls.enabled = p.target.checked, update() }}
                             >HTTPS</Checkbox>
                             <Checkbox
                                 checked={config.scanner.ftp.enabled}

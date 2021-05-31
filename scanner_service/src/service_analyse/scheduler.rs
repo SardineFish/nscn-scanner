@@ -160,40 +160,35 @@ impl ServiceAnalyseTask {
         let mut ftp_services: HashMap::<String, ServiceAnalyseResult> = HashMap::new();
         let mut ssh_services: HashMap::<String, ServiceAnalyseResult> = HashMap::new();
 
-        match &GLOBAL_CONFIG.scanner.save {
-            ResultSavingOption::SingleCollection(name) => {
-                let colllection = resource.db.collection(name);
-                let query = bson::doc!{
-                    "addr": &self.addr,
-                };
+        let collection = resource.db.collection::<Document>(&GLOBAL_CONFIG.scanner.save.collection);
+        let query = bson::doc!{
+            "addr": &self.addr,
+        };
 
-                let doc = colllection.find_one(query, None)
-                    .await?
-                    .ok_or(format!("Scan result of {} not found", self.addr))?;
-                let record: NetScanRecord = bson::from_document(doc)?;
+        let doc = collection.find_one(query, None)
+            .await?
+            .ok_or(format!("Scan result of {} not found", self.addr))?;
+        let record: NetScanRecord = bson::from_document(doc)?;
 
-                if let Some(http_scan) = record.scan.http {
-                    let services = resource.web_analyser.analyse_result_set(&http_scan).await?;
-                    // for (name, version) in services {
-                    //     web_services.insert(format!("web.{}", name), version);
-                    // }
-                    web_services = services;
-                }
-                let ftp_scan_result = record.scan.tcp.as_ref()
-                    .and_then(|tcp|tcp.get("21"))
-                    .and_then(|result|result.ftp.as_ref());
-                if let Some(ftp_result) = ftp_scan_result {
-                    ftp_services = resource.ftp_analyser.analyse_results_set(&ftp_result).await;
-                }
+        if let Some(http_scan) = record.scan.http {
+            let services = resource.web_analyser.analyse_result_set(&http_scan).await?;
+            // for (name, version) in services {
+            //     web_services.insert(format!("web.{}", name), version);
+            // }
+            web_services = services;
+        }
+        let ftp_scan_result = record.scan.tcp.as_ref()
+            .and_then(|tcp|tcp.get("21"))
+            .and_then(|result|result.ftp.as_ref());
+        if let Some(ftp_result) = ftp_scan_result {
+            ftp_services = resource.ftp_analyser.analyse_results_set(&ftp_result).await;
+        }
 
-                let ssh_scan_result = record.scan.tcp.as_ref()
-                    .and_then(|tcp_result| tcp_result.get("22"))
-                    .and_then(|result| result.ssh.as_ref());
-                if let Some(ssh_result) = ssh_scan_result {
-                    ssh_services = resource.ssh_analyser.analyse_results_set(ssh_result).await;
-                }
-            },
-            _ => panic!("Unimplement"),
+        let ssh_scan_result = record.scan.tcp.as_ref()
+            .and_then(|tcp_result| tcp_result.get("22"))
+            .and_then(|result| result.ssh.as_ref());
+        if let Some(ssh_result) = ssh_scan_result {
+            ssh_services = resource.ssh_analyser.analyse_results_set(ssh_result).await;
         }
 
         let geo = resource.ip_geo.search_ip(&self.addr);

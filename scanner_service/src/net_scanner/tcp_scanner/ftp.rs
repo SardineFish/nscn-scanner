@@ -1,10 +1,8 @@
-use std::{time::{Duration}};
 
-use tokio::{io::{AsyncRead, AsyncWrite, AsyncWriteExt}, time::timeout};
+use tokio::{io::{AsyncRead, AsyncWrite, AsyncWriteExt}};
 use serde::{Serialize, Deserialize};
 
 use crate::{ error::*, net_scanner::{scanner::ScanTask},};
-use crate::config::GLOBAL_CONFIG;
 
 use super::async_reader::AsyncBufReader;
 
@@ -12,10 +10,7 @@ pub struct FTPScanTask;
 impl FTPScanTask {
     async fn scan<S: AsyncRead + AsyncWrite + Unpin>(stream: &mut S) -> Result<FTPScanResult, SimpleError> {
         let mut stream = FTPStream(stream);
-        let handshake = timeout(
-                Duration::from_secs(GLOBAL_CONFIG.scanner.ftp.timeout), 
-                stream.read_response()
-            ).await.map_err(|_| "Handshake timeout")??;
+        let handshake = stream.read_response().await?;
         let result = match handshake {
             (230, text) => FTPScanResult {
                 handshake_code: 230,
@@ -25,13 +20,10 @@ impl FTPScanTask {
             (220, text) => FTPScanResult {
                 handshake_code: 220,
                 handshake_text: text,
-                access: match timeout(
-                        Duration::from_secs(GLOBAL_CONFIG.scanner.ftp.timeout), 
-                        Self::try_login_anonymouse(&mut stream)
-                    ).await {
-                        Ok(Ok(access)) => access,
-                        _ => FTPAccess::Login,
-                    }
+                access: match Self::try_login_anonymouse(&mut stream).await {
+                    Err(_) => FTPAccess::Login,
+                    Ok(access) => access,
+                }
             },
             (code, text) => FTPScanResult {
                 handshake_code: code,

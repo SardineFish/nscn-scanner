@@ -16,7 +16,7 @@ impl HttpProxyClient {
         let client = reqwest::Client::builder()
             .proxy(Proxy::http(&proxy_addr)?)
             .proxy(Proxy::https(&proxy_addr)?)
-            .timeout(std::time::Duration::from_secs(GLOBAL_CONFIG.scanner.http.timeout))
+            .timeout(std::time::Duration::from_secs(5))
             .build()?;
         Ok(Self {
             proxy_addr: addr.to_owned(),

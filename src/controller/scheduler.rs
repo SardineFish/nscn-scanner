@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use serde::{Serialize, Deserialize};
 use actix_web::{get, post, web::{Data, Json, Path, Query, ServiceConfig, scope}};
 use nscn::{GLOBAL_CONFIG, MasterService, ScannerConfig, ServiceAnalyserOptions, UniversalScannerOption, WorkerSchedulerOptions, WorkerService, error::{LogError, SimpleError}};
@@ -29,21 +31,16 @@ fn default_analyser_config() -> WorkerAnalyserConfig {
 
 #[derive(Deserialize, Serialize)]
 struct WorkerScannerConfig {
-    http: UniversalScannerOption,
-    https: UniversalScannerOption,
-    ssh: UniversalScannerOption,
-    ftp: UniversalScannerOption,
+    #[serde(flatten)]
+    config: HashMap<String, UniversalScannerOption>,
     scheduler: WorkerSchedulerOptions,
 }
 
 impl From<ScannerConfig> for WorkerScannerConfig {
     fn from(config: ScannerConfig) -> Self {
         Self {
-            ftp: config.ftp,
-            http: config.http,
-            https: config.https,
+            config: config.config,
             scheduler: config.scheduler,
-            ssh: config.ssh,
         }
     }
 }
@@ -102,10 +99,7 @@ async fn register_master(data: Json<WorkerSetupConfig>, service: Data<WorkerServ
     log::info!("Received connection from master {}", config.master_addr);
     let mut scanner_config = service.config().scanner.clone();
     let mut analyser_config = service.config().analyser.clone();
-    scanner_config.http = config.scanner.http;
-    scanner_config.https = config.scanner.https;
-    scanner_config.ftp = config.scanner.ftp;
-    scanner_config.ssh = config.scanner.ssh;
+    scanner_config.config = config.scanner.config;
     scanner_config.scheduler = config.scanner.scheduler;
     analyser_config.scheduler = config.analyser.scheduler;
     service.start(config.master_addr, scanner_config, analyser_config).await?;

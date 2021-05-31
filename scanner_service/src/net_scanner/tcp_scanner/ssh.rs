@@ -1,10 +1,8 @@
-use std::{time::{Duration}};
 
-use tokio::{io::{ AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt}, time::timeout};
+use tokio::{io::{ AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt}};
 use serde::{Serialize, Deserialize};
 
-use crate::{error::{LogError, SimpleError}, net_scanner::{scanner::ScanTask}};
-use crate::config::GLOBAL_CONFIG;
+use crate::{error::{SimpleError}, net_scanner::{scanner::ScanTask}};
 use super::async_reader::AsyncBufReader;
 
 pub struct SSHScanTask;
@@ -13,20 +11,11 @@ const SSH_PROTOCOL_VERSION: &[u8] = b"SSH-2.0-OpenSSH_for_Windows_7.7\r\n";
 
 impl SSHScanTask {
     async fn scan<S: AsyncRead + AsyncWrite + Unpin>(stream: &mut S) -> Result<SSHScannResult, SimpleError> {
-        let timeout_duration = Duration::from_secs(GLOBAL_CONFIG.scanner.ssh.timeout);
-        // let mut stream = tokio::net::TcpStream::connect((self.host.as_str(), self.port)).await?;
-        timeout(
-            timeout_duration,
-            stream.write_all(SSH_PROTOCOL_VERSION)
-        ).await.map_err(|_| "Timeout")??;
-
+        stream.write_all(SSH_PROTOCOL_VERSION).await?;
         let result = SSHScannResult {
-            protocol: timeout(timeout_duration, ProtocolVersionMessage::read(stream))
-                .await.map_err(|_| "Timeout")??,
-            algorithm: timeout(timeout_duration, AlgorithmExchange::read(stream))
-                .await.map_err(|_| "Timeout")??,
+            protocol: ProtocolVersionMessage::read(stream).await?,
+            algorithm: AlgorithmExchange::read(stream).await?
         };
-        stream.shutdown().await.log_warn_consume("ssh-scan");
         Ok(result)
     }
 }
@@ -171,6 +160,7 @@ impl AlgorithmExchange {
 #[cfg(test)]
 mod test {
     use tokio::net::TcpStream;
+    use crate::config::*;
 
     use super::*;
     #[tokio::test]

@@ -167,10 +167,7 @@ impl ResultHandler {
 
     }
     async fn try_save<T: Serialize>(&self, key: &str, ip_addr: &str, task_result: ScanTaskInfo<T>) -> Result<(), SimpleError> {
-        let collection = match &GLOBAL_CONFIG.scanner.save {
-            ResultSavingOption::SingleCollection(collection) => self.db.collection::<Document>(&collection),
-            _ => panic!("Not implement"),
-        };
+        let collection = self.db.collection::<Document>(&GLOBAL_CONFIG.scanner.save.collection);
         let result_key = format!("scan.{}.results", key);
         let success_key = format!("scan.{}.success", key);
         let success: i32 = match &task_result.result {

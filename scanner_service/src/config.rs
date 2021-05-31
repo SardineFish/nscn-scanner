@@ -67,7 +67,7 @@ pub struct Socks5ProxyOptions {
     pub servers: Option<Vec<String>>,
 }
 
-#[derive(Deserialize, Serialize, Clone, PartialEq, Eq)]
+#[derive(Deserialize, Serialize, Clone, PartialEq, Eq, Debug)]
 pub struct WorkerSchedulerOptions {
     pub enabled: bool,
     pub max_tasks: usize,
@@ -75,41 +75,42 @@ pub struct WorkerSchedulerOptions {
     pub fetch_threshold: usize,
 }
 
-#[derive(Deserialize, Clone, PartialEq, Eq)]
-#[serde(untagged)]
-pub enum ResultSavingOption {
-    SingleCollection(String),
-    Independent{http: String, https: String, tcp: String, },
+#[derive(Deserialize, Clone, PartialEq, Eq, Debug)]
+pub struct ResultSavingOption {
+    pub collection: String,
+    pub save_failure: bool,
 }
 
-#[derive(Deserialize, Clone, PartialEq, Eq)]
+#[derive(Deserialize, Clone, PartialEq, Eq, Debug)]
 pub struct ScannerConfig {
     #[serde(flatten)]
     pub config: HashMap<String, UniversalScannerOption>,
-    pub http: UniversalScannerOption,
-    pub https: UniversalScannerOption,
-    pub ssh: UniversalScannerOption,
-    pub ftp: UniversalScannerOption,
-    pub tcp: TCPScannerOptions,
+    pub ports: HashMap<u16, Vec<String>>,
     pub task: TaskOptions,
     pub scheduler: WorkerSchedulerOptions,
     pub save: ResultSavingOption,
 }
 
-#[derive(Deserialize, Clone, PartialEq, Eq)]
-pub struct TCPScannerOptions {
-    pub enabled: bool,
-    pub ports: HashMap<u16, Vec<String>>,
-}
-
-#[derive(Deserialize, Serialize, Clone, PartialEq, Eq)]
+#[derive(Deserialize, Serialize, Clone, PartialEq, Eq, Debug)]
 pub struct UniversalScannerOption {
     pub enabled: bool,
     pub use_proxy: bool,
     pub socks5: Option<bool>,
     pub timeout: u64,
 }
-#[derive(Deserialize, Clone, PartialEq, Eq)]
+
+impl Default for UniversalScannerOption {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            use_proxy: false,
+            socks5: Some(true),
+            timeout: 5,
+        }
+    }
+}
+
+#[derive(Deserialize, Clone, PartialEq, Eq, Debug)]
 pub struct TaskOptions {
     pub fetch: bool,
     pub clear_old_tasks: bool,

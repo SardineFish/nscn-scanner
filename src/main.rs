@@ -24,6 +24,8 @@ async fn main() {
     env_logger::init();
 
     log::info!("Run as {}", GLOBAL_CONFIG.role);
+
+    log::info!("{:?}", GLOBAL_CONFIG.scanner);
     
     let mongodb = mongodb::Client::with_uri_str(&GLOBAL_CONFIG.mongodb)
         .await

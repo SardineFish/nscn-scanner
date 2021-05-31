@@ -20,7 +20,7 @@ impl TunnelProxyClient {
     }
     pub async fn establish(&self, addr: &str) -> Result<TcpStream, SimpleError> {
         match timeout(
-            tokio::time::Duration::from_secs(GLOBAL_CONFIG.scanner.https.timeout), 
+            tokio::time::Duration::from_secs(5), 
             self.try_establish(addr)
             ).await 
         {
@@ -56,7 +56,7 @@ impl TunnelProxyClient {
 
         let ssl = ssl::Ssl::new(&SSL_CONTEXT)?;
         let mut ssl_stream = async_ssl::SslStream::new(ssl, stream).log_debug("https_proxy_verify")?;
-        match timeout(tokio::time::Duration::from_secs(GLOBAL_CONFIG.scanner.https.timeout), ssl_stream.connect()).await {
+        match timeout(tokio::time::Duration::from_secs(5), ssl_stream.connect()).await {
             Ok(Ok(_)) => (),
             Ok(err) => err.log_debug("https_proxy_verify")?,
             Err(_) => Err("SSL Handshake timeout.").log_debug("https_proxy_verify")?,

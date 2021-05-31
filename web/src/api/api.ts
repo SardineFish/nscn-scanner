@@ -129,7 +129,7 @@ export interface WorkerConfig
             socks5: boolean,
             timeout: number
         },
-        https: {
+        tls: {
             enabled: boolean,
             use_proxy: boolean,
             socks5: boolean,

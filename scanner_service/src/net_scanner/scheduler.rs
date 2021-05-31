@@ -5,8 +5,9 @@ use mongodb::{Database};
 use tokio::{task::{self, JoinHandle}};
 
 use crate::{ScannerConfig, SchedulerStats, config, error::*, scheduler::{SharedSchedulerInternalStats, SharedSchedulerStats, local_scheduler::LocalScheduler}};
-use super::{http_scanner::HttpScanTask, https_scanner::HttpsScanTask, result_handler::ResultHandler, scanner::TcpScanTask, tcp_scanner::scanner::TCPScanTask};
+use super::{http_scanner::HttpScanTask, https_scanner::HttpsScanTask, result_handler::ResultHandler, scanner::TcpScanTask, tcp_scanner::{ftp::FTPScanTask, ssh::SSHScanTask}};
 use crate::proxy::proxy_pool::ProxyPool;
+use crate::config::*;
 
 #[derive(Clone)]
 pub struct NetScanner {
@@ -120,25 +121,32 @@ impl Scheduler {
                 self.resources.stats.update_pending_tasks(range.len()).await;
                 for ip_32 in range {
                     let addr = Ipv4Addr::from(ip_32).to_string();
-                    self.dispatch(&addr).await;
+                    self.dispatch(addr).await;
                 }
                 // log::info!("Address {} completed.", ip_cidr);
             }
         }
     }
-    async fn dispatch(&mut self, addr: &str) {
-        if self.config.http.enabled {
-            TcpScanTask::new(addr.to_owned(), 80, HttpScanTask(addr.to_owned(), 80)).schedule(&mut self.task_pool).await;
-            // self.task_pool.spawn("http-scan", HttpScanTask::run, addr.to_owned()).await;
-        }
-        if self.config.https.enabled {
-            TcpScanTask::new(addr.to_owned(), 443, HttpsScanTask).schedule(&mut self.task_pool).await;
-            // self.task_pool.spawn("https-scan", HttpsScanTask::run, addr.to_owned()).await;
-        }
-        if self.config.tcp.enabled {
-            TCPScanTask::dispatch(addr.to_owned(), &mut self.task_pool).await;
+    async fn dispatch(&mut self, addr: String) {
+        for (port, scanners) in &self.config.ports {
+            for scanner in scanners {
+                match self.config.config.get(scanner) {
+                    Some(cfg) if cfg.enabled => 
+                        Self::dispatch_with_scanner(addr.clone(), *port, scanner, cfg.clone(), &mut self.task_pool).await,
+                    _ => (),
+                }
+            }
         }
         self.resources.stats.dispatch_tasks(1).await;
+    }
+    async fn dispatch_with_scanner(addr: String, port: u16, scanner: &str, cfg: UniversalScannerOption, task_pool: &mut crate::scheduler::TaskPool<ScannerResources>) {
+        match scanner {
+            "http" => TcpScanTask::new(addr.clone(), port, HttpScanTask(addr, port)).config(cfg).schedule(task_pool).await,
+            "tls" => TcpScanTask::new(addr, port, HttpsScanTask).config(cfg).schedule(task_pool).await,
+            "ftp" => TcpScanTask::new(addr, port, FTPScanTask).config(cfg).schedule(task_pool).await,
+            "ssh" => TcpScanTask::new(addr, port, SSHScanTask).config(cfg).schedule(task_pool).await,
+            _ => (),
+        }
     }
 }
 
