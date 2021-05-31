@@ -3,10 +3,9 @@ use futures::{future::join_all};
 use serde::{Deserialize};
 
 use chrono::{DateTime, NaiveDateTime, TimeZone, Utc};
-use tokio::{io::{AsyncReadExt, AsyncWriteExt}, net::TcpStream, sync::{Mutex}, task, time::{sleep}};
+use tokio::{net::TcpStream, sync::{Mutex}, task, time::{sleep}};
 use tokio_socks::tcp::Socks5Stream;
-use tokio::time::Duration;
-use crate::error::*;
+use crate::{error::*, net_scanner::scanner::Connector};
 use crate::config::GLOBAL_CONFIG;
 
 use super::ProxyPool;
@@ -22,21 +21,15 @@ pub struct Socks5Proxy {
     pub addr: String,
 }
 impl Socks5Proxy {
-    pub async fn connect(&self, target: &str, timeout: u64) -> Result<Socks5Stream<TcpStream>, SimpleError> {
-        let socket = tokio::time::timeout(
-            Duration::from_secs(timeout),
-            self.try_connect(target)
-        ).await.map_err(|_|"Connect timeout")??;
-
-        Ok(socket)
-    }
-    async fn try_connect(&self, target: &str) -> Result<Socks5Stream<TcpStream>, SimpleError> {
-        // let start = std::time::Instant::now();
-        let stream = TcpStream::connect(&self.addr).await.map_err(|err| {
+}
+#[async_trait::async_trait]
+impl Connector<Socks5Stream<TcpStream>> for Socks5Proxy {
+    async fn connect(self, addr: &str, port: u16) -> Result<Socks5Stream<TcpStream>, SimpleError> {
+        let stream = TcpStream::connect(self.addr).await.map_err(|err| {
             // log::warn!("Failed to connect TCP in {}s: {}", (std::time::Instant::now() - start).as_secs_f64(), err);
             err
         })?;
-        Ok(Socks5Stream::connect_with_socket(stream, target).await.map_err(|err| {
+        Ok(Socks5Stream::connect_with_socket(stream, (addr, port)).await.map_err(|err| {
             // log::warn!("Failed to connect TCP in {}s: {}", (std::time::Instant::now() - start).as_secs_f64(), err);
             err
         })?)
@@ -85,11 +78,11 @@ impl Socks5ProxyUpdater {
             }
         });
     }
-    async fn validate_proxy(proxy: &Socks5Proxy, validate_url: &str) -> Result<(), SimpleError> {
-        let mut stream = proxy.connect(validate_url, 3).await?;
-        stream.write_all(b"\r\n\r\n").await?;
-        let mut buf = String::new();
-        stream.read_to_string(&mut buf).await?;
+    async fn validate_proxy(_proxy: &Socks5Proxy, _validate_url: &str) -> Result<(), SimpleError> {
+        // let mut stream = proxy.connect(validate_url, 3).await?;
+        // stream.write_all(b"\r\n\r\n").await?;
+        // let mut buf = String::new();
+        // stream.read_to_string(&mut buf).await?;
         Ok(())
     }
     fn manage_expire(self, addr: String, deadline: DateTime<Utc>) {

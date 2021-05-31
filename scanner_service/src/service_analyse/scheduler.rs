@@ -6,7 +6,7 @@ use mongodb::{Database, bson};
 use tokio::{task::{self, JoinHandle}, time::sleep};
 use chrono::Utc;
 
-use crate::{SchedulerStats, config::{self, ResultSavingOption}, error::*, scheduler::{SharedSchedulerInternalStats, SharedSchedulerStats, TaskPool, local_scheduler::LocalScheduler}, vul_search::VulnerabilitiesSearch};
+use crate::{SchedulerStats, config::{self}, error::*, scheduler::{SharedSchedulerInternalStats, SharedSchedulerStats, TaskPool, local_scheduler::LocalScheduler}, vul_search::VulnerabilitiesSearch};
 use crate::config::GLOBAL_CONFIG;
 use crate::net_scanner::result_handler::NetScanRecord;
 

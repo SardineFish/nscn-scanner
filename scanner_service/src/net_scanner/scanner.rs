@@ -1,15 +1,31 @@
+use std::fmt;
 use std::marker::PhantomData;
 use std::time::Duration;
 
 use async_trait::async_trait;
-use serde::Serialize;
+use serde::{Serialize, de::DeserializeOwned};
 use tokio::io::{AsyncRead, AsyncWrite};
+use tokio::net::TcpStream;
+use tokio::time::timeout;
 
 use crate::UniversalScannerOption;
 use crate::{ScanTaskInfo, error::SimpleError, scheduler::TaskPool};
 use crate::config::GLOBAL_CONFIG;
 
 use super::scheduler::ScannerResources;
+
+#[async_trait]
+pub trait Connector<S: AsyncRead + AsyncWrite + Sync + Send + 'static> {
+    async fn connect(self, addr: &str, port: u16) -> Result<S, SimpleError>;
+}
+
+struct TcpConnector;
+#[async_trait]
+impl Connector<TcpStream> for TcpConnector {
+    async fn connect(self, addr: &str, port: u16) -> Result<TcpStream, SimpleError> {
+        Ok(TcpStream::connect((addr, port)).await?)
+    }
+}
 
 pub struct TcpScanTask<T, R>
 {
@@ -20,7 +36,11 @@ pub struct TcpScanTask<T, R>
     _phantom: PhantomData<R>,
 }
 
-impl<T, R> TcpScanTask<T, R> where T: ScanTask<R> + Send + 'static, R: Serialize + Send + 'static {
+impl<T, R> TcpScanTask<T, R> 
+where 
+    T: ScanTask<R> + Send + 'static, 
+    R: Serialize + DeserializeOwned + Unpin + Send + Sync + fmt::Debug + 'static 
+{
     pub fn new(addr: String, port: u16, task: T) -> Self {
         Self {
             addr,
@@ -41,23 +61,33 @@ impl<T, R> TcpScanTask<T, R> where T: ScanTask<R> + Send + 'static, R: Serialize
     }
 
     async fn start(self, resources: &mut ScannerResources) {
-        let proxy = resources.proxy_pool.get_socks5_proxy().await;
-        let proxy_addr = proxy.addr.clone();
-        let target = format!("{}:{}", &self.addr, self.port);
-        let task = self.task;
-        let timeout = self.config.timeout;
-        let result = tokio::time::timeout(Duration::from_secs(timeout), async move {
-            match proxy.connect(&target, timeout).await {
-                Ok(mut stream) => task.scan(&mut stream).await,
+        let mut result = ScanTaskInfo::new(self.addr.clone(), self.port).scanner(T::scanner_name());
+
+        let scan_result = match self.config.use_proxy {
+            true => {
+                let proxy = resources.proxy_pool.get_socks5_proxy().await;
+                result = result.proxy(proxy.addr.clone());
+                self.scan_with_connector(proxy).await
+            },
+            false => {
+                self.scan_with_connector(TcpConnector).await
+            },
+        };
+        let result = match scan_result {
+            Ok(scan_result) => result.success(scan_result),
+            Err(err) => result.err(err),
+        };
+        
+        resources.result_handler.save_scan_results(result).await;
+    }
+
+    async fn scan_with_connector<S: AsyncRead + AsyncWrite + Sync + Send + Unpin + 'static, C: Connector<S>>(self, connector: C) -> Result<R, SimpleError> {
+        timeout(Duration::from_secs(self.config.timeout), async move {
+            match connector.connect(&self.addr, self.port).await {
+                Ok(mut stream) => self.task.scan(&mut stream).await,
                 Err(err) => Err(err),
             }
-        }).await;
-        let result = match result {
-            Ok(Ok(result)) => ScanTaskInfo::with_proxy(proxy_addr, result),
-            Ok(Err(err)) => ScanTaskInfo::err_with_proxy(proxy_addr, err),
-            Err(err) => ScanTaskInfo::err_with_proxy(proxy_addr, "Timeout"),
-        };
-        resources.result_handler.save_scan_results(T::scanner_name(), &self.addr, result).await;
+        }).await?
     }
 }
 

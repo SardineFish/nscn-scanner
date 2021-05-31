@@ -1,10 +1,9 @@
 
 use serde::{Serialize, Deserialize};
 
-use crate::{net_scanner::{result_handler::NetScanResultSet, scanner::{TcpScanTask}, scheduler::{ScannerResources}}};
-use crate::config::GLOBAL_CONFIG;
+use crate::{net_scanner::{result_handler::NetScanResultSet, scheduler::{ScannerResources}}};
 
-use super::{ftp::{FTPScanResult, FTPScanTask}, ssh::{SSHScanTask, SSHScannResult}};
+use super::{ftp::{FTPScanResult}, ssh::{SSHScannResult}};
 
 pub struct TCPScanTask {
     pub addr: String,
