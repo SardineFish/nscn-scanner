@@ -2,7 +2,7 @@ use std::{collections::HashMap, ops::Range};
 
 use serde::{Deserialize, Serialize};
 use mongodb::{Database, bson::{self, doc,  Document}, options::{FindOptions, Hint}};
-use nscn::{IPGeoData, NetScanRecord, ServiceRecord, VulnInfo, error::SimpleError};
+use nscn::{IPGeoData, NetScanRecord, ServiceRecord, VulnInfo, error::{LogError, SimpleError}};
 use futures::StreamExt;
 
 use crate::error::ServiceError;
@@ -79,7 +79,7 @@ impl Model {
                     "name": "any_available_1",
                 }
             ]
-        }, None).await?;
+        }, None).await.log_error_consume("init-db-scan");
 
         self.db.run_command(doc! {
             "createIndexes": "analyse",
@@ -99,7 +99,7 @@ impl Model {
                     "name": "geo_location",
                 },
             ]
-        }, None).await?;
+        }, None).await.log_error_consume("init-db-analyse");
 
         self.db.run_command(doc! {
             "createIndexes": "vulns",
@@ -110,7 +110,7 @@ impl Model {
                     "unique": true,
                 },
             ]
-        }, None).await?;
+        }, None).await.log_error_consume("init-db-vulns");
 
 
         Ok(())

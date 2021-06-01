@@ -35,10 +35,11 @@ impl ScannerMasterScheduler {
         Ok(count)
     }
 
-    pub async fn complete_addr_list(&self, addr_cidr_list: Vec<String>) -> Result<usize, SimpleError> {
-        let count = Self::count_ips(&addr_cidr_list)?;
+    pub async fn complete_addr_list(&self, tasks: Vec<String>) -> Result<usize, SimpleError> {
+        let count = Self::count_ips(&tasks)?;
         self.internal_stats.remove_pending_tasks(count).await;
         self.internal_stats.dispatch_tasks(count).await;
+        self.scheduler.completed_tasks(tasks).await?;
         // self.scheduler.dispathcer().enqueue_tasks(addr_cidr_list).await?;
         Ok(count)
     }
