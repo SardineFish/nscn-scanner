@@ -63,7 +63,7 @@ async fn main() {
             .data(model.clone())
             .data(web::PayloadConfig::new(100 * 1024 * 1024))
             .data(JsonConfig::default().limit(100 * 1024 * 1024))
-            // .wrap(Logger::new("%s - %r %Dms"))
+            .wrap(actix_web::middleware::Logger::new("%s - %r %Dms"))
             .configure(controller::config)
     })
     .bind(&GLOBAL_CONFIG.listen)

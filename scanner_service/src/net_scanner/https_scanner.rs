@@ -35,7 +35,7 @@ impl HttpsScanTask {
 #[async_trait::async_trait]
 impl ScanTask<HttpsResponse> for HttpsScanTask {
     fn scanner_name() -> &'static str {
-        "https"
+        "tls"
     }
     async fn scan<S: Send + Sync + AsyncRead + AsyncWrite + Unpin + 'static>(self, stream: &mut S) -> Result<HttpsResponse, SimpleError> {
         Self::scan(stream).await
