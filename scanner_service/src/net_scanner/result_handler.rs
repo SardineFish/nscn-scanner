@@ -4,6 +4,7 @@ use std::net::Ipv4Addr;
 use std::str::FromStr;
 
 use chrono::Utc;
+use mongodb::options::UpdateOptions;
 use mongodb::{Database, bson::{self, Document, doc}, options::{FindOneAndUpdateOptions}};
 use serde::{Serialize, Deserialize, de::DeserializeOwned};
 
@@ -224,7 +225,10 @@ impl ResultHandler {
             }
         };
         // collection.insert_one(task_result, None).await?;
-        collection.update_one(query, update, None).await?;
+        let opts = UpdateOptions::builder()
+            .upsert(Some(true))
+            .build();
+        collection.update_one(query, update, opts).await?;
 
         Ok(())
     }
