@@ -3,8 +3,6 @@ use std::marker::PhantomData;
 use std::time::Duration;
 
 use async_trait::async_trait;
-use mongodb::bson;
-use mongodb::bson::Bson;
 use serde::{Serialize, de::DeserializeOwned};
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::TcpStream;
@@ -15,6 +13,7 @@ use crate::UniversalScannerOption;
 use crate::{ScanTaskInfo, error::SimpleError, scheduler::TaskPool};
 use crate::config::GLOBAL_CONFIG;
 
+use super::result_handler::SerializeScanResult;
 use super::scheduler::ScannerResources;
 
 #[async_trait]
@@ -39,6 +38,8 @@ pub struct TcpScanTask<T, R>
     _phantom: PhantomData<R>,
 }
 
+pub type TcpScanResult = Box<dyn SerializeScanResult + Send + Sync + 'static>;
+
 impl<T, R> TcpScanTask<T, R> 
 where 
     T: ScanTask<R> + Send + 'static, 
@@ -59,11 +60,11 @@ where
         self.config = cfg;
         self
     }
-    pub async fn schedule(self, task_pool: &mut TaskPool<ScannerResources>) -> JoinHandle<Option<Bson>> {
+    pub async fn schedule(self, task_pool: &mut TaskPool<ScannerResources>) -> JoinHandle<TcpScanResult> {
         task_pool.spawn(T::scanner_name(), Self::start, self).await
     }
 
-    async fn start(self, resources: &mut ScannerResources) -> Option<Bson> {
+    async fn start(self, resources: &mut ScannerResources) -> TcpScanResult {
         let mut result = ScanTaskInfo::new(self.addr.clone(), self.port).scanner(T::scanner_name());
 
         let scan_result = match self.config.use_proxy {
@@ -80,7 +81,8 @@ where
             Ok(scan_result) => result.success(scan_result),
             Err(err) => result.err(err),
         };
-        bson::to_bson(&result).ok()
+        Box::new(result)
+        // bson::to_bson(&result).ok()
         // resources.result_handler.save_scan_results(result).await;
     }
 

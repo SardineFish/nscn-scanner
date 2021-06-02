@@ -3,7 +3,6 @@ use std::net::Ipv4Addr;
 use std::str::FromStr;
 
 use chrono::Utc;
-use mongodb::bson::Bson;
 use mongodb::options::UpdateOptions;
 use mongodb::{Database, bson::{self, Document, doc}, options::{FindOneAndUpdateOptions}};
 use serde::{Serialize, Deserialize};
@@ -11,7 +10,9 @@ use serde::{Serialize, Deserialize};
 use crate::{ServiceAnalyseResult, config::{GLOBAL_CONFIG}};
 use crate::error::*;
 
-use super::{http_scanner::HttpResponseData, https_scanner::HttpsResponse, tcp_scanner::scanner::TCPScanResult};
+use super::scanner::TcpScanResult;
+use super::tcp_scanner::scanner::TCPScanResult;
+use super::{http_scanner::HttpResponseData, https_scanner::HttpsResponse};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct NetScanRecord {
@@ -145,6 +146,22 @@ pub struct ResultHandler {
     pub(super) db: Database,
 }
 
+pub trait SerializeScanResult {
+    fn to_bson(&self) -> Result<bson::Bson, bson::ser::Error>;
+    fn success(&self) -> bool;
+}
+
+impl<R: Serialize> SerializeScanResult for ScanTaskInfo<R> {
+    fn to_bson(&self) -> Result<bson::Bson, bson::ser::Error> {
+        bson::to_bson(&self)
+    }
+    fn success(&self) -> bool {
+        match self.result {
+            ScanResult::Ok(_) => true,
+            _ => false,
+        }
+    }
+}
 
 impl ResultHandler {
     pub async fn save_analyse_results(&self, ip_addr: &str, service_key: &str, services: HashMap<String, ServiceAnalyseResult>) -> Result<(), SimpleError> {
@@ -196,15 +213,19 @@ impl ResultHandler {
         Ok(())
 
     }
-    pub async fn save_scan_results_batch(&self, addr: &str, results: Vec<Bson>) -> Result<(), SimpleError> {
+    pub async fn save_scan_results_batch(&self, addr: String, results: Vec<TcpScanResult>) -> Result<(), SimpleError> {
         let collection  = self.db.collection::<Document>(&GLOBAL_CONFIG.scanner.save.collection);
-        let addr_int: u32 = std::net::Ipv4Addr::from_str(addr)?.into();
+        let addr_int: u32 = std::net::Ipv4Addr::from_str(&addr)?.into();
         let query = doc! {
             "addr_int": addr_int as i64
         };
-        let update = doc! {
+        let is_online = results.iter().any(|r|r.success());
+        let results = results.into_iter()
+            .filter_map(|r| r.to_bson().log_error("serialize-result").ok())
+            .collect::<Vec::<_>>();
+        let mut update = doc! {
             "$setOnInsert": {
-                "addr": bson::to_bson(addr)?,
+                "addr": bson::to_bson(&addr)?,
                 "addr_int": addr_int as i64,
             },
             "$push": {
@@ -213,6 +234,11 @@ impl ResultHandler {
                 }
             }
         };
+        if is_online {
+            update.insert("$set", doc! {
+                "online": true,
+            });
+        }
         let opts = UpdateOptions::builder()
             .upsert(Some(true))
             .build();
