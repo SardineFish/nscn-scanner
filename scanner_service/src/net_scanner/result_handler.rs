@@ -4,6 +4,7 @@ use std::net::Ipv4Addr;
 use std::str::FromStr;
 
 use chrono::Utc;
+use mongodb::bson::Bson;
 use mongodb::options::UpdateOptions;
 use mongodb::{Database, bson::{self, Document, doc}, options::{FindOneAndUpdateOptions}};
 use serde::{Serialize, Deserialize, de::DeserializeOwned};
@@ -151,6 +152,7 @@ pub struct ResultHandler {
     pub(super) db: Database,
 }
 
+
 impl ResultHandler {
     pub async fn save_scan_results<T: Serialize + DeserializeOwned + Unpin + fmt::Debug>(&self, task_result: ScanTaskInfo<T>) {
         let future = self.try_save(task_result);
@@ -230,6 +232,29 @@ impl ResultHandler {
             .build();
         collection.update_one(query, update, opts).await?;
 
+        Ok(())
+    }
+    pub async fn save_scan_results_batch(&self, addr: &str, results: Vec<Bson>) -> Result<(), SimpleError> {
+        let collection  = self.db.collection::<Document>(&GLOBAL_CONFIG.scanner.save.collection);
+        let addr_int: u32 = std::net::Ipv4Addr::from_str(addr)?.into();
+        let query = doc! {
+            "addr_int": addr_int as i64
+        };
+        let update = doc! {
+            "$setOnInsert": {
+                "addr": bson::to_bson(addr)?,
+                "addr_int": addr_int as i64,
+            },
+            "$push": {
+                "results": {
+                    "$each": bson::to_bson(&results)?,
+                }
+            }
+        };
+        let opts = UpdateOptions::builder()
+            .upsert(Some(true))
+            .build();
+        collection.update_one(query, update, opts).await?;
         Ok(())
     }
 }

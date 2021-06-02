@@ -3,9 +3,12 @@ use std::marker::PhantomData;
 use std::time::Duration;
 
 use async_trait::async_trait;
+use mongodb::bson;
+use mongodb::bson::Bson;
 use serde::{Serialize, de::DeserializeOwned};
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::TcpStream;
+use tokio::task::JoinHandle;
 use tokio::time::timeout;
 
 use crate::UniversalScannerOption;
@@ -56,11 +59,11 @@ where
         self.config = cfg;
         self
     }
-    pub async fn schedule(self, task_pool: &mut TaskPool<ScannerResources>) {
+    pub async fn schedule(self, task_pool: &mut TaskPool<ScannerResources>) -> JoinHandle<Option<Bson>> {
         task_pool.spawn(T::scanner_name(), Self::start, self).await
     }
 
-    async fn start(self, resources: &mut ScannerResources) {
+    async fn start(self, resources: &mut ScannerResources) -> Option<Bson> {
         let mut result = ScanTaskInfo::new(self.addr.clone(), self.port).scanner(T::scanner_name());
 
         let scan_result = match self.config.use_proxy {
@@ -77,8 +80,8 @@ where
             Ok(scan_result) => result.success(scan_result),
             Err(err) => result.err(err),
         };
-        
-        resources.result_handler.save_scan_results(result).await;
+        bson::to_bson(&result).ok()
+        // resources.result_handler.save_scan_results(result).await;
     }
 
     async fn scan_with_connector<S: AsyncRead + AsyncWrite + Sync + Send + Unpin + 'static, C: Connector<S>>(self, connector: C) -> Result<R, SimpleError> {

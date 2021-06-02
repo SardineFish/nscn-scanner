@@ -1,8 +1,9 @@
 use std::{net::Ipv4Addr};
 
-use futures::{future::join, pin_mut};
-use mongodb::{Database};
-use tokio::{task::{self, JoinHandle}};
+use futures::{future::{join, join_all}, pin_mut};
+use mongodb::{Database, bson::Bson};
+use serde::Serialize;
+use tokio::{spawn, task::{self, JoinHandle}};
 
 use crate::{ScannerConfig, SchedulerStats, config, error::*, scheduler::{SharedSchedulerInternalStats, SharedSchedulerStats, local_scheduler::LocalScheduler}};
 use super::{http_scanner::HttpScanTask, https_scanner::HttpsScanTask, result_handler::ResultHandler, scanner::TcpScanTask, tcp_scanner::{ftp::FTPScanTask, ssh::SSHScanTask}};
@@ -128,25 +129,39 @@ impl Scheduler {
         }
     }
     async fn dispatch(&mut self, addr: String) {
+        let mut join_list = Vec::new();
         for (port, scanners) in &self.config.ports {
             for scanner in scanners {
                 match self.config.config.get(scanner) {
-                    Some(cfg) if cfg.enabled => 
-                        Self::dispatch_with_scanner(addr.clone(), *port, scanner, cfg.clone(), &mut self.task_pool).await,
+                    Some(cfg) if cfg.enabled => {
+                        match Self::dispatch_with_scanner(addr.clone(), *port, scanner, cfg.clone(), &mut self.task_pool).await {
+                            Some(join) => join_list.push(join),
+                            _ => (),
+                        }
+                    },
                     _ => (),
                 }
             }
         }
         self.resources.stats.dispatch_tasks(1).await;
+        let result_handler = self.resources.result_handler.clone();
+        spawn(async move {
+            let scan_results = join_all(join_list).await;
+            let scan_results = scan_results.into_iter()
+                .filter_map(|r|r.ok().and_then(|r|r))
+                .collect::<Vec<Bson>>();
+            result_handler.save_scan_results_batch(&addr, scan_results).await.log_error_consume("save-result-batch");
+        });
     }
-    async fn dispatch_with_scanner(addr: String, port: u16, scanner: &str, cfg: UniversalScannerOption, task_pool: &mut crate::scheduler::TaskPool<ScannerResources>) {
-        match scanner {
+    async fn dispatch_with_scanner(addr: String, port: u16, scanner: &str, cfg: UniversalScannerOption, task_pool: &mut crate::scheduler::TaskPool<ScannerResources>) -> Option<JoinHandle<Option<Bson>>> {
+        let join = match scanner {
             "http" => TcpScanTask::new(addr.clone(), port, HttpScanTask(addr, port)).config(cfg).schedule(task_pool).await,
             "tls" => TcpScanTask::new(addr, port, HttpsScanTask).config(cfg).schedule(task_pool).await,
             "ftp" => TcpScanTask::new(addr, port, FTPScanTask).config(cfg).schedule(task_pool).await,
             "ssh" => TcpScanTask::new(addr, port, SSHScanTask).config(cfg).schedule(task_pool).await,
-            _ => (),
-        }
+            _ => return None,
+        };
+        Some(join)
     }
 }
 
