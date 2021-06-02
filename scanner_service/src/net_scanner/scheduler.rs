@@ -2,7 +2,6 @@ use std::{net::Ipv4Addr};
 
 use futures::{future::{join, join_all}, pin_mut};
 use mongodb::{Database, bson::Bson};
-use serde::Serialize;
 use tokio::{spawn, task::{self, JoinHandle}};
 
 use crate::{ScannerConfig, SchedulerStats, config, error::*, scheduler::{SharedSchedulerInternalStats, SharedSchedulerStats, local_scheduler::LocalScheduler}};

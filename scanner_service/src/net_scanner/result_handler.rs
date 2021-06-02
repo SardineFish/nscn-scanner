@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::fmt;
 use std::net::Ipv4Addr;
 use std::str::FromStr;
 
@@ -7,7 +6,7 @@ use chrono::Utc;
 use mongodb::bson::Bson;
 use mongodb::options::UpdateOptions;
 use mongodb::{Database, bson::{self, Document, doc}, options::{FindOneAndUpdateOptions}};
-use serde::{Serialize, Deserialize, de::DeserializeOwned};
+use serde::{Serialize, Deserialize};
 
 use crate::{ServiceAnalyseResult, config::{GLOBAL_CONFIG}};
 use crate::error::*;
@@ -63,8 +62,6 @@ impl<T: Serialize> From<Result<T, SimpleError>> for ScanResult<T> {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ScanTaskInfo<T> {
-    pub addr_int: i64,
-    pub addr: String,
     pub port: i32,
     pub scanner: String,
     pub proxy: Option<String>,
@@ -113,8 +110,6 @@ impl ScanTaskInfoBuilder {
     pub fn success<T>(self, result: T) -> ScanTaskInfo<T> {
         ScanTaskInfo::<T> {
             result: ScanResult::Ok(result),
-            addr: self.addr,
-            addr_int: self.addr_int,
             port: self.port as i32,
             proxy: self.proxy,
             scanner: self.scanner.to_owned(),
@@ -124,8 +119,6 @@ impl ScanTaskInfoBuilder {
     pub fn err<T, E: Into<SimpleError>>(self, err: E) -> ScanTaskInfo<T> {
         ScanTaskInfo::<T> {
             result: ScanResult::Err(<E as Into<SimpleError>>::into(err).msg),
-            addr: self.addr,
-            addr_int: self.addr_int,
             port: self.port as i32,
             proxy: self.proxy,
             scanner: self.scanner.to_owned(),
@@ -154,15 +147,6 @@ pub struct ResultHandler {
 
 
 impl ResultHandler {
-    pub async fn save_scan_results<T: Serialize + DeserializeOwned + Unpin + fmt::Debug>(&self, task_result: ScanTaskInfo<T>) {
-        let future = self.try_save(task_result);
-        match tokio::time::timeout(std::time::Duration::from_secs(300), async move {
-            future.await.log_error_consume("result-saving");
-        }).await {
-            Ok(_) => (),
-            Err(_) => log::error!("Result saving timeout"),
-        }
-    }
     pub async fn save_analyse_results(&self, ip_addr: &str, service_key: &str, services: HashMap<String, ServiceAnalyseResult>) -> Result<(), SimpleError> {
         let collecion = self.db.collection::<Document>(&GLOBAL_CONFIG.analyser.save);
 
@@ -211,28 +195,6 @@ impl ResultHandler {
 
         Ok(())
 
-    }
-    async fn try_save<T>(&self, task_result: ScanTaskInfo<T>) -> Result<(), SimpleError> where T: Serialize + DeserializeOwned + Unpin + fmt::Debug {
-        let collection = self.db.collection::<ScanTaskInfo<T>>(&GLOBAL_CONFIG.scanner.save.collection);
-        let query = doc! {
-            "addr_int": task_result.addr_int,
-        };
-        let update = doc! {
-            "$setOnInsert": {
-                "addr": bson::to_bson(&task_result.addr)?,
-                "addr_int": task_result.addr_int,
-            },
-            "$push": {
-                "results": bson::to_bson(&task_result)?,
-            }
-        };
-        // collection.insert_one(task_result, None).await?;
-        let opts = UpdateOptions::builder()
-            .upsert(Some(true))
-            .build();
-        collection.update_one(query, update, opts).await?;
-
-        Ok(())
     }
     pub async fn save_scan_results_batch(&self, addr: &str, results: Vec<Bson>) -> Result<(), SimpleError> {
         let collection  = self.db.collection::<Document>(&GLOBAL_CONFIG.scanner.save.collection);
