@@ -211,7 +211,20 @@ impl ResultHandler {
     }
     async fn try_save<T>(&self, task_result: ScanTaskInfo<T>) -> Result<(), SimpleError> where T: Serialize + DeserializeOwned + Unpin + fmt::Debug {
         let collection = self.db.collection::<ScanTaskInfo<T>>(&GLOBAL_CONFIG.scanner.save.collection);
-        collection.insert_one(task_result, None).await?;
+        let query = doc! {
+            "addr_int": task_result.addr_int,
+        };
+        let update = doc! {
+            "$setOnInsert": {
+                "addr": bson::to_bson(&task_result.addr)?,
+                "addr_int": task_result.addr_int,
+            },
+            "$push": {
+                "results": bson::to_bson(&task_result)?,
+            }
+        };
+        // collection.insert_one(task_result, None).await?;
+        collection.update_one(query, update, None).await?;
 
         Ok(())
     }
