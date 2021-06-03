@@ -164,9 +164,9 @@ impl Model {
             opts.limit = Some(count as i64);
         }
         opts.projection = Some(projection);
-        if online_only {
-            opts.hint = Some(Hint::Keys(doc! { "online": 1 }));
-        }
+        // if online_only {
+        //     opts.hint = Some(Hint::Keys(doc! { "online": 1 }));
+        // }
         let docs: Vec<AddrOnlyDoc> = self.db.collection::<AddrOnlyDoc>("scan")
             .find(query, opts)
             .await?
