@@ -7,19 +7,33 @@ use mongodb::options::UpdateOptions;
 use mongodb::{Database, bson::{self, Document, doc}, options::{FindOneAndUpdateOptions}};
 use serde::{Serialize, Deserialize};
 
+use crate::FTPScanResult;
+use crate::SSHScannResult;
 use crate::{ServiceAnalyseResult, config::{GLOBAL_CONFIG}};
 use crate::error::*;
 
 use super::scanner::TcpScanResult;
-use super::tcp_scanner::scanner::TCPScanResult;
 use super::{http_scanner::HttpResponseData, https_scanner::HttpsResponse};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct NetScanRecord {
     pub addr_int: i64,
     pub addr: String,
-    pub last_update: bson::DateTime,
-    pub scan: NetScanResult,
+    pub online: Option<bool>,
+    pub results: Vec<ScanTaskData>
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(tag="scanner")]
+pub enum TcpScanResultType {
+    #[serde(rename = "http")]
+    Http(ScanResult<HttpResponseData>),
+    #[serde(rename = "tls")]
+    Tls(ScanResult<HttpsResponse>),
+    #[serde(rename = "ftp")]
+    Ftp(ScanResult<FTPScanResult>),
+    #[serde(rename = "ssh")]
+    SSH(ScanResult<SSHScannResult>),
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -59,7 +73,14 @@ impl<T: Serialize> From<Result<T, SimpleError>> for ScanResult<T> {
     }
 }
 
-
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ScanTaskData {
+    pub port: i32,
+    pub proxy: Option<String>,
+    pub time: bson::DateTime,
+    #[serde(flatten)]
+    pub result: TcpScanResultType,
+}
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ScanTaskInfo<T> {
@@ -126,19 +147,6 @@ impl ScanTaskInfoBuilder {
             time: self.time,
         }
     }
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct NetScanResult {
-    pub http: Option<NetScanResultSet<HttpResponseData>>,
-    pub https: Option<NetScanResultSet<HttpsResponse>>,
-    pub tcp: Option<HashMap<String, TCPScanResult>>,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct NetScanResultSet<T> {
-    pub success: i32,
-    pub results: Vec<ScanTaskInfo<T>>,
 }
 
 #[derive(Clone)]

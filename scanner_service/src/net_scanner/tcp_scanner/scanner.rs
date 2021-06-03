@@ -1,7 +1,7 @@
 
 use serde::{Serialize, Deserialize};
 
-use crate::{net_scanner::{result_handler::NetScanResultSet, scheduler::{ScannerResources}}};
+use crate::{net_scanner::{scheduler::{ScannerResources}}};
 
 use super::{ftp::{FTPScanResult}, ssh::{SSHScannResult}};
 
@@ -13,8 +13,8 @@ pub struct TCPScanTask {
 impl TCPScanTask {
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-pub struct TCPScanResult {
-    pub ftp: Option<NetScanResultSet<FTPScanResult>>,
-    pub ssh: Option<NetScanResultSet<SSHScannResult>>,
-}
+// #[derive(Serialize, Deserialize, Debug)]
+// pub struct TCPScanResult {
+//     pub ftp: Option<NetScanResultSet<FTPScanResult>>,
+//     pub ssh: Option<NetScanResultSet<SSHScannResult>>,
+// }
