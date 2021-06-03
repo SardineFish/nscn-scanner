@@ -67,9 +67,9 @@ async fn geo_stats_by_service_version(path: Path<(String, String)>, model: Data<
 async fn geo_stats_by_port(path: Path<u16>, model: Data<Model>) -> ApiResult<Vec<AnalyseGeometryStats>> {
     let results = match path.into_inner() {
         80 => model.geo_stats_by_scanner("http").await?,
-        443 => model.geo_stats_by_scanner("https").await?,
-        21 => model.geo_stats_by_scanner("tcp.21.ftp").await?,
-        22 => model.geo_stats_by_scanner("tcp.22.ssh").await?,
+        443 => model.geo_stats_by_scanner("tls").await?,
+        21 => model.geo_stats_by_scanner("ftp").await?,
+        22 => model.geo_stats_by_scanner("ssh").await?,
         port => Err(ApiError(StatusCode::BAD_REQUEST, format!("Invalid port '{}'", port)))?,
     };
     Ok(Response(results))

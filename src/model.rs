@@ -413,7 +413,7 @@ impl Model {
         pipeline.push(doc! {
             "$lookup": {
                 "from": "analyse",
-                "localField": "analyse",
+                "localField": "addr_int",
                 "foreignField": "addr_int",
                 "as": "analyse",
             },
