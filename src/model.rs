@@ -66,18 +66,31 @@ impl Model {
             "createIndexes": "scan",
             "indexes": [
                 {
-                    "key": {"addr": 1},
-                    "name": "addr_1",
-                },
-                {
                     "key": {"addr_int": 1},
                     "name": "addr_int_1",
                     "unique": true,
                 },
                 {
-                    "key": {"any_available" : 1},
-                    "name": "any_available_1",
-                }
+                    "key": {
+                        "online" : 1,
+                    },
+                    "name": "online",
+                },
+                {
+                    "key": {
+                        "results.result": 1,
+                        "results.port": 1,
+                        "addr": 1,
+                    },
+                    "name": "result_port",
+                },
+                {
+                    "key": {
+                        "results.scanner": 1,
+                        "results.result": 1,
+                    },
+                    "name": "scanner_result",
+                },
             ]
         }, None).await?;
 

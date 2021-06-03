@@ -282,7 +282,7 @@
             count: -1
         }
     }
-]
+];
 
 [
     {
@@ -292,4 +292,44 @@
             geo: { $first: "$geo" },
         }
     }
-]
+];
+
+
+[
+    {
+        $match: {}
+    },
+    {
+        $project: {
+            addr: 1,
+            "results.port": 1,
+            "results.result": 1
+        }
+    },
+    {
+        $replaceRoot: {
+            newRoot: {
+                addr: "$addr",
+                ports: {
+                    $reduce: {
+                        input: {
+                            $map: {
+                                input: {
+                                    $filter: {
+                                        input: "$results",
+                                        as: "result",
+                                        cond: { $eq: ["$$result.result", "Err"] }
+                                    }
+                                },
+                                as: "result",
+                                in: "$$result.port"
+                            }
+                        },
+                        initialValue: [],
+                        in: {$setUnion: ["$$value", ["$$this"]]}
+                    }
+                }
+            }
+        }
+    },
+];
