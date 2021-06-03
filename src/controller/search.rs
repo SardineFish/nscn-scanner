@@ -34,6 +34,12 @@ async fn search_by_port(path: Path<u16>, query: Query<QueryParameters>, model: D
     Ok(Response(results))
 }
 
+#[get("/scanner/{scanner}")]
+async fn search_by_scanner(path: Path<String>, query: Query<QueryParameters>, model: Data<Model>) -> ApiResult<Vec<ScanResultBreif>> {
+    let results = model.get_by_scanner(&path, query.skip, query.count).await?;
+    Ok(Response(results))
+}
+
 #[get("/geo_stats/all")]
 async fn geo_stats_all(model: Data<Model>) -> ApiResult<Vec<AnalyseGeometryStats>> {
     let results = model.geo_stats_by_ip_range(0..u32::max_value()).await?;
@@ -77,6 +83,7 @@ pub fn config(cfg: &mut ServiceConfig) {
             .service(search_by_service)
             .service(search_by_service_version)
             .service(search_by_port)
+            .service(search_by_scanner)
             .service(geo_stats_all)
             .service(geo_stats_by_service_name)
             .service(geo_stats_by_service_version)
