@@ -1,7 +1,7 @@
 use std::{collections::HashMap, ops::Range};
 
 use serde::{Deserialize, Serialize};
-use mongodb::{Database, bson::{self, doc,  Document}, options::{FindOptions, Hint}};
+use mongodb::{Database, bson::{self, Bson, Document, doc}, options::{FindOptions, Hint}};
 use nscn::{IPGeoData, NetScanRecord, ServiceRecord, VulnInfo, error::SimpleError};
 use futures::StreamExt;
 
@@ -58,9 +58,16 @@ pub struct AnalyseGeometryStats {
 pub struct ScanResultBreif {
     pub addr: String,
     pub ports: Vec<i32>,
-    pub services: Vec<String>,
+    pub services: Vec<ServiceAnalyseResultBrif>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ServiceAnalyseResultBrif {
+    pub name: String,
+    pub version: String,
     pub vulns: i32,
 }
+
 
 impl Model {
     pub fn new(db: Database) -> Self {
@@ -196,21 +203,9 @@ impl Model {
                     "$mergeObjects": ["$$ROOT", {
                         "vulns": {
                             "$reduce": {
-                                "input": {
-                                    "$map": {
-                                        "input": {
-                                            "$concatArrays": [
-                                                { "$objectToArray": "$web" },
-                                                { "$objectToArray": "$ssh" },
-                                                { "$objectToArray": "$ftp" },
-                                            ],
-                                        },
-                                        "as": "service",
-                                        "in": "$$service.v.vulns"
-                                    }
-                                },
+                                "input": "$services",
                                 "initialValue": [],
-                                "in": { "$concatArrays": ["$$value", "$$this"] }
+                                "in": { "$concatArrays": ["$$value", "$$this.vulns"] }
                             }
                         }
                     }]
@@ -266,7 +261,7 @@ impl Model {
         }
     }
 
-    pub async fn get_by_ip_range(&self, range: Range<u32>, skip: usize, count: usize, online_only: bool) -> Result<Vec<ScanAnalyseResult>, ServiceError> {
+    pub async fn get_by_ip_range(&self, range: Range<u32>, skip: usize, count: usize, online_only: bool) -> Result<Vec<ScanResultBreif>, ServiceError> {
         let mut pipeline = Vec::<Document>::new();
         pipeline.push(doc! {
             "$match": {
@@ -279,71 +274,56 @@ impl Model {
         if online_only {
             pipeline.push(doc! {
                 "$match": {
-                    "any_available": true,
+                    "online": true,
                 }
             })
         }
-        self.query_union_scan_with_analyse(pipeline, skip, count).await
+        self.query_union_scan_from_analyse(pipeline, skip, count).await
     }
 
-    pub async fn get_by_scanner(&self, scanner: &str,skip: usize, count: usize) -> Result<Vec<ScanAnalyseResult>, ServiceError> {
+    pub async fn get_by_scanner(&self, scanner: &str,skip: usize, count: usize) -> Result<Vec<ScanResultBreif>, ServiceError> {
         let mut pipeline = Vec::new();
         pipeline.push(doc! {
             "$match": {
-                "any_available": true,
-                format!("scan.{}.success", scanner): {"$gt": 0}
+                "results": {
+                    "$elemMatch": {
+                        "scanner": scanner,
+                        "result": "Ok"
+                    }
+                }
             }
         });
-        self.query_union_scan_with_analyse(pipeline, skip, count).await
+        self.query_union_analyse_from_scan(pipeline, skip, count).await
     }
  
-    pub async fn get_by_service_name(&self, service_name: &str, skip: usize, count: usize) -> Result<Vec<ScanAnalyseResult>, ServiceError> {
+    pub async fn get_by_service_name(&self, service_name: &str, skip: usize, count: usize) -> Result<Vec<ScanResultBreif>, ServiceError> {
         let mut pipeline = Vec::<Document>::new();
-        let web_key = format!("web.{}", service_name);
-        let ftp_key = format!("ftp.{}", service_name);
-        let ssh_key = format!("ssh.{}", service_name);
         pipeline.push(doc! {
             "$match": {
-                "$or": [
-                    {
-                        web_key: { "$gt": {} },
-                    },
-                    {
-                        ftp_key: { "$gt": {} },
-                    },
-                    {
-                        ssh_key: { "$gt": {} },
+                "services": {
+                    "$elemMatch": {
+                        "name": service_name,
                     }
-                    
-                ]
+                }
             }
         });
-        self.query_union_analyse_with_scan(pipeline, skip, count).await
+        self.query_union_scan_from_analyse(pipeline, skip, count).await
     }
 
-    pub async fn get_by_service_version(&self, service_name: &str, version: &str, skip: usize, count: usize) -> Result<Vec<ScanAnalyseResult>, ServiceError> {
+    pub async fn get_by_service_version(&self, service_name: &str, version: &str, skip: usize, count: usize) -> Result<Vec<ScanResultBreif>, ServiceError> {
         
         let mut pipeline = Vec::<Document>::new();
-        let web_key = format!("web.{}.version", service_name);
-        let ftp_key = format!("ftp.{}.version", service_name);
-        let ssh_key = format!("ssh.{}.version", service_name);
         pipeline.push(doc! {
             "$match": {
-                "$or": [
-                    {
-                        web_key: version,
-                    },
-                    {
-                        ftp_key: version,
-                    },
-                    {
-                        ssh_key: version,
+                "services": {
+                    "$elemMatch": {
+                        "name": service_name,
+                        "version": version,
                     }
-                    
-                ]
+                }
             }
         });
-        self.query_union_analyse_with_scan(pipeline, skip, count).await
+        self.query_union_scan_from_analyse(pipeline, skip, count).await
     }
 
     pub async fn geo_stats_by_ip_range(&self, range: Range<u32>) -> Result<Vec<AnalyseGeometryStats>, ServiceError> {
@@ -437,7 +417,7 @@ impl Model {
         Ok(result)
     }
 
-    async fn query_union_scan_with_analyse(&self, mut pipeline: Vec<Document>, skip: usize, count: usize) -> Result<Vec<ScanAnalyseResult>, ServiceError> {
+    async fn query_union_scan_from_analyse(&self, mut pipeline: Vec<Document>, skip: usize, count: usize) -> Result<Vec<ScanResultBreif>, ServiceError> {
         pipeline.push(doc! {
             "$skip": skip as i64,
         });
@@ -446,70 +426,166 @@ impl Model {
                 "$limit": count as i64,
             });
         }
-        pipeline.push(doc! {
-            "$project": {
-                "scan": "$$ROOT",
-            }
-        });
-        pipeline.push(doc! {
-            "$lookup": {
-                "from": "analyse",
-                "localField": "scan.addr_int",
-                "foreignField": "addr_int",
-                "as": "analyse",
-            }
-        });
-        pipeline.push(doc! {
-             "$project": {
-                "scan": "$scan",
-                "analyse": {
-                    "$arrayElemAt": ["$analyse", 0]
-                }
-            }
-        });
-        let results: Vec<ScanAnalyseResult> = self.db.collection::<Document>("scan").aggregate(pipeline, None)
-            .await?
-            .filter_map(|doc|async move{ doc.ok().and_then(|doc|bson::from_document::<ScanAnalyseResult>(doc).ok())})
-            .collect()
-            .await;
-        Ok(results)
-    }
-
-
-    async fn query_union_analyse_with_scan(&self, mut pipeline: Vec<Document>, skip: usize, count: usize) -> Result<Vec<ScanAnalyseResult>, ServiceError> {
-        pipeline.push(doc! {
-            "$skip": skip as i64,
-        });
-        if count > 0 {
-            pipeline.push(doc! {
-                "$limit": count as i64,
-            });
-        }
-        pipeline.push(doc! {
-            "$project": {
-                "analyse": "$$ROOT",
-            }
-        });
-        pipeline.push(doc! {
+        pipeline.push(doc!{
             "$lookup": {
                 "from": "scan",
-                "localField": "analyse.addr_int",
+                "localField": "addr_int",
                 "foreignField": "addr_int",
                 "as": "scan",
             }
         });
         pipeline.push(doc! {
             "$project": {
-                "analyse": "$analyse",
-                "scan": {
-                    "$arrayElemAt": ["$scan", 0]
+                "scan": { "$arrayElemAt": ["$scan", 0] },
+                "services": "$services"
+            }
+        });
+        pipeline.push(doc! {
+            "$replaceRoot": {
+                "newRoot": {
+                    "addr": "$scan.addr",
+                    "ports": {
+                        "$reduce": {
+                            "input": {
+                                "$map": {
+                                    "input": {
+                                        "$filter": {
+                                            "input": "$scan.results",
+                                            "as": "result",
+                                            "cond": { "$eq": ["$$result.result", "Ok"] }
+                                        }
+                                    },
+                                    "as": "result",
+                                    "in": "$$result.port"
+                                }
+                            },
+                            "initialValue": [],
+                            "in": { "$setUnion": ["$$value", ["$$this"]] }
+                        }
+                    },
+                    "services": {
+                        "$map": {
+                            "input": "$services",
+                            "as": "service",
+                            "in": {
+                                "name": "$$service.name",
+                                "version": "$$service.version",
+                                "vulns": { "$size": "$$service.vulns" }
+                            }
+                        }
+                    },
                 }
             }
         });
 
-        let results: Vec<ScanAnalyseResult> = self.db.collection::<Document>("analyse").aggregate(pipeline, None)
+        let results: Vec<ScanResultBreif> = self.db.collection::<Document>("scan").aggregate(pipeline, None)
             .await?
-            .filter_map(|doc|async move{ doc.ok().and_then(|doc|bson::from_document::<ScanAnalyseResult>(doc).ok())})
+            .filter_map(|doc|async move{ doc.ok().and_then(|doc|bson::from_document::<ScanResultBreif>(doc).ok())})
+            .collect()
+            .await;
+        Ok(results)
+    }
+
+
+    async fn query_union_analyse_from_scan(&self, mut pipeline: Vec<Document>, skip: usize, count: usize) -> Result<Vec<ScanResultBreif>, ServiceError> {
+        pipeline.push(doc! {
+            "$skip": skip as i64,
+        });
+        if count > 0 {
+            pipeline.push(doc! {
+                "$limit": count as i64,
+            });
+        }
+        pipeline.push(doc! {
+            "$project": {
+                "addr": 1,
+                "addr_int": 1,
+                "results.port": 1,
+                "results.result": 1
+            }
+        });
+        pipeline.push(doc! {
+            "$replaceRoot": {
+                "newRoot": {
+                    "addr": "$addr",
+                    "addr_int": "$addr_int",
+                    "ports": {
+                        "$reduce": {
+                            "input": {
+                                "$map": {
+                                    "input": {
+                                        "$filter": {
+                                            "input": "$results",
+                                            "as": "result",
+                                            "cond": { "$eq": ["$$result.result", "Ok"] }
+                                        }
+                                    },
+                                    "as": "result",
+                                    "in": "$$result.port"
+                                }
+                            },
+                            "initialValue": [],
+                            "in": {"$setUnion": ["$$value", ["$$this"]]}
+                        }
+                    }
+                }
+            }
+        });
+        pipeline.push(doc! {
+        "$replaceRoot": {
+                "newRoot": {
+                    "addr": "$addr",
+                    "ports": "$ports",
+                    "analyse": {
+                        "$cond": {
+                            "if": { "$eq": ["$ports", []] },
+                            "then": Bson::Null,
+                            "else": "$addr_int"
+                        }
+                    }
+                }
+            }
+        });
+        pipeline.push(doc! {
+            "$lookup": {
+                "from": "analyse",
+                "localField": "analyse",
+                "foreignField": "addr_int",
+                "as": "analyse",
+            }
+        });
+        pipeline.push(doc! {
+            "$project": {
+                "addr": "$addr",
+                "ports": "$ports",
+                "analyse": {
+                    "$arrayElemAt": ["$analyse", 0],
+                }
+            }
+        });
+        pipeline.push(doc! {
+            "$replaceRoot": {
+                "newRoot": {
+                    "addr": "$addr",
+                    "ports": "$ports",
+                    "services": {
+                        "$map": {
+                            "input": "$analyse.services",
+                            "as": "service",
+                            "in": {
+                                "name": "$$service.name",
+                                "version": "$$service.version",
+                                "vulns": { "$size": "$$service.vulns" }
+                            }
+                        }
+                    },
+                }
+            }
+        });
+
+        let results: Vec<ScanResultBreif> = self.db.collection::<Document>("analyse").aggregate(pipeline, None)
+            .await?
+            .filter_map(|doc|async move{ doc.ok().and_then(|doc|bson::from_document::<ScanResultBreif>(doc).ok())})
             .collect()
             .await;
 
