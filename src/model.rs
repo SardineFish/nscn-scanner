@@ -478,7 +478,7 @@ impl Model {
             }
         });
 
-        let results: Vec<ScanResultBreif> = self.db.collection::<Document>("scan").aggregate(pipeline, None)
+        let results: Vec<ScanResultBreif> = self.db.collection::<Document>("analyse").aggregate(pipeline, None)
             .await?
             .filter_map(|doc|async move{ doc.ok().and_then(|doc|bson::from_document::<ScanResultBreif>(doc).ok())})
             .collect()
@@ -583,7 +583,7 @@ impl Model {
             }
         });
 
-        let results: Vec<ScanResultBreif> = self.db.collection::<Document>("analyse").aggregate(pipeline, None)
+        let results: Vec<ScanResultBreif> = self.db.collection::<Document>("scan").aggregate(pipeline, None)
             .await?
             .filter_map(|doc|async move{ doc.ok().and_then(|doc|bson::from_document::<ScanResultBreif>(doc).ok())})
             .collect()
