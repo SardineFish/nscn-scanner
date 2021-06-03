@@ -1,6 +1,6 @@
 use std::{collections::HashMap, pin::Pin, sync::atomic::AtomicPtr, task::{Context, Poll}};
 
-use http_types::Url;
+use http_types::{Url, headers::HeaderValues};
 use reqwest::{ header::HeaderMap};
 use serde::{Serialize, Deserialize};
 use tokio::io::{self, AsyncRead, AsyncWrite, ReadBuf};
@@ -32,6 +32,13 @@ impl SerializeHeaders for HeaderMap {
     }
 }
 
+fn stringify_header_values(values: HeaderValues) -> String {
+    values.into_iter()
+        .map(|v|v.as_str())
+        .collect::<Vec::<_>>()
+        .join(",")
+}
+
 pub struct HttpScanTask(pub String, pub u16);
 
 #[async_trait::async_trait]
@@ -45,7 +52,7 @@ impl ScanTask<HttpResponseData> for HttpScanTask {
             status: u16::from(response.status()) as i32,
             body: response.take_body().into_string().await?,
             headers: response.into_iter()
-                .map(|(name, value)| (name.to_string(), value.to_string()))
+                .map(|(name, values)| (name.to_string(), stringify_header_values(values)))
                 .collect()
         })
     }
