@@ -54,6 +54,14 @@ pub struct AnalyseGeometryStats {
     pub count: i64,
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ScanResultBreif {
+    pub addr: String,
+    pub ports: Vec<i32>,
+    pub services: Vec<String>,
+    pub vulns: i32,
+}
+
 impl Model {
     pub fn new(db: Database) -> Self {
         Self {
@@ -129,7 +137,6 @@ impl Model {
         Ok(())
     }
 
-
     pub async fn get_scaned_addr(&self, range: Range<u32>, skip: usize, count: usize, online_only: bool) -> Result<Vec<AddrOnlyDoc>, ServiceError> {
         let query = match online_only {
             true => doc! {
@@ -137,7 +144,7 @@ impl Model {
                     "$gte": range.start as i64,
                     "$lt": range.end as i64,
                 },
-                "any_available": true,
+                "online": true,
             },
             false => doc! {
                 "addr_int": {
@@ -158,7 +165,7 @@ impl Model {
         }
         opts.projection = Some(projection);
         if online_only {
-            opts.hint = Some(Hint::Keys(doc! { "any_available": 1 }));
+            opts.hint = Some(Hint::Keys(doc! { "online": 1 }));
         }
         let docs: Vec<AddrOnlyDoc> = self.db.collection::<AddrOnlyDoc>("scan")
             .find(query, opts)

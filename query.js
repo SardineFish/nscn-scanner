@@ -302,6 +302,7 @@
     {
         $project: {
             addr: 1,
+            addr_int: 1,
             "results.port": 1,
             "results.result": 1
         }
@@ -310,6 +311,7 @@
         $replaceRoot: {
             newRoot: {
                 addr: "$addr",
+                addr_int: "$addr_int",
                 ports: {
                     $reduce: {
                         input: {
@@ -332,4 +334,27 @@
             }
         }
     },
+    {
+        $replaceRoot: {
+            newRoot: {
+                addr: "$addr",
+                ports: "$ports",
+                analyse: {
+                    $cond: {
+                        if: { $eq: ["$ports", []] },
+                        then: null,
+                        else: "$addr_int"
+                    }
+                }
+            }
+        }
+    },
+    {
+        $lookup: {
+            from: "analyse",
+            localField: "analyse",
+            foreignField: "addr_int",
+            as: "analyse",
+        }
+    }
 ];
