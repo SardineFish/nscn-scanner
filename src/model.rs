@@ -278,7 +278,7 @@ impl Model {
                 }
             })
         }
-        self.query_union_scan_from_analyse(pipeline, skip, count).await
+        self.query_union_analyse_from_scan(pipeline, skip, count).await
     }
 
     pub async fn get_by_scanner(&self, scanner: &str,skip: usize, count: usize) -> Result<Vec<ScanResultBreif>, ServiceError> {
