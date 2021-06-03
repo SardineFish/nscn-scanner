@@ -361,64 +361,87 @@ impl Model {
     }
 
     pub async fn geo_stats_by_service_name(&self, service_name: &str) -> Result<Vec<AnalyseGeometryStats>, ServiceError> {
-        let web_key = format!("web.{}", service_name);
-        let ftp_key = format!("ftp.{}", service_name);
-        let ssh_key = format!("ssh.{}", service_name);
-
         self.geo_count(vec![
             doc!{
                 "$match": {
-                    "$or": [
-                        {
-                            web_key: { "$gt": {} },
-                        },
-                        {
-                            ftp_key: { "$gt": {} },
-                        },
-                        {
-                            ssh_key: { "$gt": {} },
+                    "services": {
+                        "$elemMatch": {
+                            "name": service_name
                         }
-
-                    ]
+                    }
                 }
             }
         ]).await
     }
 
     pub async fn geo_stats_by_service_version(&self, service_name: &str, version: &str) -> Result<Vec<AnalyseGeometryStats>, ServiceError> {
-        let web_key = format!("web.{}.version", service_name);
-        let ftp_key = format!("ftp.{}.version", service_name);
-        let ssh_key = format!("ssh.{}.version", service_name);
-
         self.geo_count(vec![
-            doc! {
+            doc!{
                 "$match": {
-                    "$or": [
-                        {
-                            web_key: version,
-                        },
-                        {
-                            ftp_key: version,
-                        },
-                        {
-                            ssh_key: version,
+                    "services": {
+                        "$elemMatch": {
+                            "name": service_name,
+                            "version": version,
                         }
-
-                    ]
+                    }
                 }
             }
         ]).await
     }
 
     pub async fn geo_stats_by_scanner(&self, scanner: &str) -> Result<Vec<AnalyseGeometryStats>, ServiceError> {
-        self.geo_count(vec![
+        self.geo_count_from_scan(vec![
             doc! {
                 "$match": {
-                    "any_available": true,
-                    format!("scan.{}.success", scanner): {"$gt": 0}
+                    "results": {
+                        "$elemMatch": {
+                            "scanner": scanner,
+                            "result": "Ok",
+                        }
+                    }
+                }
+            },
+            doc! {
+                "$project": {
+                    "addr_int": 1,
                 }
             }
         ]).await
+    }
+
+    async fn geo_count_from_scan(&self, mut pipeline: Vec<Document>) -> Result<Vec<AnalyseGeometryStats>, ServiceError> {
+        pipeline.push(doc! {
+            "$lookup": {
+                "from": "analyse",
+                "localField": "analyse",
+                "foreignField": "addr_int",
+                "as": "analyse",
+            },
+        });
+        pipeline.push(doc! {
+            "$replaceRoot": {
+                "newRoot": {
+                    "$mergeObjects": [
+                        {},
+                        { "$arrayElemAt": ["$analyse", 0] }
+                    ]
+                }
+            }
+        });
+        pipeline.push(doc! {
+            "$group": {
+                "_id": "$geo.location",
+                "count": {"$sum": 1},
+                "geo": {"$first": "$geo"},
+            }
+        });
+        let result: Vec<AnalyseGeometryStats> = self.db.collection::<Document>("scan").aggregate(pipeline, None)
+            .await?
+            .filter_map(|doc| async move {doc.ok().and_then(|doc|bson::from_document::<AnalyseGeometryStats>(doc).ok())})
+            .collect()
+            .await;
+
+        Ok(result)
     }
 
     async fn geo_count(&self, mut pipeline: Vec<Document>) -> Result<Vec<AnalyseGeometryStats>, ServiceError> {
@@ -629,23 +652,11 @@ impl Model {
             "$replaceRoot": {
                 "newRoot": {
                     "vulns": {
-                        "$sum": {
-                            "$map": {
-                                "input": {
-                                    "$concatArrays": [
-                                        { "$objectToArray": "$web" },
-                                        { "$objectToArray": "$ssh" },
-                                        { "$objectToArray": "$ftp" },
-                                    ],
-                                },
-                                "as": "service",
-                                "in": {
-                                    "$sum": { "$size": "$$service.v.vulns" }
-                                }
-
-                            }
-                        }
-
+                        "$reduce": {
+                            "input": "$services",
+                            "initialValue": 0,
+                            "in": {"$add": ["$$value", {"$size": "$$this.vulns"}]}
+                        },
                     },
                 }
             }

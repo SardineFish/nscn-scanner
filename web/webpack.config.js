@@ -76,7 +76,7 @@ module.exports = {
             chunks: ["index"],
         }),
         new webpack.DefinePlugin({
-            "process.env.NODE_ENV": '"production"',
+            "process.env.NODE_ENV": '"development"',
             "process.env.NODE_DEBUG": '0',
             "global": "window",
         })

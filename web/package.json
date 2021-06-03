@@ -6,7 +6,7 @@
   "scripts": {
     "build": "npx webpack --mode production",
     "build:watch": "npx webpack --mode development --watch",
-    "start": "npx webpack serve"
+    "start": "npx webpack serve --mode development --devtool source-map"
   },
   "author": "SardineFish",
   "license": "GPL-3.0",

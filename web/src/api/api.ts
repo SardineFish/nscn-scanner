@@ -78,9 +78,12 @@ export interface BreifResult
 {
     addr: string,
     last_update: number,
-    opened_ports: number[],
-    services: string[],
-    vulnerabilities: number,
+    ports: number[],
+    services: Array<{
+        name: string,
+        version: string,
+        vulns: number,
+    }>,
 }
 
 export interface ScannerStatistics
