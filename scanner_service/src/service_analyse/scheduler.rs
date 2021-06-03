@@ -181,6 +181,8 @@ impl ServiceAnalyseTask {
             services.extend(analyse_results.into_iter().map(|r|r.1));
         }
 
+        let geo = resource.ip_geo.search_ip(&self.addr);
+
         let collection = resource.db.collection::<Document>(&GLOBAL_CONFIG.analyser.save);
         // let result = ServiceRecord {
         //     addr: self.addr,
@@ -198,7 +200,8 @@ impl ServiceAnalyseTask {
             },
             "$set": {
                 "last_update": bson::to_bson(&bson::DateTime::from(Utc::now()))?,
-                "services": bson::to_bson(&services)?
+                "services": bson::to_bson(&services)?,
+                "geo": bson::to_bson(&geo)?,
             }
         };
         let opts = UpdateOptions::builder()
@@ -233,7 +236,6 @@ impl ServiceAnalyseTask {
         //     ssh_services = resource.ssh_analyser.analyse_results_set(ssh_result).await;
         // }
 
-        // let geo = resource.ip_geo.search_ip(&self.addr);
 
         // let time: bson::DateTime = Utc::now().into();
         // let collection = resource.db.collection::<Document>(&GLOBAL_CONFIG.analyser.save);
