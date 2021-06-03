@@ -1,7 +1,6 @@
 use actix_web::{get, http::StatusCode, web::{Data, Path, Query, ServiceConfig, scope}};
-use serde::{Serialize};
 
-use crate::{error::ApiError, misc::responder::ApiResult, model::{AnalyseGeometryStats, Model, ScanAnalyseResult, ScanResultBreif}, parse_ipv4_cidr};
+use crate::{error::ApiError, misc::responder::ApiResult, model::{AnalyseGeometryStats, Model, ScanResultBreif}, parse_ipv4_cidr};
 use crate::misc::responder::Response;
 
 use super::scan::{QueryParameters};

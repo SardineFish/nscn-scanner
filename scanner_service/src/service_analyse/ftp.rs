@@ -2,7 +2,7 @@ use serde::{Deserialize};
 use std::{collections::HashMap, fs, sync::Arc};
 
 use regex::Regex;
-use crate::{ScanTaskInfo, error::*, net_scanner::{result_handler::{ScanResult}, tcp_scanner::ftp::FTPScanResult}, vul_search::VulnerabilitiesSearch};
+use crate::{error::*, net_scanner::{result_handler::{ScanResult}, tcp_scanner::ftp::FTPScanResult}, vul_search::VulnerabilitiesSearch};
 
 use super::ServiceAnalyseResult;
 #[derive(Deserialize)]

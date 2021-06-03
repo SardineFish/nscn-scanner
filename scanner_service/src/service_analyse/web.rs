@@ -2,7 +2,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use regex::Regex;
 use serde::{Deserialize};
-use crate::{ScanTaskInfo, net_scanner::{http_scanner::HttpResponseData, result_handler::{ScanResult}}, vul_search::VulnerabilitiesSearch};
+use crate::{net_scanner::{http_scanner::HttpResponseData, result_handler::{ScanResult}}, vul_search::VulnerabilitiesSearch};
 use crate::error::*;
 
 use super::ServiceAnalyseResult;

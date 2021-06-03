@@ -1,7 +1,7 @@
 use std::{collections::HashMap, net::Ipv4Addr, str::FromStr};
 
 use actix_web::{get, delete, http::StatusCode, post, web::{Data, Json, Path, Query, ServiceConfig, scope}};
-use nscn::{FTPScanResult, HttpResponseData, HttpsResponse, MasterService, SSHScannResult, ScanTaskInfo, ServiceAnalyseResult, VulnInfo, WorkerService, error::SimpleError, parse_ipv4_cidr};
+use nscn::{ MasterService, WorkerService, error::SimpleError, parse_ipv4_cidr};
 use serde::{Deserialize, Serialize};
 
 use crate::{error::{ApiError}, misc::responder::{ApiResult, Response}, model::{Model, ScanAnalyseResult, ScanResultBreif, ScanStats}};

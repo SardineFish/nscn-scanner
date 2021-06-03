@@ -2,7 +2,7 @@ use std::{collections::HashMap, str::FromStr, time::Duration};
 use bson::{Document, doc};
 use futures::future::{join3, join_all};
 use serde::{Serialize, Deserialize};
-use mongodb::{Database, bson, options::{UpdateModifications, UpdateOptions}};
+use mongodb::{Database, bson, options::{UpdateOptions}};
 use tokio::{task::{self, JoinHandle}, time::sleep};
 use chrono::Utc;
 

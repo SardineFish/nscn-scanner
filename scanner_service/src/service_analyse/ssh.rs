@@ -2,7 +2,7 @@ use std::{collections::HashMap, fs, sync::Arc};
 
 use super::{ServiceAnalyseResult, ftp::{UniversalServiceRule, UniversalServiceRuleParsed}};
 
-use crate::{ScanTaskInfo, error::*, net_scanner::{result_handler::{ScanResult}, tcp_scanner::ssh::SSHScannResult}, vul_search::VulnerabilitiesSearch};
+use crate::{error::*, net_scanner::{result_handler::{ScanResult}, tcp_scanner::ssh::SSHScannResult}, vul_search::VulnerabilitiesSearch};
 
 pub struct SSHServiceAnalyser {
     rules: Arc<Vec<UniversalServiceRuleParsed>>,

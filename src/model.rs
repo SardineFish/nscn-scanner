@@ -1,7 +1,7 @@
 use std::{collections::HashMap, ops::Range};
 
 use serde::{Deserialize, Serialize};
-use mongodb::{Database, bson::{self, Bson, Document, doc}, options::{FindOptions, Hint}};
+use mongodb::{Database, bson::{self, Bson, Document, doc}, options::{FindOptions}};
 use nscn::{IPGeoData, NetScanRecord, ServiceRecord, VulnInfo, error::SimpleError};
 use futures::StreamExt;
 
