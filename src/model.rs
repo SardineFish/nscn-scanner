@@ -281,6 +281,21 @@ impl Model {
         self.query_union_analyse_from_scan(pipeline, skip, count).await
     }
 
+    pub async fn get_by_port(&self, port: u16, skip: usize, count: usize) -> Result<Vec<ScanResultBreif>, ServiceError> {
+        let mut pipeline = Vec::new();
+        pipeline.push(doc! {
+            "$match": {
+                "results": {
+                    "$elemMatch": {
+                        "port": port as i32,
+                        "result": "Ok"
+                    }
+                }
+            }
+        });
+        self.query_union_analyse_from_scan(pipeline, skip, count).await
+    }
+
     pub async fn get_by_scanner(&self, scanner: &str,skip: usize, count: usize) -> Result<Vec<ScanResultBreif>, ServiceError> {
         let mut pipeline = Vec::new();
         pipeline.push(doc! {
