@@ -56,9 +56,15 @@ pub struct AnalyseGeometryStats {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ScanResultBreif {
+    #[serde(serialize_with="serialize_timestamp")]
+    pub last_update: bson::DateTime,
     pub addr: String,
     pub ports: Vec<i32>,
     pub services: Vec<ServiceAnalyseResultBrif>,
+}
+
+fn serialize_timestamp<S>(time: &bson::DateTime, serializer: S) -> Result<S::Ok, S::Error> where S: serde::ser::Serializer {
+    serializer.serialize_i64(time.timestamp_millis())
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -459,6 +465,7 @@ impl Model {
             "$replaceRoot": {
                 "newRoot": {
                     "addr": "$scan.addr",
+                    "last_update": "$scan.last_update",
                     "ports": {
                         "$reduce": {
                             "input": {
@@ -515,6 +522,7 @@ impl Model {
             "$project": {
                 "addr": 1,
                 "addr_int": 1,
+                "last_update": 1,
                 "results.port": 1,
                 "results.result": 1
             }
@@ -524,6 +532,7 @@ impl Model {
                 "newRoot": {
                     "addr": "$addr",
                     "addr_int": "$addr_int",
+                    "last_update": "$last_update",
                     "ports": {
                         "$reduce": {
                             "input": {
@@ -551,6 +560,7 @@ impl Model {
                 "newRoot": {
                     "addr": "$addr",
                     "ports": "$ports",
+                    "last_update": "$last_update",
                     "analyse": {
                         "$cond": {
                             "if": { "$eq": ["$ports", []] },
@@ -573,6 +583,7 @@ impl Model {
             "$project": {
                 "addr": "$addr",
                 "ports": "$ports",
+                "last_update": "$last_update",
                 "analyse": {
                     "$arrayElemAt": ["$analyse", 0],
                 }
@@ -583,6 +594,7 @@ impl Model {
                 "newRoot": {
                     "addr": "$addr",
                     "ports": "$ports",
+                    "last_update": "$last_update",
                     "services": {
                         "$map": {
                             "input": "$analyse.services",

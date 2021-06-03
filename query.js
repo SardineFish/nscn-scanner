@@ -305,6 +305,7 @@
         $project: {
             addr: 1,
             addr_int: 1,
+            last_update: 1,
             "results.port": 1,
             "results.result": 1
         }
@@ -314,6 +315,7 @@
             newRoot: {
                 addr: "$addr",
                 addr_int: "$addr_int",
+                last_update: "$last_update",
                 ports: {
                     $reduce: {
                         input: {
@@ -341,6 +343,7 @@
             newRoot: {
                 addr: "$addr",
                 ports: "$ports",
+                last_update: "$last_update",
                 analyse: {
                     $cond: {
                         if: { $eq: ["$ports", []] },
@@ -363,6 +366,7 @@
         $project: {
             addr: "$addr",
             ports: "$ports",
+            last_update: "$last_update",
             analyse: {
                 $arrayElemAt: ["$analyse", 0],
             }
@@ -373,6 +377,7 @@
             newRoot: {
                 addr: "$addr",
                 ports: "$ports",
+                last_update: "$last_update",
                 services: {
                     $map: {
                         input: "$analyse.services",

@@ -245,6 +245,11 @@ impl ResultHandler {
         if is_online {
             update.insert("$set", doc! {
                 "online": true,
+                "last_update": bson::to_bson(&bson::DateTime::from(Utc::now()))?,
+            });
+        } else {
+            update.insert("$set", doc! {
+                "last_update": bson::to_bson(&bson::DateTime::from(Utc::now()))?,
             });
         }
         let opts = UpdateOptions::builder()
