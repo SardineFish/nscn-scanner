@@ -150,13 +150,17 @@ const SearchResultItem = (props: { result: BreifResult, onClick: (addr: string) 
                         : props.result.ports.map((port, key) => (<Tag color="green" key={key}>{port}</Tag>))
                 }
                 {
-                    props.result.services.map((service, key) => (<Tag color="blue" key={key}>{service}</Tag>))
+                    props.result.services.map((service, key) => (
+                        <Tag color="blue" key={key}>
+                            {service.name}
+                            {service.version !== "" ? ` ${service.version}` : null}
+                        </Tag>))
                 }
-                {
+                {/* {
                     vulns > 0
                         ? <Tag color="warning" icon={<ExclamationCircleOutlined />}>{`vulnerabilities ${vulns}`}</Tag>
                         : null
-                }
+                } */}
             </>}
         />
 
