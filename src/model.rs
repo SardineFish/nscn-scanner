@@ -2,7 +2,7 @@ use std::{collections::HashMap, ops::Range};
 
 use serde::{Deserialize, Serialize};
 use mongodb::{Database, bson::{self, Bson, Document, doc}, options::{FindOptions}};
-use nscn::{IPGeoData, NetScanRecord, ServiceRecord, VulnInfo, error::SimpleError};
+use nscn::{IPGeoData, ScanTaskData, ServiceRecord, VulnInfo, error::SimpleError};
 use futures::StreamExt;
 
 use crate::error::ServiceError;
@@ -23,6 +23,16 @@ pub struct ScanAnalyseResult {
     pub scan: NetScanRecord,
     pub analyse: Option<ServiceRecord>,
     pub vulns: Option<HashMap<String, VulnInfo>>,
+}
+
+#[derive(Deserialize, Serialize, Debug)]
+pub struct NetScanRecord {
+    pub addr_int: i64,
+    pub addr: String,
+    pub online: bool,
+    #[serde(serialize_with="serialize_timestamp")]
+    pub last_update: bson::DateTime,
+    pub results: Vec<ScanTaskData>,
 }
 
 #[derive(Serialize, Deserialize)]

@@ -16,7 +16,7 @@ use super::scanner::TcpScanResult;
 use super::{http_scanner::HttpResponseData, https_scanner::HttpsResponse};
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct NetScanRecord {
+pub(crate) struct NetScanRecord {
     pub addr_int: i64,
     pub addr: String,
     pub online: Option<bool>,

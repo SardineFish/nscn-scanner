@@ -33,10 +33,9 @@ use error::*;
 
 pub use service_analyse::{scheduler::ServiceAnalyseScheduler, scheduler::ServiceRecord, ServiceAnalyseResult, ip_geo::IPGeoData};
 pub use config::Config;
-pub use net_scanner::result_handler::NetScanRecord;
 pub use address::{parse_ipv4_cidr};
 pub use net_scanner::tcp_scanner::ftp::FTPAccess;
-pub use net_scanner::{http_scanner::HttpResponseData, https_scanner::HttpsResponse, result_handler::ScanTaskInfo, tcp_scanner::{ftp::FTPScanResult, ssh::SSHScannResult}};
+pub use net_scanner::{http_scanner::HttpResponseData, https_scanner::HttpsResponse, result_handler::{ScanTaskInfo, ScanTaskData}, tcp_scanner::{ftp::FTPScanResult, ssh::SSHScannResult}};
 pub use stats_mornitor::{SystemStats};
 pub use scheduler::SchedulerStats;
 pub use vul_search::VulnInfo;

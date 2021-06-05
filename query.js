@@ -294,8 +294,8 @@
     }
 ];
 
-
-[ // union analyse from scan
+// union analyse from scan
+[
     {
         $match: {
             online: true,

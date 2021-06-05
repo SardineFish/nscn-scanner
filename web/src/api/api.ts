@@ -15,8 +15,10 @@ const IPV4Field: ParamInfo<"string"> = {
     validator: ipv4Validator,
 }
 
-export type NetScanResult<T> =
+export type NetScanResult<S, T> =
     {
+        port: number,
+        scanner: S,
         proxy: string,
         time: { $date: string },
     } & ({
@@ -27,41 +29,56 @@ export type NetScanResult<T> =
         data: string,
     });
 
+export interface HTTPScanResult
+{
+    status: number,
+    headers: Record<string, string[]>,
+    body: string,
+}
+export interface TLSScanResult
+{
+    cert: string,
+}
+export interface FTPScanResult
+{
+    handshake_code: number,
+    handshake_text: string,
+    access: "Anonymous" | "Login",
+}
+export interface SSHScanResult
+{
+    protocol: {
+        version: string,
+        software: string,
+        comments: string,
+    },
+    algorithm: {
+        kex: string[],
+        host_key: string[],
+        encryption_client_to_server: string[],
+        encryption_server_to_client: string[],
+        mac_client_to_server: string[],
+        mac_server_to_client: string[],
+        compression_client_to_server: string[],
+        compression_server_to_client: string[],
+        languages_client_to_server: string[],
+        languages_server_to_client: string[],
+    }
+}
+
 export interface ScanResult
 {
-    addr: string,
-    last_update: number,
-    opened_ports: number[],
-    http_results: NetScanResult<{
-        status: number,
-        headers: Record<string, string[]>,
-        body: string,
-    }>[];
-    https_results: NetScanResult<{ cert: string }>[],
-    ftp_results: NetScanResult<{
-        handshake_code: number,
-        handshake_text: string,
-        access: "Anonymous" | "Login",
-    }>[];
-    ssh_results: NetScanResult<{
-        protocol: {
-            version: string,
-            software: string,
-            comments: string,
-        },
-        algorithm: {
-            kex: string[],
-            host_key: string[],
-            encryption_client_to_server: string[],
-            encryption_server_to_client: string[],
-            mac_client_to_server: string[],
-            mac_server_to_client: string[],
-            compression_client_to_server: string[],
-            compression_server_to_client: string[],
-            languages_client_to_server: string[],
-            languages_server_to_client: string[],
-        }
-    }>[];
+    scan: {
+        addr_int: number,
+        addr: string,
+        online: boolean,
+        results: Array<
+            NetScanResult<"http", HTTPScanResult>
+            | NetScanResult<"tls", TLSScanResult>
+            | NetScanResult<"ftp", FTPScanResult>
+            | NetScanResult<"ssh", SSHScanResult>
+        >,
+    }
     services: Record<string, {
         name: string,
         version: string,
