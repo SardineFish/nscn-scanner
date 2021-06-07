@@ -48,6 +48,8 @@ impl ScanTask<HttpResponseData> for HttpScanTask {
         let request = http_types::Request::new(http_types::Method::Get, url);
         let mut response = async_h1::connect(UnsafeStreamWrapper::from(stream), request).await?;
 
+        log::info!("{}/HTTP was opened at {}", self.1, self.0);
+        
         Ok(HttpResponseData{
             status: u16::from(response.status()) as i32,
             body: response.take_body().into_string().await?,
