@@ -294,11 +294,13 @@ impl<Resource> TaskPool<Resource> where Resource: Send + 'static {
             // future.await;
             let mut ptr: AtomicPtr<Resource> = AtomicPtr::new(&mut resource);
             let mut_ref = unsafe{ ptr.get_mut().as_mut().unwrap()};
-            let result = func(task, mut_ref).await;
-            // if let Err(_) = timeout(Duration::from_secs(300), future).await {
-            //     log::error!("Task {} suspedned over 300s", name);
-            // }
-            // sleep(Duration::from_secs(5)).await;
+            // let result = func(task, mut_ref).await;
+            let result = match tokio::time::timeout(Duration::from_secs(8), func(task, mut_ref)).await {
+                Err(_) => {
+                    panic!("Task {} suspedned over 300s", _name);
+                },
+                Ok(result) => result,
+            };
             complete_sender.send(resource).await.log_warn_consume("scan-scheduler");
             result
         })
