@@ -1,11 +1,11 @@
 import { Collapse, Descriptions, Divider, List } from "antd";
 import Paragraph from "antd/lib/typography/Paragraph";
 import React from "react";
-import { ScanResult } from "../api/api";
+import { NetScanResult, ScanResult, SSHScanResult } from "../api/api";
 import { ArrayElement } from "../utils/utils";
 import { GenericScanResult } from "./generic-scan-result";
 
-export function SSHResultPanel(props: {result: ArrayElement<ScanResult["ssh_results"]>})
+export function SSHResultPanel(props: {result: NetScanResult<"ssh", SSHScanResult>})
 {
     const data = props.result;
     return (<>

@@ -1,5 +1,5 @@
 import React from "react";
-import { ScanResult } from "../api/api";
+import { NetScanResult, ScanResult, TLSScanResult } from "../api/api";
 import { ArrayElement, extract, parsePEM } from "../utils/utils";
 import { GenericScanResult } from "./generic-scan-result";
 import {Buffer} from "buffer";
@@ -8,7 +8,7 @@ import { Descriptions, Divider, message } from "antd";
 import { Attribute, Certificate } from "@sardinefish/x509";
 import { ASN1 } from "@sardinefish/asn1";
 
-export function HttpsResult(props: { result: ArrayElement<ScanResult["https_results"]> })
+export function HttpsResult(props: { result: NetScanResult<"tls", TLSScanResult>})
 {
     const data = props.result;
     if (data.result === "Ok")

@@ -3,7 +3,7 @@ import Paragraph from "antd/lib/typography/Paragraph";
 import React from "react";
 import { NetScanResult } from "../api/api";
 
-export function GenericScanResult(props: {result: NetScanResult<any>, scanner: string})
+export function GenericScanResult(props: {result: NetScanResult<string, any>, scanner: string})
 {
     const data = props.result;
     return (<>

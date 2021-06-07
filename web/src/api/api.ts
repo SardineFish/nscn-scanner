@@ -32,7 +32,7 @@ export type NetScanResult<S, T> =
 export interface HTTPScanResult
 {
     status: number,
-    headers: Record<string, string[]>,
+    headers: Record<string, string>,
     body: string,
 }
 export interface TLSScanResult
@@ -72,6 +72,7 @@ export interface ScanResult
         addr_int: number,
         addr: string,
         online: boolean,
+        last_update: number,
         results: Array<
             NetScanResult<"http", HTTPScanResult>
             | NetScanResult<"tls", TLSScanResult>
@@ -79,12 +80,14 @@ export interface ScanResult
             | NetScanResult<"ssh", SSHScanResult>
         >,
     }
-    services: Record<string, {
-        name: string,
-        version: string,
-        vulns: string[],
-    }>,
-    vulns: Record<string, {
+    analyse?: {
+        services: Record<string, {
+            name: string,
+            version: string,
+            vulns: string[],
+        }>
+    },
+    vulns?: Record<string, {
         id: string,
         title: string,
         url: string
