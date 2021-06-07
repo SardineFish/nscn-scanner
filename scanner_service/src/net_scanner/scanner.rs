@@ -9,7 +9,7 @@ use tokio::net::TcpStream;
 use tokio::task::JoinHandle;
 use tokio::time::timeout;
 
-use crate::UniversalScannerOption;
+use crate::{UniversalScannerOption, ScannerProxy};
 use crate::{ScanTaskInfo, error::SimpleError, scheduler::TaskPool};
 use crate::config::GLOBAL_CONFIG;
 
@@ -68,10 +68,19 @@ where
         let mut result = ScanTaskInfo::new(self.addr.clone(), self.port).scanner(T::scanner_name());
 
         let scan_result = match self.config.use_proxy {
-            true => {
-                let proxy = resources.proxy_pool.get_socks5_proxy().await;
-                result = result.proxy(proxy.addr.clone());
-                self.scan_with_connector(proxy).await
+            true => match self.config.proxy {
+                Some(ScannerProxy::Socks5) => {
+                    let proxy = resources.proxy_pool.get_socks5_proxy().await;
+                    result = result.proxy(proxy.addr.clone());
+                    self.scan_with_connector(proxy).await
+                },
+                Some(ScannerProxy::Shadowsocks) => {
+                    let proxy = resources.proxy_pool.get_ss_proxy().await;
+                    result = result.proxy(proxy.cfg.addr().to_string());
+                    self.scan_with_connector(proxy).await
+                },
+                Some(_) => Err(SimpleError::new("Not supported proxy")),
+                None => self.scan_with_connector(TcpConnector).await,
             },
             false => {
                 self.scan_with_connector(TcpConnector).await

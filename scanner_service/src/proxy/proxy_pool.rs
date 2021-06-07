@@ -7,7 +7,7 @@ use std::{collections::{HashMap}, sync::Arc, usize};
 use crate::{error::*};
 use crate::config::{GLOBAL_CONFIG};
 
-use super::{http_proxy::HttpProxyClient, socks5_proxy::{Socks5ProxyInfo, Socks5ProxyUpdater}};
+use super::{http_proxy::HttpProxyClient, socks5_proxy::{Socks5ProxyInfo, Socks5ProxyUpdater}, ss_proxy::SSProxy};
 use super::tunnel_proxy::TunnelProxyClient;
 use super::socks5_proxy::Socks5Proxy;
 
@@ -21,6 +21,7 @@ pub struct ProxyPool {
     http_client_pool: Arc<Mutex<Vec<HttpProxyClient>>>,
     tunnel_client_pool: Arc<Mutex<Vec<TunnelProxyClient>>>,
     socks5_proxy_pool: Arc<Mutex<Vec<Socks5ProxyInfo>>>,
+    ss_proxy_pool: Arc<Vec<SSProxy>>,
     rng: Arc<Mutex<rand::rngs::SmallRng>>,
     fetch_idx: Arc<Mutex<usize>>,
 }
@@ -32,6 +33,13 @@ impl ProxyPool {
             tunnel_client_pool: Arc::new(Mutex::new(Vec::new())),
             socks5_proxy_pool: Arc::new(Mutex::new(Vec::new())),
             rng: Arc::new(Mutex::new(rand::rngs::SmallRng::from_entropy())),
+            ss_proxy_pool: Arc::new(match &GLOBAL_CONFIG.proxy_pool.shadowsocks {
+                Some(cfg) => cfg.iter().map(|cfg| SSProxy {
+                    cfg,
+                    ctx: shadowsocks::context::Context::new_shared(shadowsocks::config::ServerType::Local),
+                }).collect::<Vec<_>>(),
+                None => Vec::new(),
+            }),
             fetch_idx: Arc::new(Mutex::new(0)),
         }
     }
@@ -113,6 +121,16 @@ impl ProxyPool {
         Socks5Proxy {
             addr: proxy
         }
+    }
+    pub async fn get_ss_proxy(&self) -> SSProxy {
+        if self.ss_proxy_pool.len() <= 0 {
+            panic!("No ss server available");
+        }
+
+        let mut idx = self.fetch_idx.lock().await;
+        *idx += 1;
+        *idx %= self.ss_proxy_pool.len();
+        self.ss_proxy_pool[*idx].clone()
     }
 }
 

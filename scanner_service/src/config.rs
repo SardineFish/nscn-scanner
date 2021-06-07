@@ -1,8 +1,8 @@
-use std::{collections::HashMap, fmt::{self, Display, Formatter}};
+use std::{collections::HashMap, fmt::{self, Display, Formatter}, str::FromStr};
 
 use clap::{Clap, AppSettings};
 use lazy_static::lazy_static;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use crate::error::*;
 
 
@@ -55,7 +55,35 @@ pub struct ProxyPoolConfig {
     pub http_validate: Vec<ProxyVerify>,
     pub https_validate: String,
     pub socks5: Socks5ProxyOptions,
+    #[serde(deserialize_with = "deserialize_ss_config")]
+    pub shadowsocks: Option<Vec<shadowsocks::ServerConfig>>,
 }
+
+fn deserialize_ss_config<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Option<Vec<shadowsocks::ServerConfig>>, D::Error> {
+    let cfg = Option::<Vec<SSProxyConfig>>::deserialize(deserializer)?;
+    let cfg = cfg.map(|v|
+        v.into_iter().filter_map(|cfg| {
+            shadowsocks::crypto::v1::CipherKind::from_str(&cfg.method)
+                .map(|method|
+                    shadowsocks::ServerConfig::new(
+                        (cfg.address, cfg.port),
+                        cfg.password,
+                        method
+                    )
+                ).ok()
+        })
+        .collect::<Vec<_>>());
+    Ok(cfg)
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct SSProxyConfig {
+    pub address: String,
+    pub port: u16,
+    pub password: String,
+    pub method: String,
+}
+
 
 #[derive(Deserialize, Clone)]
 pub struct Socks5ProxyOptions {
@@ -95,8 +123,16 @@ pub struct ScannerConfig {
 pub struct UniversalScannerOption {
     pub enabled: bool,
     pub use_proxy: bool,
-    pub socks5: Option<bool>,
+    pub proxy: Option<ScannerProxy>,
     pub timeout: u64,
+}
+
+#[derive(Deserialize, Serialize, Clone, PartialEq, Eq, Debug)]
+pub enum ScannerProxy {
+    None,
+    Http,
+    Socks5,
+    Shadowsocks,
 }
 
 impl Default for UniversalScannerOption {
@@ -104,7 +140,7 @@ impl Default for UniversalScannerOption {
         Self {
             enabled: false,
             use_proxy: false,
-            socks5: Some(true),
+            proxy: None,
             timeout: 5,
         }
     }
