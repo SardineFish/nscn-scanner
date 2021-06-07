@@ -36,9 +36,13 @@ mod test {
                     cfg,
                     ctx: shadowsocks::context::Context::new_shared(shadowsocks::config::ServerType::Local),
                 };
-                
-                let mut stream = proxy.connect("myip.top", 80).await.unwrap();
+
+                let mut stream = tokio::time::timeout(std::time::Duration::from_secs(5), proxy.connect("myip.top", 80))
+                    .await
+                    .expect(&format!("{} Timeout", cfg.addr().to_string()))
+                    .unwrap();
                 let result = HttpScanTask("myip.top".to_owned(), 80).scan(&mut stream).await.unwrap();
+                println!("{:?}", result);
                 assert_eq!(result.status, 200);
             }
         }

@@ -276,7 +276,7 @@ mod test {
     use mongodb::bson::{self, doc};
     use tokio::test;
 
-    use crate::NetScanRecord;
+    use crate::net_scanner::result_handler::NetScanRecord;
     
     #[test]
     async fn test_deserialize() {
