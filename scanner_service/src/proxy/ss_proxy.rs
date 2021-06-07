@@ -3,6 +3,7 @@ use std::sync::Arc;
 use shadowsocks::{self, ProxyClientStream, ServerConfig, context::Context};
 
 use crate::{error::SimpleError, net_scanner::scanner::Connector};
+use crate::error::LogError;
 
 pub type SSProxyStream = ProxyClientStream<shadowsocks::net::TcpStream>;
 
@@ -15,7 +16,9 @@ pub struct SSProxy {
 #[async_trait::async_trait]
 impl Connector<SSProxyStream> for SSProxy {
     async fn connect(self, addr: &str, port: u16) -> Result<SSProxyStream, SimpleError> {
-        let stream = ProxyClientStream::connect(self.ctx, &self.cfg, (addr.to_owned(), port)).await?;
+        let stream = ProxyClientStream::connect(self.ctx, &self.cfg, (addr.to_owned(), port))
+            .await
+            .log_warn("ss-connect")?;
         Ok(stream)
     }
 }
