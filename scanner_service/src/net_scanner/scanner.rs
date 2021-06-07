@@ -75,7 +75,10 @@ where
                     self.scan_with_connector(proxy).await
                 },
                 Some(ScannerProxy::Shadowsocks) => {
-                    let proxy = resources.proxy_pool.get_ss_proxy().await;
+                    let proxy = match timeout(Duration::from_secs(1),resources.proxy_pool.get_ss_proxy()).await {
+                        Err(_) => panic!("Fetch proxy timeout"),
+                        Ok(proxy) => proxy,
+                    };
                     result = result.proxy(proxy.cfg.addr().to_string());
                     self.scan_with_connector(proxy).await
                 },
@@ -96,7 +99,7 @@ where
     }
 
     async fn scan_with_connector<S: AsyncRead + AsyncWrite + Sync + Send + Unpin + 'static, C: Connector<S>>(self, connector: C) -> Result<R, SimpleError> {
-        timeout(Duration::from_secs(self.config.timeout), async move {
+        timeout(Duration::from_secs(5), async move {
             match connector.connect(&self.addr, self.port).await {
                 Ok(mut stream) => self.task.scan(&mut stream).await,
                 Err(err) => Err(err),

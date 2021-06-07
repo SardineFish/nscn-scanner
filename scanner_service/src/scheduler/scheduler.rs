@@ -297,7 +297,7 @@ impl<Resource> TaskPool<Resource> where Resource: Send + 'static {
             // let result = func(task, mut_ref).await;
             let result = match tokio::time::timeout(Duration::from_secs(8), func(task, mut_ref)).await {
                 Err(_) => {
-                    panic!("Task {} suspedned over 300s", _name);
+                    panic!("Task {} suspedned over 8s", _name);
                 },
                 Ok(result) => result,
             };
