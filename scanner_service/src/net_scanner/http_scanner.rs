@@ -5,6 +5,8 @@ use reqwest::{ header::HeaderMap};
 use serde::{Serialize, Deserialize};
 use tokio::io::{self, AsyncRead, AsyncWrite, ReadBuf};
 use crate::{error::SimpleError};
+use crate::error::*;
+use futures::{AsyncReadExt};
 
 use super::{scanner::ScanTask};
 
@@ -47,12 +49,16 @@ impl ScanTask<HttpResponseData> for HttpScanTask {
         let url = Url::parse(&format!("http://{}:{}/", self.0, self.1))?;
         let request = http_types::Request::new(http_types::Method::Get, url);
         let mut response = async_h1::connect(UnsafeStreamWrapper::from(stream), request).await?;
+        let mut reader = response.take_body().into_reader();
+        let mut buf = [0u8;8192];
+        reader.read_exact(&mut buf).await.log_warn_consume("http-scan-body");
+        let body = std::str::from_utf8(&buf).log_warn("http-scan-body").unwrap_or_default();
 
         log::info!("{}/HTTP was opened at {}", self.1, self.0);
         
         Ok(HttpResponseData{
             status: u16::from(response.status()) as i32,
-            body: response.take_body().into_string().await?,
+            body: body.to_owned(),
             headers: response.into_iter()
                 .map(|(name, values)| (name.to_string(), stringify_header_values(values)))
                 .collect()
