@@ -79,26 +79,13 @@ export function WorkerConfig(props: { workerAddr: string })
                     </Col>
                     <Col span={24}>
                         <Space direction="horizontal">
-                            <Checkbox
-                                checked={config.scanner.http.enabled}
-                                disabled={!config.scanner.scheduler.enabled}
-                                onChange={p => { config.scanner.http.enabled = p.target.checked, update() }}
-                            >HTTP</Checkbox>
-                            <Checkbox
-                                checked={config.scanner.tls.enabled}
-                                disabled={!config.scanner.scheduler.enabled}
-                                onChange={p => { config.scanner.tls.enabled = p.target.checked, update() }}
-                            >HTTPS</Checkbox>
-                            <Checkbox
-                                checked={config.scanner.ftp.enabled}
-                                disabled={!config.scanner.scheduler.enabled}
-                                onChange={p => { config.scanner.ftp.enabled = p.target.checked, update() }}
-                            >FTP</Checkbox>
-                            <Checkbox
-                                checked={config.scanner.ssh.enabled}
-                                disabled={!config.scanner.scheduler.enabled}
-                                onChange={p => { config.scanner.ssh.enabled = p.target.checked, update() }}
-                            >SSH</Checkbox>
+                            {Object.keys(config.scanner.config).map((key, idx) => (
+                                <Checkbox
+                                    checked={config.scanner.config[key].enabled}
+                                    disabled={!config.scanner.scheduler.enabled}
+                                    onChange={p => { config.scanner.config[key].enabled = p.target.checked, update() }}
+                                >{key}</Checkbox>
+                            ))}
                         </Space>
                     </Col>
                     <Col span={24}>

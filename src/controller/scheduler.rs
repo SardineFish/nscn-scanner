@@ -31,7 +31,6 @@ fn default_analyser_config() -> WorkerAnalyserConfig {
 
 #[derive(Deserialize, Serialize)]
 struct WorkerScannerConfig {
-    #[serde(flatten)]
     config: HashMap<String, UniversalScannerOption>,
     scheduler: WorkerSchedulerOptions,
 }

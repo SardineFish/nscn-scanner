@@ -142,38 +142,30 @@ export interface WorkerStats
     analyser: SchedulerStats
 }
 
+export enum ProxyType
+{
+    None = "None",
+    Http = "Http",
+    Socks5 = "Socks5",
+    Shadowsocks = "Shadowsocks",
+}
+
 export interface WorkerConfig
 {
     master_addr: string,
     scanner: {
-        http: {
+        config: Record<string, {
             enabled: boolean,
             use_proxy: boolean,
-            socks5: boolean,
-            timeout: number
-        },
-        tls: {
-            enabled: boolean,
-            use_proxy: boolean,
-            socks5: boolean,
-            timeout: number
-        },
-        ftp: {
-            enabled: boolean,
-            use_proxy: boolean,
-            timeout: number
-        },
-        ssh: {
-            enabled: boolean,
-            use_proxy: boolean,
-            timeout: number
-        },
+            proxy: ProxyType,
+            timeout: number,
+        }>,
         scheduler: {
             enabled: boolean,
             max_tasks: number,
             fetch_count: number,
             fetch_threshold: number
-        },
+        }
     },
     analyser: {
         scheduler: {
