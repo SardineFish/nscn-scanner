@@ -1,0 +1,101 @@
+{
+    "mongodb": "mongodb://127.0.0.1/nscn",
+    "redis": "redis://127.0.0.1/0",
+    "listen": "127.0.0.1:3000",
+    "role": "Standalone",
+    "workers": [],
+    "proxy": {
+        "http": {
+            "update": false,
+            "fetch_addr": "http://localhost:5000/proxy_pool/get_all/",
+            "update_interval": 60,
+            "http_validate": [
+                "http://www.baidu.com"
+            ],
+            "https_validate": "www.baidu.com:443"
+        },
+        "socks5": {
+            "enabled": false,
+            "fetch": "http://webapi.http.zhimacangku.com/getip?num=1&type=2&pro=&city=0&yys=0&port=1&time=3&ts=1&ys=0&cs=0&lb=1&sb=0&pb=4&mr=1&regions=",
+            "pool_size": 0,
+            "servers": [
+                "127.0.0.1:1088"
+            ]
+        },
+        "shadowsocks": [
+            {
+                "address": "127.0.0.1",
+                "port": 1234,
+                "password": "<password>",
+                "method": "aes-256-cfb"
+            }
+        ]
+    },
+    "scanner": {
+        "ports": {
+            "80": [ "http" ],
+            "443": [ "tls" ],
+            "21": [ "ftp" ],
+            "22": [ "ssh" ]
+        },
+        "config": {
+            "http": {
+                "enabled": true,
+                "use_proxy": true,
+                "proxy": "Shadowsocks",
+                "timeout": 5
+            },
+            "tls": {
+                "enabled": true,
+                "use_proxy": true,
+                "proxy": "Shadowsocks",
+                "timeout": 5
+            },
+            "ftp": {
+                "enabled": true,
+                "use_proxy": true,
+                "proxy": "Shadowsocks",
+                "timeout": 5
+            },
+            "ssh": {
+                "enabled": true,
+                "use_proxy": true,
+                "proxy": "Shadowsocks",
+                "timeout": 5
+            }
+        },
+        "scheduler": {
+            "enabled": true,
+            "max_tasks": 20000,
+            "fetch_count": 16,
+            "fetch_threshold": 8
+        },
+        "save": {
+            "collection": "scan",
+            "save_failure": true
+        }
+    },
+    "analyser": {
+        "analyse_on_scan": false,
+        "externals": {
+            "wappanalyser_rules": "./thirdparty/wappanalyser/technologies.json",
+            "ftp_rules": "./rules/ftp.json",
+            "ssh_rules": "./rules/ssh.json",
+            "city_coords": "./china-cities.json"
+        },
+        "scheduler": {
+            "enabled": true,
+            "max_tasks": 32,
+            "fetch_count": 16,
+            "fetch_threshold": 8
+        },
+        "save": "analyse",
+        "vuln_search": {
+            "exploitdb": "./thirdparty/exploitdb/searchsploit"
+        }
+    },
+    "stats": {
+        "sys_update_interval": 1000,
+        "scheduler_update_interval": 10000
+    }
+}
