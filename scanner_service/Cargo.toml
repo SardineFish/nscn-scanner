@@ -32,4 +32,8 @@ clap = "3.0.0-beta.2"
 ip2region = { path = "../thirdparty/ip2region/binding/rust", features = ["lazy"] }
 async-h1 = "2.3.2"
 http-types = "2.11.1"
-shadowsocks = { version = "1.11.0", features = ["stream-cipher"] }
+shadowsocks = { version = "1.11.0", features = ["stream-cipher"], optional = true }
+
+[features]
+default = ["ss_proxy"]
+ss_proxy = ["shadowsocks"]

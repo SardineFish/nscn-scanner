@@ -74,11 +74,9 @@ where
                     result = result.proxy(proxy.addr.clone());
                     self.scan_with_connector(proxy).await
                 },
+                #[cfg(feature = "ss_proxy")]
                 Some(ScannerProxy::Shadowsocks) => {
-                    let proxy = match timeout(Duration::from_secs(1),resources.proxy_pool.get_ss_proxy()).await {
-                        Err(_) => panic!("Fetch proxy timeout"),
-                        Ok(proxy) => proxy,
-                    };
+                    let proxy = resources.proxy_pool.get_ss_proxy();
                     result = result.proxy(proxy.cfg.addr().to_string());
                     self.scan_with_connector(proxy).await
                 },

@@ -1,8 +1,8 @@
-use std::{collections::HashMap, fmt::{self, Display, Formatter}, str::FromStr};
+use std::{collections::HashMap, fmt::{self, Display, Formatter}};
 
 use clap::{Clap, AppSettings};
 use lazy_static::lazy_static;
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Serialize};
 use crate::error::*;
 
 
@@ -55,25 +55,9 @@ pub struct ProxyPoolConfig {
     pub http_validate: Vec<ProxyVerify>,
     pub https_validate: String,
     pub socks5: Socks5ProxyOptions,
-    #[serde(deserialize_with = "deserialize_ss_config")]
+    #[cfg(feature = "ss_proxy")]
+    #[serde(deserialize_with = "ss_config::deserialize_ss_config")]
     pub shadowsocks: Option<Vec<shadowsocks::ServerConfig>>,
-}
-
-fn deserialize_ss_config<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Option<Vec<shadowsocks::ServerConfig>>, D::Error> {
-    let cfg = Option::<Vec<SSProxyConfig>>::deserialize(deserializer)?;
-    let cfg = cfg.map(|v|
-        v.into_iter().filter_map(|cfg| {
-            shadowsocks::crypto::v1::CipherKind::from_str(&cfg.method)
-                .map(|method|
-                    shadowsocks::ServerConfig::new(
-                        (cfg.address, cfg.port),
-                        cfg.password,
-                        method
-                    )
-                ).ok()
-        })
-        .collect::<Vec<_>>());
-    Ok(cfg)
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -132,6 +116,7 @@ pub enum ScannerProxy {
     None,
     Http,
     Socks5,
+    #[cfg(feature = "ss_proxy")]
     Shadowsocks,
 }
 
@@ -183,7 +168,33 @@ pub enum ProxyVerify {
     Echo{base: String, pattern: String},
 }
 
+#[cfg(feature = "ss_proxy")]
+mod ss_config {
+    use std::str::FromStr;
+    use serde::Deserializer;
+    use super::SSProxyConfig;
+    use serde::Deserialize;
+
+    pub fn deserialize_ss_config<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Option<Vec<shadowsocks::ServerConfig>>, D::Error> {
+        let cfg = Option::<Vec<SSProxyConfig>>::deserialize(deserializer)?;
+        let cfg = cfg.map(|v|
+            v.into_iter().filter_map(|cfg| {
+                shadowsocks::crypto::v1::CipherKind::from_str(&cfg.method)
+                    .map(|method|
+                        shadowsocks::ServerConfig::new(
+                            (cfg.address, cfg.port),
+                            cfg.password,
+                            method
+                        )
+                    ).ok()
+            })
+                .collect::<Vec<_>>());
+        Ok(cfg)
+    }
+}
+
 impl Config {
+
     pub fn from_file(path: &str) -> Result<Self, SimpleError> {
         let data = std::fs::read_to_string(path)?;
         Ok(serde_json::from_str(&data)?)
