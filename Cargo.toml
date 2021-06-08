@@ -7,7 +7,7 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-nscn = { path = "scanner_service" }
+nscn = { path = "scanner_service", default-features = false }
 tokio = { version = "1", features = ["full", "sync"] }
 actix-web = "4.0.0-beta.4"
 actix-files = { git = "https://github.com/actix/actix-web", tag = "web-v4.0.0-beta.6" }
@@ -17,3 +17,7 @@ env_logger = "0.8.3"
 futures = "0.3.13"
 serde = "1.0.124"
 serde_json = "1.0.64"
+
+[features]
+default = ["ss_proxy"]
+ss_proxy = ["nscn/ss_proxy"]

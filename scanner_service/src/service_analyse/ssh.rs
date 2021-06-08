@@ -2,7 +2,7 @@ use std::{collections::HashMap, fs, sync::Arc};
 
 use super::{ServiceAnalyseResult, ftp::{UniversalServiceRule, UniversalServiceRuleParsed}};
 
-use crate::{error::*, net_scanner::{result_handler::{NetScanResultSet, ScanResult}, tcp_scanner::ssh::SSHScannResult}, vul_search::VulnerabilitiesSearch};
+use crate::{error::*, net_scanner::{result_handler::{ScanResult}, tcp_scanner::ssh::SSHScannResult}, vul_search::VulnerabilitiesSearch};
 
 pub struct SSHServiceAnalyser {
     rules: Arc<Vec<UniversalServiceRuleParsed>>,
@@ -27,11 +27,8 @@ impl SSHServiceAnalyser {
         })
     }
 
-    pub async fn analyse(&self, results: &ScanResult<SSHScannResult>, services: &mut HashMap<String, ServiceAnalyseResult>) {
-        let result = match results {
-            ScanResult::Err(_) => return,
-            ScanResult::Ok(result) => result,
-        };
+    pub fn analyse(&self, result: &SSHScannResult) -> HashMap<String, ServiceAnalyseResult> {
+        let mut services = HashMap::new();
         for rule in self.rules.as_ref() {
             match rule.try_match(&result.protocol.software) {
                 Some(version) => { 
@@ -50,17 +47,14 @@ impl SSHServiceAnalyser {
                 _ => (),
             }
         }
+        services
     }
 
-    pub async fn analyse_results_set(&mut self, result_set: &NetScanResultSet<SSHScannResult>) -> HashMap<String, ServiceAnalyseResult> {
-        let mut services = HashMap::new();
-        if result_set.success <= 0 {
-            return services;
-        }
-
-        for scan_result in &result_set.results {
-            self.analyse(&scan_result.result, &mut services).await;
-        }
+    pub async fn analyse_results_set(&mut self, scan_result: &ScanResult<SSHScannResult>) -> HashMap<String, ServiceAnalyseResult> {
+        let mut services = match &scan_result {
+            ScanResult::Err(_) => return HashMap::new(),
+            ScanResult::Ok(result) => self.analyse(result),
+        };
 
         for (_, result) in &mut services {
             match self.vuln_searcher.exploitdb().search(&result.name, &result.version).await {

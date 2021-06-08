@@ -2,11 +2,11 @@ use std::{collections::HashMap, str::FromStr, time::Duration};
 use bson::{Document, doc};
 use futures::future::{join3, join_all};
 use serde::{Serialize, Deserialize};
-use mongodb::{Database, bson};
+use mongodb::{Database, bson, options::{UpdateOptions}};
 use tokio::{task::{self, JoinHandle}, time::sleep};
 use chrono::Utc;
 
-use crate::{SchedulerStats, config::{self, ResultSavingOption}, error::*, scheduler::{SharedSchedulerInternalStats, SharedSchedulerStats, TaskPool, local_scheduler::LocalScheduler}, vul_search::VulnerabilitiesSearch};
+use crate::{SchedulerStats, config::{self}, error::*, net_scanner::result_handler::TcpScanResultType, scheduler::{SharedSchedulerInternalStats, SharedSchedulerStats, TaskPool, local_scheduler::LocalScheduler}, vul_search::VulnerabilitiesSearch};
 use crate::config::GLOBAL_CONFIG;
 use crate::net_scanner::result_handler::NetScanRecord;
 
@@ -156,68 +156,107 @@ impl ServiceAnalyseTask {
     async fn analyse(self, resource: & mut TaskResources) -> Result<(), SimpleError> {
         // log::info!("Analyse {}", self.addr);
 
-        let mut web_services: HashMap::<String, ServiceAnalyseResult> = HashMap::new();
-        let mut ftp_services: HashMap::<String, ServiceAnalyseResult> = HashMap::new();
-        let mut ssh_services: HashMap::<String, ServiceAnalyseResult> = HashMap::new();
+        let mut services = Vec::new();
+        // let mut web_services: HashMap::<String, ServiceAnalyseResult> = HashMap::new();
+        // let mut ftp_services: HashMap::<String, ServiceAnalyseResult> = HashMap::new();
+        // let mut ssh_services: HashMap::<String, ServiceAnalyseResult> = HashMap::new();
 
-        match &GLOBAL_CONFIG.scanner.save {
-            ResultSavingOption::SingleCollection(name) => {
-                let colllection = resource.db.collection(name);
-                let query = bson::doc!{
-                    "addr": &self.addr,
-                };
+        let addr_int: u32 = std::net::Ipv4Addr::from_str(&self.addr)?.into();
+        let collection = resource.db.collection::<NetScanRecord>(&GLOBAL_CONFIG.scanner.save.collection);
+        let query = bson::doc!{
+            "addr_int": addr_int as i64,
+        };
 
-                let doc = colllection.find_one(query, None)
-                    .await?
-                    .ok_or(format!("Scan result of {} not found", self.addr))?;
-                let record: NetScanRecord = bson::from_document(doc)?;
+        let doc = collection.find_one(query, None)
+            .await?
+            .ok_or(format!("Scan result of {} not found", self.addr))?;
 
-                if let Some(http_scan) = record.scan.http {
-                    let services = resource.web_analyser.analyse_result_set(&http_scan).await?;
-                    // for (name, version) in services {
-                    //     web_services.insert(format!("web.{}", name), version);
-                    // }
-                    web_services = services;
-                }
-                let ftp_scan_result = record.scan.tcp.as_ref()
-                    .and_then(|tcp|tcp.get("21"))
-                    .and_then(|result|result.ftp.as_ref());
-                if let Some(ftp_result) = ftp_scan_result {
-                    ftp_services = resource.ftp_analyser.analyse_results_set(&ftp_result).await;
-                }
-
-                let ssh_scan_result = record.scan.tcp.as_ref()
-                    .and_then(|tcp_result| tcp_result.get("22"))
-                    .and_then(|result| result.ssh.as_ref());
-                if let Some(ssh_result) = ssh_scan_result {
-                    ssh_services = resource.ssh_analyser.analyse_results_set(ssh_result).await;
-                }
-            },
-            _ => panic!("Unimplement"),
+        for result in doc.results {
+            let analyse_results = match result.result {
+                TcpScanResultType::Http(scan_result) => resource.web_analyser.analyse_result_set(&scan_result).await,
+                TcpScanResultType::Ftp(scan_result) => resource.ftp_analyser.analyse_results_set(&scan_result).await,
+                TcpScanResultType::SSH(scan_result) => resource.ssh_analyser.analyse_results_set(&scan_result).await,
+                _ => HashMap::new(),
+            };
+            services.extend(analyse_results.into_iter().map(|r|r.1));
         }
 
         let geo = resource.ip_geo.search_ip(&self.addr);
 
-        let time: bson::DateTime = Utc::now().into();
         let collection = resource.db.collection::<Document>(&GLOBAL_CONFIG.analyser.save);
+        // let result = ServiceRecord {
+        //     addr: self.addr,
+        //     addr_int: addr_int as i64,
+        //     last_update: Utc::now().into(),
+        //     services,
+        // };
         let query = doc! {
-            "addr": &self.addr,
+            "addr_int": addr_int as i64,
         };
-        let addr_int: u32 = std::net::Ipv4Addr::from_str(&self.addr)?.into();
         let update = doc! {
-            "$set": {
-                "addr": &self.addr,
+            "$setOnInsert": {
+                "addr": self.addr,
                 "addr_int": addr_int as i64,
-                "last_update": bson::to_bson(&time)?,
-                "web": bson::to_bson(&web_services)?,
-                "ftp": bson::to_bson(&ftp_services)?,
-                "ssh": bson::to_bson(&ssh_services)?,
+            },
+            "$set": {
+                "last_update": bson::to_bson(&bson::DateTime::from(Utc::now()))?,
+                "services": bson::to_bson(&services)?,
                 "geo": bson::to_bson(&geo)?,
             }
         };
-        let mut opts = mongodb::options::UpdateOptions::default();
-        opts.upsert = Some(true);
+        let opts = UpdateOptions::builder()
+            .upsert(Some(true))
+            .build();
         collection.update_one(query, update, opts).await?;
+        
+        // let mut results = HashMap::new();
+        // for result in doc.results {
+        // }
+
+        // let record: NetScanRecord = bson::from_document(doc)?;
+
+        // if let Some(http_scan) = record.scan.http {
+        //     let services = resource.web_analyser.analyse_result_set(&http_scan).await?;
+        //     // for (name, version) in services {
+        //     //     web_services.insert(format!("web.{}", name), version);
+        //     // }
+        //     web_services = services;
+        // }
+        // let ftp_scan_result = record.scan.tcp.as_ref()
+        //     .and_then(|tcp|tcp.get("21"))
+        //     .and_then(|result|result.ftp.as_ref());
+        // if let Some(ftp_result) = ftp_scan_result {
+        //     ftp_services = resource.ftp_analyser.analyse_results_set(&ftp_result).await;
+        // }
+
+        // let ssh_scan_result = record.scan.tcp.as_ref()
+        //     .and_then(|tcp_result| tcp_result.get("22"))
+        //     .and_then(|result| result.ssh.as_ref());
+        // if let Some(ssh_result) = ssh_scan_result {
+        //     ssh_services = resource.ssh_analyser.analyse_results_set(ssh_result).await;
+        // }
+
+
+        // let time: bson::DateTime = Utc::now().into();
+        // let collection = resource.db.collection::<Document>(&GLOBAL_CONFIG.analyser.save);
+        // let query = doc! {
+        //     "addr": &self.addr,
+        // };
+        // let addr_int: u32 = std::net::Ipv4Addr::from_str(&self.addr)?.into();
+        // let update = doc! {
+        //     "$set": {
+        //         "addr": &self.addr,
+        //         "addr_int": addr_int as i64,
+        //         "last_update": bson::to_bson(&time)?,
+        //         "web": bson::to_bson(&web_services)?,
+        //         "ftp": bson::to_bson(&ftp_services)?,
+        //         "ssh": bson::to_bson(&ssh_services)?,
+        //         "geo": bson::to_bson(&geo)?,
+        //     }
+        // };
+        // let mut opts = mongodb::options::UpdateOptions::default();
+        // opts.upsert = Some(true);
+        // collection.update_one(query, update, opts).await?;
 
         Ok(())
     }
@@ -226,9 +265,75 @@ impl ServiceAnalyseTask {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ServiceRecord {
     pub addr: String,
+    pub addr_int: i64,
     pub last_update: bson::DateTime,
-    pub system: Option<HashMap<String, ServiceAnalyseResult>>,
-    pub web: Option<HashMap<String, ServiceAnalyseResult>>,
-    pub ftp: Option<HashMap<String, ServiceAnalyseResult>>,
-    pub ssh: Option<HashMap<String, ServiceAnalyseResult>>,
+    pub services: Vec<ServiceAnalyseResult>,
+}
+
+#[cfg(test)]
+mod test {
+    use chrono::Utc;
+    use mongodb::bson::{self, doc};
+    use tokio::test;
+
+    use crate::net_scanner::result_handler::NetScanRecord;
+    
+    #[test]
+    async fn test_deserialize() {
+        
+        let doc = doc! {
+            "addr_int" : 0,
+            "addr" : "123.123.123.123",
+            "online" : true,
+            "results" : [
+                {
+                    "port" : 21,
+                    "scanner" : "ftp",
+                    "proxy" : "",
+                    "time" : bson::to_bson(&bson::DateTime::from(Utc::now())).unwrap(),
+                    "result" : "Err",
+                    "data" : "deadline has elapsed"
+                },
+                {
+                    "port" : 443,
+                    "scanner" : "tls",
+                    "proxy" : "",
+                    "time" : bson::to_bson(&bson::DateTime::from(Utc::now())).unwrap(),
+                    "result" : "Ok",
+                    "data" : {
+                        "cert" : "****"
+                    }
+                },
+                {
+                    "port" : 80,
+                    "scanner" : "http",
+                    "proxy" : "",
+                    "time" : bson::to_bson(&bson::DateTime::from(Utc::now())).unwrap(),
+                    "result" : "Ok",
+                    "data" : {
+                        "status" : 412,
+                        "headers" : {
+                            "cache-control" : "[\"no-cache\"]",
+                            "date" : "[\"Thu, 03 Jun 2021 04:29:56 GMT\"]",
+                            "connection" : "[\"keep-alive\"]",
+                            "transfer-encoding" : "[\"chunked\"]",
+                            "server" : "[\"******\"]",
+                            "content-type" : "[\"text/html;charset=utf-8\"]"
+                        },
+                        "body" : "<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">\n<html>\n<head>\n    <meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\">\n    <meta id=\"JLyKZlWgYjpTkAsEt9LnA\" content=\"\" >\n</head>\n<body>\n    <script type=\"text/javascript\" src=\"/xlIsAnK1Ny52/Gx56ae5/468faf\" r='m'></script>\n</body>\n</html>\n"
+                    }
+                },
+                {
+                    "port" : 22,
+                    "scanner" : "ssh",
+                    "proxy" : "",
+                    "time" : bson::to_bson(&bson::DateTime::from(Utc::now())).unwrap(),
+                    "result" : "Err",
+                    "data" : "deadline has elapsed"
+                }
+            ]
+        };
+        let record: NetScanRecord = bson::from_document(doc).unwrap();
+        println!("{:?}", record);
+    }
 }

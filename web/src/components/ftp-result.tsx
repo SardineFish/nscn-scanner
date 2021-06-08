@@ -2,11 +2,11 @@ import { Descriptions, Divider } from "antd";
 import Paragraph from "antd/lib/typography/Paragraph";
 import Text from "antd/lib/typography/Text";
 import React from "react";
-import { ScanResult } from "../api/api";
+import { FTPScanResult, NetScanResult, ScanResult } from "../api/api";
 import { ArrayElement } from "../utils/utils";
 import { GenericScanResult } from "./generic-scan-result";
 
-export function FTPScanResult(props: {result: ArrayElement<ScanResult["ftp_results"]>})
+export function FTPScanResult(props: {result: NetScanResult<"ftp", FTPScanResult>})
 {
     const data = props.result;
     return (<>

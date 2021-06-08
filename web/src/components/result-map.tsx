@@ -25,11 +25,18 @@ export function ResultMap(props: {data: GeoStats[]})
 
     const dataSource: GeoJSON.FeatureCollection = {
         type: "FeatureCollection",
-        features: props.data.map(data => ({
-            type: "Feature",
-            properties: data,
-            geometry: data.geo.location,
-        }))
+        features: props.data
+            .filter(data => data.geo.location.coordinates[0] !== 0 && data.geo.location.coordinates[1] !== 0)
+            .map(data =>
+            {
+                data.count = Math.log(data.count);
+                return data;
+            })
+            .map(data => ({
+                type: "Feature",
+                properties: data,
+                geometry: data.geo.location,
+            }))
     };
     
     return (<AMapScene
@@ -50,8 +57,7 @@ export function ResultMap(props: {data: GeoStats[]})
             shape={{ values: "circle" }}
             size={{
                 field: "count",
-                values: [4, 30],
-                scale: "log",
+                values: [2, 10],
             }}
             color={{
                 values: "#9dff8052"

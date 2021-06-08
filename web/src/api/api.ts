@@ -15,8 +15,10 @@ const IPV4Field: ParamInfo<"string"> = {
     validator: ipv4Validator,
 }
 
-export type NetScanResult<T> =
+export type NetScanResult<S, T> =
     {
+        port: number,
+        scanner: S,
         proxy: string,
         time: { $date: string },
     } & ({
@@ -27,47 +29,65 @@ export type NetScanResult<T> =
         data: string,
     });
 
+export interface HTTPScanResult
+{
+    status: number,
+    headers: Record<string, string>,
+    body: string,
+}
+export interface TLSScanResult
+{
+    cert: string,
+}
+export interface FTPScanResult
+{
+    handshake_code: number,
+    handshake_text: string,
+    access: "Anonymous" | "Login",
+}
+export interface SSHScanResult
+{
+    protocol: {
+        version: string,
+        software: string,
+        comments: string,
+    },
+    algorithm: {
+        kex: string[],
+        host_key: string[],
+        encryption_client_to_server: string[],
+        encryption_server_to_client: string[],
+        mac_client_to_server: string[],
+        mac_server_to_client: string[],
+        compression_client_to_server: string[],
+        compression_server_to_client: string[],
+        languages_client_to_server: string[],
+        languages_server_to_client: string[],
+    }
+}
+
 export interface ScanResult
 {
-    addr: string,
-    last_update: number,
-    opened_ports: number[],
-    http_results: NetScanResult<{
-        status: number,
-        headers: Record<string, string[]>,
-        body: string,
-    }>[];
-    https_results: NetScanResult<{ cert: string }>[],
-    ftp_results: NetScanResult<{
-        handshake_code: number,
-        handshake_text: string,
-        access: "Anonymous" | "Login",
-    }>[];
-    ssh_results: NetScanResult<{
-        protocol: {
+    scan: {
+        addr_int: number,
+        addr: string,
+        online: boolean,
+        last_update: number,
+        results: Array<
+            NetScanResult<"http", HTTPScanResult>
+            | NetScanResult<"tls", TLSScanResult>
+            | NetScanResult<"ftp", FTPScanResult>
+            | NetScanResult<"ssh", SSHScanResult>
+        >,
+    }
+    analyse?: {
+        services: Record<string, {
+            name: string,
             version: string,
-            software: string,
-            comments: string,
-        },
-        algorithm: {
-            kex: string[],
-            host_key: string[],
-            encryption_client_to_server: string[],
-            encryption_server_to_client: string[],
-            mac_client_to_server: string[],
-            mac_server_to_client: string[],
-            compression_client_to_server: string[],
-            compression_server_to_client: string[],
-            languages_client_to_server: string[],
-            languages_server_to_client: string[],
-        }
-    }>[];
-    services: Record<string, {
-        name: string,
-        version: string,
-        vulns: string[],
-    }>,
-    vulns: Record<string, {
+            vulns: string[],
+        }>
+    },
+    vulns?: Record<string, {
         id: string,
         title: string,
         url: string
@@ -78,9 +98,12 @@ export interface BreifResult
 {
     addr: string,
     last_update: number,
-    opened_ports: number[],
-    services: string[],
-    vulnerabilities: number,
+    ports: number[],
+    services?: Array<{
+        name: string,
+        version: string,
+        vulns: number,
+    }>,
 }
 
 export interface ScannerStatistics
@@ -119,38 +142,30 @@ export interface WorkerStats
     analyser: SchedulerStats
 }
 
+export enum ProxyType
+{
+    None = "None",
+    Http = "Http",
+    Socks5 = "Socks5",
+    Shadowsocks = "Shadowsocks",
+}
+
 export interface WorkerConfig
 {
     master_addr: string,
     scanner: {
-        http: {
+        config: Record<string, {
             enabled: boolean,
             use_proxy: boolean,
-            socks5: boolean,
-            timeout: number
-        },
-        https: {
-            enabled: boolean,
-            use_proxy: boolean,
-            socks5: boolean,
-            timeout: number
-        },
-        ftp: {
-            enabled: boolean,
-            use_proxy: boolean,
-            timeout: number
-        },
-        ssh: {
-            enabled: boolean,
-            use_proxy: boolean,
-            timeout: number
-        },
+            proxy: ProxyType,
+            timeout: number,
+        }>,
         scheduler: {
             enabled: boolean,
             max_tasks: number,
             fetch_count: number,
             fetch_threshold: number
-        },
+        }
     },
     analyser: {
         scheduler: {

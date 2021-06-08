@@ -16,7 +16,7 @@ impl HttpProxyClient {
         let client = reqwest::Client::builder()
             .proxy(Proxy::http(&proxy_addr)?)
             .proxy(Proxy::https(&proxy_addr)?)
-            .timeout(std::time::Duration::from_secs(GLOBAL_CONFIG.scanner.http.timeout))
+            .timeout(std::time::Duration::from_secs(5))
             .build()?;
         Ok(Self {
             proxy_addr: addr.to_owned(),
@@ -25,7 +25,7 @@ impl HttpProxyClient {
     }
 
     pub(super) async fn verify(&self) -> Result<bool, SimpleError> {
-        for (idx, verify_method) in GLOBAL_CONFIG.proxy_pool.http_validate.iter().enumerate() {
+        for (idx, verify_method) in GLOBAL_CONFIG.proxy.http.http_validate.iter().enumerate() {
             match verify_method {
                 ProxyVerify::Plain(url) => {
                     let response = self.client.get(url)

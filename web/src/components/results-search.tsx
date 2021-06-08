@@ -135,6 +135,7 @@ export const ResultSearch: React.FC = () =>
 const SearchResultItem = (props: { result: BreifResult, onClick: (addr: string) => any }) =>
 {
     const time = new Date(props.result.last_update).toLocaleString();
+    const vulns = (props.result.services ?? []).reduce((sum, current) => sum + current.vulns, 0);
     return (<List.Item>
         <List.Item.Meta
             avatar={<DatabaseOutlined style={{ fontSize: "32px" }} />}
@@ -144,18 +145,22 @@ const SearchResultItem = (props: { result: BreifResult, onClick: (addr: string) 
             </span>}
             description={<>
                 {
-                    props.result.opened_ports.length <= 0
+                    props.result.ports.length <= 0
                         ? <Tag color="default">offline</Tag>
-                        : props.result.opened_ports.map((port, key) => (<Tag color="green" key={key}>{port}</Tag>))
+                        : props.result.ports.map((port, key) => (<Tag color="green" key={key}>{port}</Tag>))
                 }
                 {
-                    props.result.services.map((service, key) => (<Tag color="blue" key={key}>{service}</Tag>))
+                    props.result.services?.map((service, key) => (
+                        <Tag color="blue" key={key}>
+                            {service.name}
+                            {service.version !== "" ? ` ${service.version}` : null}
+                        </Tag>))
                 }
-                {
-                    props.result.vulnerabilities > 0
-                        ? <Tag color="warning" icon={<ExclamationCircleOutlined />}>{`vulnerabilities ${props.result.vulnerabilities}`}</Tag>
+                {/* {
+                    vulns > 0
+                        ? <Tag color="warning" icon={<ExclamationCircleOutlined />}>{`vulnerabilities ${vulns}`}</Tag>
                         : null
-                }
+                } */}
             </>}
         />
 

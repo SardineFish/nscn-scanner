@@ -1,0 +1,7 @@
+{
+	"SEARCH": "Microsoft ASP.NET ["4.0.30319"]",
+	"DB_PATH_EXPLOIT": "/home/micor/projects/nscn-scanner/thirdparty/exploitdb",
+	"RESULTS_EXPLOIT": [	],
+	"DB_PATH_SHELLCODE": "/home/micor/projects/nscn-scanner/thirdparty/exploitdb",
+	"RESULTS_SHELLCODE": [	]
+}

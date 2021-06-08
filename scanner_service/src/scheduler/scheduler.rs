@@ -281,7 +281,7 @@ impl<Resource> TaskPool<Resource> where Resource: Send + 'static {
             resource_pool,
         }
     }
-    pub async fn spawn<T, Task>(&mut self, _name: &'static str, func: fn(Task, &'static mut Resource) -> T, task: Task)
+    pub async fn spawn<T, Task>(&mut self, _name: &'static str, func: fn(Task, &'static mut Resource) -> T, task: Task) -> JoinHandle<T::Output>
     where T : Future + Send + 'static, 
         T::Output: Send + 'static,
         Task: Send + 'static,
@@ -294,13 +294,16 @@ impl<Resource> TaskPool<Resource> where Resource: Send + 'static {
             // future.await;
             let mut ptr: AtomicPtr<Resource> = AtomicPtr::new(&mut resource);
             let mut_ref = unsafe{ ptr.get_mut().as_mut().unwrap()};
-            func(task, mut_ref).await;
-            // if let Err(_) = timeout(Duration::from_secs(300), future).await {
-            //     log::error!("Task {} suspedned over 300s", name);
-            // }
-            // sleep(Duration::from_secs(5)).await;
+            // let result = func(task, mut_ref).await;
+            let result = match tokio::time::timeout(Duration::from_secs(8), func(task, mut_ref)).await {
+                Err(_) => {
+                    panic!("Task {} suspedned over 8s", _name);
+                },
+                Ok(result) => result,
+            };
             complete_sender.send(resource).await.log_warn_consume("scan-scheduler");
-        });
+            result
+        })
     }
     async fn wait_resource(&mut self) -> Resource {
         if self.running_tasks >= self.max_tasks || self.resource_pool.len() <= 0 {

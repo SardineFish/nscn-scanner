@@ -2,11 +2,11 @@ import { Badge, Collapse, Descriptions, Divider, Table } from "antd";
 import Paragraph from "antd/lib/typography/Paragraph";
 import Text from "antd/lib/typography/Text";
 import React from "react";
-import { ScanResult } from "../api/api";
+import { HTTPScanResult, NetScanResult, ScanResult } from "../api/api";
 import { ArrayElement } from "../utils/utils";
 import { GenericScanResult } from "./generic-scan-result";
 
-export function HTTPResult(props: { result: ArrayElement<ScanResult["http_results"]>})
+export function HTTPResult(props: { result: NetScanResult<"http", HTTPScanResult>})
 {
     const data = props.result;
     if (data.result === "Ok")
@@ -14,7 +14,7 @@ export function HTTPResult(props: { result: ArrayElement<ScanResult["http_result
         const headers = Object.keys(data.data.headers).map(key => ({
             key: key,
             name: key,
-            value: data.data.headers[key].join(", ")
+            value: data.data.headers[key]
         }));
         const columns = [
             {

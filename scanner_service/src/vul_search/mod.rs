@@ -21,19 +21,19 @@ pub(super) struct CacheHitRateStats {
 lazy_static! {
     pub(super) static ref HIT_RATE_STATS: Arc<Mutex<CacheHitRateStats>> = {
         let stats = Arc::new(Mutex::new(CacheHitRateStats::default()));
-        let stats_clone = stats.clone();
-        tokio::task::spawn(async move {
-            loop {
-                tokio::time::sleep(std::time::Duration::from_secs(10)).await;
-                {
-                    let guard = stats_clone.lock().await;
-                    log::info!("Access: {}, Hit: {}, HitRate: {}", 
-                        guard.access_count, 
-                        guard.hit_count, 
-                        guard.hit_count as f64 / guard.access_count as f64);
-                }
-            }
-        });
+        // let stats_clone = stats.clone();
+        // tokio::task::spawn(async move {
+        //     loop {
+        //         tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+        //         {
+        //             let guard = stats_clone.lock().await;
+        //             log::info!("Access: {}, Hit: {}, HitRate: {}", 
+        //                 guard.access_count, 
+        //                 guard.hit_count, 
+        //                 guard.hit_count as f64 / guard.access_count as f64);
+        //         }
+        //     }
+        // });
         stats
     };
 }

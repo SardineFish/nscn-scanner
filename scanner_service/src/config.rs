@@ -16,7 +16,7 @@ pub struct Config {
     pub workers: Option<Vec<String>>,
     pub master: Option<String>,
     pub init: Option<bool>,
-    pub proxy_pool: ProxyPoolConfig,
+    pub proxy: ProxyPoolConfig,
     pub scanner: ScannerConfig,
     pub analyser: ServiceAnalyserOptions,
     pub stats: StatsConfig,
@@ -49,13 +49,32 @@ pub struct StatsConfig {
 
 #[derive(Deserialize, Clone)]
 pub struct ProxyPoolConfig {
-    pub update_http_proxy: bool,
+    pub http: HttpProxyPoolConfig,
+    pub socks5: Socks5ProxyOptions,
+    #[cfg(feature = "ss_proxy")]
+    #[serde(deserialize_with = "ss_config::deserialize_ss_config")]
+    pub shadowsocks: Option<Vec<shadowsocks::ServerConfig>>,
+
+    pub task_fetch_proxy: Option<String>,
+}
+
+#[derive(Deserialize, Clone)]
+pub struct HttpProxyPoolConfig {
+    pub update: bool,
     pub fetch_addr: String,
     pub update_interval: u64,
     pub http_validate: Vec<ProxyVerify>,
     pub https_validate: String,
-    pub socks5: Socks5ProxyOptions,
 }
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct SSProxyConfig {
+    pub address: String,
+    pub port: u16,
+    pub password: String,
+    pub method: String,
+}
+
 
 #[derive(Deserialize, Clone)]
 pub struct Socks5ProxyOptions {
@@ -67,7 +86,7 @@ pub struct Socks5ProxyOptions {
     pub servers: Option<Vec<String>>,
 }
 
-#[derive(Deserialize, Serialize, Clone, PartialEq, Eq)]
+#[derive(Deserialize, Serialize, Clone, PartialEq, Eq, Debug)]
 pub struct WorkerSchedulerOptions {
     pub enabled: bool,
     pub max_tasks: usize,
@@ -75,39 +94,49 @@ pub struct WorkerSchedulerOptions {
     pub fetch_threshold: usize,
 }
 
-#[derive(Deserialize, Clone, PartialEq, Eq)]
-#[serde(untagged)]
-pub enum ResultSavingOption {
-    SingleCollection(String),
-    Independent{http: String, https: String, tcp: String, },
+#[derive(Deserialize, Clone, PartialEq, Eq, Debug)]
+pub struct ResultSavingOption {
+    pub collection: String,
+    pub save_failure: bool,
 }
 
-#[derive(Deserialize, Clone, PartialEq, Eq)]
+#[derive(Deserialize, Clone, PartialEq, Eq, Debug)]
 pub struct ScannerConfig {
-    pub http: UniversalScannerOption,
-    pub https: UniversalScannerOption,
-    pub ssh: UniversalScannerOption,
-    pub ftp: UniversalScannerOption,
-    pub tcp: TCPScannerOptions,
-    pub task: TaskOptions,
+    pub config: HashMap<String, UniversalScannerOption>,
+    pub ports: HashMap<u16, Vec<String>>,
     pub scheduler: WorkerSchedulerOptions,
     pub save: ResultSavingOption,
 }
 
-#[derive(Deserialize, Clone, PartialEq, Eq)]
-pub struct TCPScannerOptions {
-    pub enabled: bool,
-    pub ports: HashMap<u16, Vec<String>>,
-}
-
-#[derive(Deserialize, Serialize, Clone, PartialEq, Eq)]
+#[derive(Deserialize, Serialize, Clone, PartialEq, Eq, Debug)]
 pub struct UniversalScannerOption {
     pub enabled: bool,
     pub use_proxy: bool,
-    pub socks5: Option<bool>,
+    pub proxy: Option<ScannerProxy>,
     pub timeout: u64,
 }
-#[derive(Deserialize, Clone, PartialEq, Eq)]
+
+#[derive(Deserialize, Serialize, Clone, PartialEq, Eq, Debug)]
+pub enum ScannerProxy {
+    None,
+    Http,
+    Socks5,
+    #[cfg(feature = "ss_proxy")]
+    Shadowsocks,
+}
+
+impl Default for UniversalScannerOption {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            use_proxy: false,
+            proxy: None,
+            timeout: 5,
+        }
+    }
+}
+
+#[derive(Deserialize, Clone, PartialEq, Eq, Debug)]
 pub struct TaskOptions {
     pub fetch: bool,
     pub clear_old_tasks: bool,
@@ -144,7 +173,33 @@ pub enum ProxyVerify {
     Echo{base: String, pattern: String},
 }
 
+#[cfg(feature = "ss_proxy")]
+mod ss_config {
+    use std::str::FromStr;
+    use serde::Deserializer;
+    use super::SSProxyConfig;
+    use serde::Deserialize;
+
+    pub fn deserialize_ss_config<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Option<Vec<shadowsocks::ServerConfig>>, D::Error> {
+        let cfg = Option::<Vec<SSProxyConfig>>::deserialize(deserializer)?;
+        let cfg = cfg.map(|v|
+            v.into_iter().filter_map(|cfg| {
+                shadowsocks::crypto::v1::CipherKind::from_str(&cfg.method)
+                    .map(|method|
+                        shadowsocks::ServerConfig::new(
+                            (cfg.address, cfg.port),
+                            cfg.password,
+                            method
+                        )
+                    ).ok()
+            })
+                .collect::<Vec<_>>());
+        Ok(cfg)
+    }
+}
+
 impl Config {
+
     pub fn from_file(path: &str) -> Result<Self, SimpleError> {
         let data = std::fs::read_to_string(path)?;
         Ok(serde_json::from_str(&data)?)

@@ -1,21 +1,39 @@
 use std::collections::HashMap;
+use std::net::Ipv4Addr;
 use std::str::FromStr;
 
 use chrono::Utc;
-use mongodb::{Database, bson::{self, Document, doc}, options::{FindOneAndUpdateOptions, UpdateOptions}};
+use mongodb::options::UpdateOptions;
+use mongodb::{Database, bson::{self, Document, doc}, options::{FindOneAndUpdateOptions}};
 use serde::{Serialize, Deserialize};
 
-use crate::{ServiceAnalyseResult, config::{GLOBAL_CONFIG, ResultSavingOption}};
+use crate::FTPScanResult;
+use crate::SSHScannResult;
+use crate::{ServiceAnalyseResult, config::{GLOBAL_CONFIG}};
 use crate::error::*;
 
-use super::{http_scanner::HttpResponseData, https_scanner::HttpsResponse, tcp_scanner::scanner::TCPScanResult};
+use super::scanner::TcpScanResult;
+use super::{http_scanner::HttpResponseData, https_scanner::HttpsResponse};
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct NetScanRecord {
+pub(crate) struct NetScanRecord {
     pub addr_int: i64,
     pub addr: String,
-    pub last_update: bson::DateTime,
-    pub scan: NetScanResult,
+    pub online: Option<bool>,
+    pub results: Vec<ScanTaskData>
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(tag="scanner")]
+pub enum TcpScanResultType {
+    #[serde(rename = "http")]
+    Http(ScanResult<HttpResponseData>),
+    #[serde(rename = "tls")]
+    Tls(ScanResult<HttpsResponse>),
+    #[serde(rename = "ftp")]
+    Ftp(ScanResult<FTPScanResult>),
+    #[serde(rename = "ssh")]
+    SSH(ScanResult<SSHScannResult>),
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -55,44 +73,80 @@ impl<T: Serialize> From<Result<T, SimpleError>> for ScanResult<T> {
     }
 }
 
-
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ScanTaskData {
+    pub port: i32,
+    pub proxy: Option<String>,
+    pub time: bson::DateTime,
+    #[serde(flatten)]
+    pub result: TcpScanResultType,
+}
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ScanTaskInfo<T> {
-    pub proxy: String,
+    pub port: i32,
+    pub scanner: String,
+    pub proxy: Option<String>,
     pub time: bson::DateTime,
     #[serde(flatten)]
     pub result: ScanResult<T>,
 }
 
-impl<T> ScanTaskInfo<T> {
-    pub fn new(result: ScanResult<T>) -> Self {
-        Self {
-            proxy : "".to_owned(),
-            time: Utc::now().into(),
-            result,
-        }
-    }
-    pub fn with_proxy(proxy: String, result: ScanResult<T>) -> Self {
-        Self {
-            proxy: proxy.to_owned(),
-            time: Utc::now().into(),
-            result,
-        }
+impl ScanTaskInfo<()> {
+    pub fn new(addr: String, port: u16) -> ScanTaskInfoBuilder {
+        ScanTaskInfoBuilder::new(addr, port)
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-pub struct NetScanResult {
-    pub http: Option<NetScanResultSet<HttpResponseData>>,
-    pub https: Option<NetScanResultSet<HttpsResponse>>,
-    pub tcp: Option<HashMap<String, TCPScanResult>>,
+pub struct ScanTaskInfoBuilder {
+    pub addr_int: i64,
+    pub addr: String,
+    pub port: u16,
+    pub scanner: &'static str,
+    pub proxy: Option<String>,
+    pub time: bson::DateTime,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-pub struct NetScanResultSet<T> {
-    pub success: i32,
-    pub results: Vec<ScanTaskInfo<T>>,
+impl ScanTaskInfoBuilder {
+    fn new(addr: String, port: u16) -> Self {
+        Self {
+            addr_int: u32::from(std::net::Ipv4Addr::from_str(&addr)
+                .unwrap_or(Ipv4Addr::UNSPECIFIED)) as i64,
+            addr,
+            port,
+            proxy: None,
+            time: Utc::now().into(),
+            scanner: "",
+        }
+    }
+    pub fn scanner(self, scanner: &'static str) -> Self {
+        Self {
+            scanner,
+            ..self
+        }
+    }
+    pub fn proxy(mut self, proxy_addr: String) -> Self {
+        self.proxy = Some(proxy_addr);
+        self
+    }
+    pub fn success<T>(self, result: T) -> ScanTaskInfo<T> {
+        ScanTaskInfo::<T> {
+            result: ScanResult::Ok(result),
+            port: self.port as i32,
+            proxy: self.proxy,
+            scanner: self.scanner.to_owned(),
+            time: self.time,
+        }
+    }
+    pub fn err<T, E: Into<SimpleError>>(self, err: E) -> ScanTaskInfo<T> {
+        ScanTaskInfo::<T> {
+            result: ScanResult::Err(<E as Into<SimpleError>>::into(err).msg),
+            port: self.port as i32,
+            proxy: self.proxy,
+            scanner: self.scanner.to_owned(),
+            time: self.time,
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -100,16 +154,24 @@ pub struct ResultHandler {
     pub(super) db: Database,
 }
 
-impl ResultHandler {
-    pub async fn save_scan_results<T: Serialize>(&self, key: &str, ip_addr: &str, task_result: &ScanTaskInfo<T>) {
-        let future = self.try_save(key, ip_addr, task_result);
-        match tokio::time::timeout(std::time::Duration::from_secs(300), async move {
-            future.await.log_error_consume("result-saving");
-        }).await {
-            Ok(_) => (),
-            Err(_) => log::error!("Result saving timeout"),
+pub trait SerializeScanResult {
+    fn to_bson(&self) -> Result<bson::Bson, bson::ser::Error>;
+    fn success(&self) -> bool;
+}
+
+impl<R: Serialize> SerializeScanResult for ScanTaskInfo<R> {
+    fn to_bson(&self) -> Result<bson::Bson, bson::ser::Error> {
+        bson::to_bson(&self)
+    }
+    fn success(&self) -> bool {
+        match self.result {
+            ScanResult::Ok(_) => true,
+            _ => false,
         }
     }
+}
+
+impl ResultHandler {
     pub async fn save_analyse_results(&self, ip_addr: &str, service_key: &str, services: HashMap<String, ServiceAnalyseResult>) -> Result<(), SimpleError> {
         let collecion = self.db.collection::<Document>(&GLOBAL_CONFIG.analyser.save);
 
@@ -159,56 +221,41 @@ impl ResultHandler {
         Ok(())
 
     }
-    async fn try_save<T: Serialize>(&self, key: &str, ip_addr: &str, task_result: &ScanTaskInfo<T>) -> Result<(), SimpleError> {
-        let collection = match &GLOBAL_CONFIG.scanner.save {
-            ResultSavingOption::SingleCollection(collection) => self.db.collection::<Document>(&collection),
-            _ => panic!("Not implement"),
+    pub async fn save_scan_results_batch(&self, addr: String, results: Vec<TcpScanResult>) -> Result<(), SimpleError> {
+        let collection  = self.db.collection::<Document>(&GLOBAL_CONFIG.scanner.save.collection);
+        let addr_int: u32 = std::net::Ipv4Addr::from_str(&addr)?.into();
+        let query = doc! {
+            "addr_int": addr_int as i64
         };
-        let result_key = format!("scan.{}.results", key);
-        let success_key = format!("scan.{}.success", key);
-        let success: i32 = match &task_result.result {
-            ScanResult::Ok(_) => 1,
-            ScanResult::Err(_) => 0,
-        };
-
-        let current_time = bson::DateTime::from(Utc::now());
-        let addr_int: u32 = std::net::Ipv4Addr::from_str(ip_addr)?.into();
-        let doc = match success {
-            1 => bson::doc! {
-                "$set": {
-                    "addr": ip_addr,
-                    "addr_int": addr_int as i64,
-                    "last_update": bson::to_bson(&current_time)?,
-                    "any_available": true,
-                },
-                "$inc": {
-                    success_key: success,
-                },
-                "$push": {
-                    result_key: bson::to_bson(&task_result)?
-                },
+        let is_online = results.iter().any(|r|r.success());
+        let results = results.into_iter()
+            .filter_map(|r| r.to_bson().log_error("serialize-result").ok())
+            .collect::<Vec::<_>>();
+        let mut update = doc! {
+            "$setOnInsert": {
+                "addr": bson::to_bson(&addr)?,
+                "addr_int": addr_int as i64,
             },
-            _ => bson::doc! {
-                "$set": {
-                    "addr": ip_addr,
-                    "addr_int": addr_int as i64,
-                    "last_update": bson::to_bson(&bson::DateTime::from(Utc::now()))?,
-                },
-                "$inc": {
-                    success_key: success,
-                },
-                "$push": {
-                    result_key: bson::to_bson(&task_result)?
+            "$push": {
+                "results": {
+                    "$each": bson::to_bson(&results)?,
                 }
             }
         };
-        let query = bson::doc! {
-            "addr_int": addr_int as i64,
-        };
-        let mut opts = UpdateOptions::default();
-        opts.upsert = Some(true);
-        collection.update_one(query, doc, opts).await?;
-
+        if is_online {
+            update.insert("$set", doc! {
+                "online": true,
+                "last_update": bson::to_bson(&bson::DateTime::from(Utc::now()))?,
+            });
+        } else {
+            update.insert("$set", doc! {
+                "last_update": bson::to_bson(&bson::DateTime::from(Utc::now()))?,
+            });
+        }
+        let opts = UpdateOptions::builder()
+            .upsert(Some(true))
+            .build();
+        collection.update_one(query, update, opts).await?;
         Ok(())
     }
 }

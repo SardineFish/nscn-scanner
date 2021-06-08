@@ -2,7 +2,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use regex::Regex;
 use serde::{Deserialize};
-use crate::{net_scanner::{http_scanner::HttpResponseData, result_handler::{NetScanResultSet, ScanResult}}, vul_search::VulnerabilitiesSearch};
+use crate::{net_scanner::{http_scanner::HttpResponseData, result_handler::{ScanResult}}, vul_search::VulnerabilitiesSearch};
 use crate::error::*;
 
 use super::ServiceAnalyseResult;
@@ -146,12 +146,10 @@ impl WappanalyserRuleParsed {
         if let Some(header_rules) = &self.headers {
             for (name, pattern) in header_rules {
                 let header = name.to_lowercase();
-                if let Some(header_values) = data.headers.get(&header) {
-                    for header_value in header_values {
-                        match pattern.analyse(header_value) {
-                            Some (version) => return Ok(Some(version)),
-                            _ => (),
-                        }
+                if let Some(header_value) = data.headers.get(&header) {
+                    match pattern.analyse(header_value) {
+                        Some (version) => return Ok(Some(version)),
+                        _ => (),
                     }
                 }
             }
@@ -206,13 +204,10 @@ impl WebServiceAnalyser {
         })
     }
 
-    pub async fn analyse(&self, result: &ScanResult<HttpResponseData>, web_services: &mut HashMap<String, ServiceAnalyseResult>) -> Result<(), SimpleError> {
-        let data = match result {
-            ScanResult::Ok(data) => data,
-            _ => return Ok(()),
-        };
+    pub fn analyse(&self, result: &HttpResponseData) -> HashMap<String, ServiceAnalyseResult> {
+        let mut web_services: HashMap<String, ServiceAnalyseResult> = HashMap::new();
         for (name, rule) in self.rules.as_ref() {
-            match rule.try_match(data) {
+            match rule.try_match(result) {
                 Ok(Some(analysed_version)) => match web_services.get_mut(name) {
                         Some(service_version) => { service_version.version = analysed_version; },
                         None => { web_services.insert(name.to_owned(), ServiceAnalyseResult::new(name.to_owned(), analysed_version)); },
@@ -221,24 +216,22 @@ impl WebServiceAnalyser {
                 Err(err) => log::error!("Failed to analyse {}: {}", name, err.msg),
             }
         };
-        Ok(())
+        web_services
     }
 
-    pub async fn analyse_result_set(&mut self, result_set: &NetScanResultSet<HttpResponseData>) -> Result<HashMap<String, ServiceAnalyseResult>, SimpleError> {
-        let mut web_services: HashMap<String, ServiceAnalyseResult> = HashMap::new();
-        if result_set.success <= 0 {
-            return Ok(web_services);
-        }
-        for result in &result_set.results {
-            self.analyse(&result.result,&mut web_services).await?;
-        }
-        for (_, result) in &mut web_services {
+    pub async fn analyse_result_set(&mut self, scan_result: &ScanResult<HttpResponseData>) -> HashMap<String, ServiceAnalyseResult> {
+        let mut services = match &scan_result {
+            ScanResult::Err(_) => return HashMap::new(),
+            ScanResult::Ok(result) => self.analyse(result),
+        };
+
+        for (_, result) in &mut services {
             match self.vuln_searcher.exploitdb().search(&result.name, &result.version).await {
                 Ok(vulns) => result.vulns = vulns,
                 Err(err) => log::error!("Failed to search exploitdb: {}", err.msg),
             }
         }
 
-        Ok(web_services)
+        services
     }
 }

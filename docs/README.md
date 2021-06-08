@@ -1,394 +1,154 @@
-## Get Statistics
-`GET /api/scan/stats`
+# NSCN Scanner
 
-### Response
-```json
-{
-    "total_scan": 0,
-    "scan_per_seconds": 0,
-    "available_servers": 0,
-    "total_vulnerabilities": 0,
-}
+## Build
+### Requirement
+- Rust 1.52 (No Shadowsocks proxy support, build with args `--no-default-features`)
+- Rust nightly (Support shadowsocks, default)
+
+### Build Command
+Recommend build optmised binary with `--release` on production environment.
+
+Build with shadowsocks support by nightly rust toolchain
+```shell
+$ cargo +nightly build --release
+```
+Build without shadowsocks support in stable rust toolchain
+```shell
+$ cargo build --release --no-default-features
 ```
 
---------
+## Run
+### Runtime Requirement
+- OpenSSL, install with `apt-get instal libssl-dev`
+- Config file named `config.json` in project root directory
 
-## Query by IP Address
-`GET /api/scan/{ip}`
+### Run CLI
+```shell
+$ cargo run
+```
 
-### Response
+#### CLI Arguments
+Specify config file
+```shell
+$ cargo run --release -- -c /path/to/config.json
+```
 
-```json
-[{
-    "addr": "123.123.123.123",
-    "services": {
-        "Nginx": {
-            "name": "Nginx",
-            "version": "1.4.0",
-            "vulnerabilities": [
-                {
-                    "id": "CVE-XXXX-XXXX",
-                    "title": "Some Vulnerability of Nginx 1.4.0",
-                    "url": "http://example.com"
-                },
-                {
-                    "id": "EDB-XXXX",
-                    "title": "Another Vulnerability of Nginx 1.4.0",
-                    "url": "http://example.com"
-                }
+Specify node role
+```shell
+$ cargo run --release -- --role Standalone
+```
+
+For more args, see:
+```shell
+$ cargo run --release -- --help
+```
+
+### Configuration File
+See `config-example.json` for example.
+```js
+{
+    "mongodb": "mongodb://127.0.0.1/nscn",
+    "redis": "redis://127.0.0.1/0",
+    "listen": "127.0.0.1:3000", // The API server will listen on this address and port, Make sure other Workers, Master or WebUI can connect to this address.
+    "role": "Standalone", // Master | Worker | Standalone (* both master and worker)
+    "workers": [
+        "<worker_address>:<port>" // (optional) The `listen` address of the worker API server. Connect to Worker from Master
+    ],
+    "master": "127.0.0.1:3001" // (optional) Connect to Master from Worker
+    "proxy": {
+        "http": { // HTTP proxy pool config, use with https://github.com/jhao104/proxy_pool
+            "update": false,
+            "fetch_addr": "http://localhost:5000/proxy_pool/get_all/",
+            "update_interval": 60,
+            "http_validate": [
+                "http://www.baidu.com"
+            ],
+            "https_validate": "www.baidu.com:443"
+        },
+        "socks5": { // Socks5 proxy pool used with http://webapi.http.zhimacangku.com/
+            "enabled": true,
+            "fetch": "<fetch_url>", // Fetch api in json format with expire time.
+            "pool_size": 0, // Keep N socks5 proxies in pool to perform load balance
+            "servers": [ // Manually add socks5 proxies into pool, ignoreing pool size
+                "127.0.0.1:1080"
             ]
         },
-        "OpenSSH": {
-            "name": "OpenSSH",
-            "version": "",
-            "vulnerabilities": []
-        }
-    },
-    "opened_ports": [80, 443, 21, 22],
-    "http_response": {
-        "status": "200",
-        "header": {
-            "Server": "Nginx",
-            "Content-Type": "text/html"
-        }
-    },
-    "https_certificate": "<In X.509 format>",
-    "ftp_access": "Anonymous",
-    "ssh_server": "OpenSSH 7.0"
-}]
-```
---------
-
-
-## Request Scanning IP Adress
-`POST /api/scan/{ip}`
-
---------
-
-## Request Scanning IP Range with CIDR Notation
-`POST /api/scan/{ip}/{CIDR_notation}`
-
---------
-
-## Request Scanning IP from List URL
-`POST /api/scan/list`
-### Request
-```json
-{
-    "fetch_urls": [
-        "https://example.com/addr_list1.txt",
-        "https://example.com/addr_list2.txt"
-    ],
-    "addr_ranges": [
-        "10.1.0.0/16",
-        "192.168.1.0/24"
-    ]
-}
-```
-### Response
-```json
-{
-    "tasks": 1
-}
-```
---------
-
-## Get Pending Tasks
-`GET /api/scan/task?skip=0&count=0`
-### Response
-```json
-[
-    "123.123.123.123/32",
-    "123.123.123.0/24",
-]
-```
-
---------
-
-## Remove Pending Task
-`DELETE /api/scan/task/{ip}/{CIDR_notation}`
-
-e.g. `DELETE /api/scan/task/123.123.123.0/24`
-
-### Response
-```json
-{
-    "removed_tasks": 1
-}
-```
-
---------
-
-## Clear Pending Tasks
-`DELETE /api/scan/task/all`
-
-### Response
-```json
-{
-    "removed_tasks": 1024
-}
-```
-
---------
-
-
-## Get All Available Hosts
-`GET /api/search/all?skip=0&count=10`
-
-Just alias of `/api/scan/0.0.0.0/0?online_only=1`
-
---------
-
-
-## Search by IP Range with CIDR Notation
-`GET /api/scan/{ip}/{CIDR_notation}?skip=0&count=10&online_only=1`
-
-e.g. `GET /api/scan/123.123.123.123/24`
-
-
-
-### Response
-```json
-[
-    {
-        "addr": "123.123.123.123",
-        "last_update": 1618933373681,
-        "opened_ports": [80, 443, 22],
-        "services": ["Nginx 1.4.0", "OpenSSH 7.0"],
-        "vulnerabilities": 13
-    },
-    {
-        "addr": "100.100.100.100",
-        "last_update": 1618933373681,
-        "opened_ports": [80, 22],
-        "services": ["PHP 7.0", "OpenSSH 7.2"],
-        "vulnerabilities": 21
-    }
-]
-```
-
---------
-
-
-## Search by Service Name
-`GET /api/search/service/{service_name}?skip=0&count=10`
-
-`GET /api/search/service/{service_name}/{version}?skip=0&count=10`
-
-### Response
-```json
-[
-    {
-        "addr": "123.123.123.123",
-        "opened_ports": [80, 443, 22],
-        "services": ["Nginx 1.4.0", "OpenSSH 7.0"],
-        "vulnerabilities": 13
-    },
-    {
-        "addr": "100.100.100.100",
-        "opened_ports": [80, 22],
-        "services": ["PHP 7.0", "OpenSSH 7.2"],
-        "vulnerabilities": 21
-    }
-]
-```
-
---------
-
-## Search by Port
-`GET /api/search/port/{port}`
-
-
---------
-
-## Get Master Scheduler Stats
-`GET /api/stats/master`
-### Response 
-```json
-{
-    "pending_tasks": 0,
-    "tasks_per_second": 0,
-    "jobs_per_second": 0,
-}
-```
-
---------
-
-## Get Worker Stats
-`GET /api/stats/all`
-### Response
-```json
-{
-    "system": {
-        "cpu_usage": 0,
-        "total_memory_kb": 0,
-        "used_memory_kb": 0,
-        "total_swap_kb": 0,
-        "used_swap_kb": 0,
-        "network_in_bytes": 0,
-        "network_out_bytes": 0,
-        "load_one": 0,
-        "load_five": 0,
-        "load_fifteen": 0
-    },
-    "analyser": {
-        "pending_tasks": 0,
-        "tasks_per_second": 0,
-        "jobs_per_second": 0,
+        "shadowsocks": [ // Shadowsocks servers
+            {
+                "address": "127.0.0.1",
+                "port": 1234,
+                "password": "<password>",
+                "method": "aes-256-cfb"
+            }
+        ]
     },
     "scanner": {
-        "pending_tasks": 0,
-        "tasks_per_second": 0,
-        "jobs_per_second": 0,
-    }
-}
-```
-
---------
-
-## Get Specific Worker Stats
-`GET /api/stats/{worker_addr}/all`
-### Response
-```json
-{
-    "system": {
-        "cpu_usage": 0,
-        "total_memory_kb": 0,
-        "used_memory_kb": 0,
-        "total_swap_kb": 0,
-        "used_swap_kb": 0,
-        "network_in_bytes": 0,
-        "network_out_bytes": 0,
-        "load_one": 0,
-        "load_five": 0,
-        "load_fifteen": 0
-    },
-    "analyser": {
-        "pending_tasks": 0,
-        "tasks_per_second": 0,
-        "jobs_per_second": 0,
-    },
-    "scanner": {
-        "pending_tasks": 0,
-        "tasks_per_second": 0,
-        "jobs_per_second": 0,
-    }
-}
-```
-
---------
-
-## Request Full Analyse
-`POST /api/analyse/all`
-### Response
-```json
-{
-    "tasks": 1,
-}
-```
-
---------
-
-## Fetch Tasks
-`POST /api/scheduler/{task_key}/fetch?count=10`
-### Response
-```json
-[
-    "10.0.0.0/8",
-    "192.168.1.0/24",
-]
-```
-
---------
-
-## Complete Task
-`POST /api/scheduler/{task_key}/complete`
-### Request
-```json
-[
-    "10.0.0.0/8",
-    "192.168.1.0/24",
-]
-```
-
---------
-
-## Setup Worker Scheduler State
-`POST /api/scheduler/setup`
-### Request
-```json
-{
-    "master_addr": "localhost:3000",
-    "scanner": {
-        "http": {
-            "enabled": true,
-            "use_proxy": true,
-            "socks5": true,
-            "timeout": 5
+        "ports": { // Specify which scanners should be used to scan on a TCP port
+            "80": ["http"],
+            "443": ["tls"],
+            "21": ["ftp"],
+            "22": ["ssh"],
+            "3000": [ "http", "tls" ] // Scan 3000/tcp with both http and tls scanner
         },
-        "https": {
-            "enabled": true,
-            "use_proxy": true,
-            "socks5": true,
-            "timeout": 5
-        },
-        "ftp": {
-            "enabled": true,
-            "use_proxy": true,
-            "timeout": 5
-        },
-        "ssh": {
-            "enabled": true,
-            "use_proxy": true,
-            "timeout": 5
+        "config": { // Per scanner config
+            "http": {
+                "enabled": true,
+                "use_proxy": true,
+                "proxy": "Shadowsocks", // None | Socks5 | Shadowsocks | Http
+                "timeout": 5
+            },
+            "tls": {
+                "enabled": true,
+                "use_proxy": true,
+                "proxy": "Shadowsocks",
+                "timeout": 5
+            },
+            "ftp": {
+                "enabled": true,
+                "use_proxy": true,
+                "proxy": "Shadowsocks",
+                "timeout": 5
+            },
+            "ssh": {
+                "enabled": true,
+                "use_proxy": true,
+                "proxy": "Shadowsocks",
+                "timeout": 5
+            }
         },
         "scheduler": {
             "enabled": true,
-            "max_tasks": 400,
-            "fetch_count": 5,
-            "fetch_threshold": 3
+            "max_tasks": 20000,
+            "fetch_count": 16,
+            "fetch_threshold": 8
         },
+        "save": {
+            "collection": "scan", // Not implement yet
+            "save_failure": true // Save failed error info or not, turn off to improve performance of database.
+        }
     },
     "analyser": {
+        "analyse_on_scan": false, // Not implement yet.
+        "externals": {
+            "wappanalyser_rules": "./thirdparty/wappanalyser/technologies.json",
+            "ftp_rules": "./rules/ftp.json",
+            "ssh_rules": "./rules/ssh.json",
+            "city_coords": "./china-cities.json"
+        },
         "scheduler": {
             "enabled": true,
-            "max_tasks": 1,
-            "fetch_count": 5,
-            "fetch_threshold": 3
+            "max_tasks": 32,
+            "fetch_count": 16,
+            "fetch_threshold": 8
         },
+        "save": "analyse", // Not implement yet
+        "vuln_search": {
+            "exploitdb": "./thirdparty/exploitdb/searchsploit"
+        }
+    },
+    "stats": {
+        "sys_update_interval": 1000,
+        "scheduler_update_interval": 10000
     }
-    
 }
-
 ```
-
---------
-
-## Setup Specific Worker Scheduler Config 
-`POST /api/scheduler/{worker_addr}/setup`
-### Request
-```
-See above
-```
-
---------
-
-## List workers
-`GET /api/scheduler/workers`
-### Response
-```json
-[
-    "localhost:3000",
-    "172.24.0.2:3000",
-]
-```
-
---------
-
-## Get Worker Scheduler State
-`GET /api/scheduler/status`
-
---------
-
-## Get Specific Scheduler State
-`GET /api/scheduler/{worker_addr}/status`

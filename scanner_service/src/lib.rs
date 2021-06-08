@@ -33,10 +33,9 @@ use error::*;
 
 pub use service_analyse::{scheduler::ServiceAnalyseScheduler, scheduler::ServiceRecord, ServiceAnalyseResult, ip_geo::IPGeoData};
 pub use config::Config;
-pub use net_scanner::result_handler::NetScanRecord;
 pub use address::{parse_ipv4_cidr};
 pub use net_scanner::tcp_scanner::ftp::FTPAccess;
-pub use net_scanner::{http_scanner::HttpResponseData, https_scanner::HttpsResponse, result_handler::ScanTaskInfo, tcp_scanner::{ftp::FTPScanResult, ssh::SSHScannResult}};
+pub use net_scanner::{http_scanner::HttpResponseData, https_scanner::HttpsResponse, result_handler::{ScanTaskInfo, ScanTaskData}, tcp_scanner::{ftp::FTPScanResult, ssh::SSHScannResult}};
 pub use stats_mornitor::{SystemStats};
 pub use scheduler::SchedulerStats;
 pub use vul_search::VulnInfo;
@@ -78,7 +77,7 @@ pub struct WorkerService {
     scanner: NetScanner,
     analyser: ServiceAnalyseScheduler,
     sys_mornitor: SystemStatsMornitor,
-    runtime: Arc<tokio::runtime::Runtime>,
+    runtime: Arc<Mutex<tokio::runtime::Runtime>>,
     current_state: Arc<Mutex<Option<WorkerState>>>
 }
 
@@ -107,12 +106,18 @@ impl WorkerService {
             analyser: analyser_scheduler,
             sys_mornitor: SystemStatsMornitor::start(),
             current_state: Arc::new(Mutex::new(None)),
-            runtime: Arc::new(rt),
+            runtime: Arc::new(Mutex::new(rt)),
         })
     }
 
-    pub async fn start(&self, master_addr: String, scanner_config: ScannerConfig, analyser_config: ServiceAnalyserOptions) -> Result<(), SimpleError>{
-        let _guard = self.runtime.enter();
+    pub async fn start(&self, master_addr: String, scanner_config: ScannerConfig, analyser_config: ServiceAnalyserOptions) -> Result<(), SimpleError> {
+        let mut runtime = self.runtime.lock().await;
+        let mut rt = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()?;
+        mem::swap(&mut rt, &mut runtime);
+        rt.shutdown_background();
+        let _guard = runtime.enter();
         let should_restart = {
             let guard = self.current_state.lock().await;
             match guard.as_ref() {

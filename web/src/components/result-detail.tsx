@@ -67,48 +67,53 @@ function Overview(props: { data: ScanResult })
     const data = props.data;
     return (<div className="overview">
         <Descriptions title="Scanning">
-            <Descriptions.Item label="IP">{data.addr}</Descriptions.Item>
+            <Descriptions.Item label="IP">{data.scan.addr}</Descriptions.Item>
             <Descriptions.Item label="Status">{
-                data.opened_ports.length > 0
+                data.scan.online
                     ? <Badge status="success" text="Online"/>
                     : <Badge status="default" text="Offline"/>
             }</Descriptions.Item>
-            <Descriptions.Item label="Last Update">{new Date(data.last_update).toLocaleString()}</Descriptions.Item>
+            <Descriptions.Item label="Last Update">{new Date(data.scan.last_update).toLocaleString()}</Descriptions.Item>
             <Descriptions.Item label="Opened Ports">{
-                data.opened_ports.length > 0
-                    ? data.opened_ports.join(", ")
+                data.scan.results.length > 0
+                    ? data.scan.results.map(r=>r.port).join(", ")
                     : "None"
             }</Descriptions.Item>
         </Descriptions>
         <Divider orientation="left">Scanning Results</Divider>
         <Collapse>
-            {data.http_results.map((data, idx) => (
-                <Collapse.Panel key={"http" + idx} header={breifHeader("HTTP", 80, data)}>
-                    <HTTPResult result={data} />
-                </Collapse.Panel>
-            ))}
-            {data.https_results.map((data, idx) => (
-                <Collapse.Panel key={"https" + idx} header={breifHeader("HTTPS", 443, data)}>
-                    {<HttpsResult result={data} />}
-                </Collapse.Panel>))}
-            {data.ftp_results.map((data, idx) => (
-                <Collapse.Panel key={"ftp" + idx} header={breifHeader("FTP", 21, data)}>
-                    <FTPScanResult result={data} />
-                </Collapse.Panel>
-            ))}
-            {data.ssh_results.map((data, idx) => (
-                <Collapse.Panel key={"ssh" + idx} header={breifHeader("SSH", 22, data)}>
-                    <SSHResultPanel result={data} />
-                </Collapse.Panel>
-            ))}
+            {
+                data.scan.results.map((result, idx) =>
+                {
+                    switch (result.scanner)
+                    {
+                        case "http":
+                            return (<Collapse.Panel key={idx} header={breifHeader(result)}>
+                                <HTTPResult result={result} />
+                            </Collapse.Panel>);
+                        case "tls":
+                            return (<Collapse.Panel key={idx} header={breifHeader(result)}>
+                                {<HttpsResult result={result} />}
+                            </Collapse.Panel>)
+                        case "ftp":
+                            return (<Collapse.Panel key={idx} header={breifHeader(result)}>
+                                <FTPScanResult result={result} />
+                            </Collapse.Panel>);
+                        case "ssh":
+                            return (<Collapse.Panel key={idx} header={breifHeader(result)}>
+                                <SSHResultPanel result={result} />
+                            </Collapse.Panel>);
+                    }
+                })
+            }
         </Collapse>
     </div>)
 }
 
-function breifHeader(name: string, port: number, data: NetScanResult<any>)
+function breifHeader(result: NetScanResult<string, unknown>)
 {
     return (<span>
-        <Badge status={data.result === "Ok" ? "success" : "error"} />
-        {name} {port} at {new Date(data.time.$date).toLocaleString()}
+        <Badge status={result.result === "Ok" ? "success" : "error"} />
+        {result.scanner.toUpperCase()} {result.port} at {new Date(result.time.$date).toLocaleString()}
     </span>);
 }

@@ -1,25 +1,11 @@
 use std::{collections::HashMap, net::Ipv4Addr, str::FromStr};
 
 use actix_web::{get, delete, http::StatusCode, post, web::{Data, Json, Path, Query, ServiceConfig, scope}};
-use nscn::{FTPScanResult, HttpResponseData, HttpsResponse, MasterService, SSHScannResult, ScanTaskInfo, ServiceAnalyseResult, VulnInfo, WorkerService, error::SimpleError, parse_ipv4_cidr};
+use nscn::{ MasterService, WorkerService, error::SimpleError, parse_ipv4_cidr};
 use serde::{Deserialize, Serialize};
 
-use crate::{error::{ApiError}, misc::responder::{ApiResult, Response}, model::{Model, ScanAnalyseResult, ScanStats}};
+use crate::{error::{ApiError}, misc::responder::{ApiResult, Response}, model::{Model, ScanAnalyseResult, ScanResultBreif, ScanStats}};
 
-use super::search::ScanResultBreif;
-
-#[derive(Serialize)]
-struct ScanResult {
-    addr: String,
-    opened_ports: Vec<u16>,
-    last_update: i64,
-    services: HashMap<String, ServiceAnalyseResult>,
-    http_results: Vec<ScanTaskInfo<HttpResponseData>>,
-    https_results: Vec<ScanTaskInfo<HttpsResponse>>,
-    ftp_results: Vec<ScanTaskInfo<FTPScanResult>>,
-    ssh_results: Vec<ScanTaskInfo<SSHScannResult>>,
-    vulns: HashMap<String, VulnInfo>,
-}
 #[derive(Serialize)]
 struct HTTPResponseData {
     status: i32,
@@ -31,126 +17,6 @@ pub struct QueryParameters {
     pub skip: usize,
     pub count: usize,
     pub online_only: Option<i32>,
-}
-
-pub fn get_opened_ports(result: &ScanAnalyseResult) -> Vec<i16> {
-    let mut ports = Vec::new();
-    match &result.scan.scan.http {
-        Some(http) if http.success > 0 => {
-            ports.push(80);
-        },
-        _ => ()
-    }
-    match &result.scan.scan.https {
-        Some(https) if https.success > 0 => {
-            ports.push(443);
-        },
-        _ => ()
-    }
-    if let Some(tcp) = &result.scan.scan.tcp {
-        match tcp.get("21") {
-            Some(tcp_result) => match &tcp_result.ftp {
-                Some(ftp_result) if ftp_result.success > 0 => {
-                    ports.push(21);
-                },
-                _ =>(),
-            },
-            _ => (),
-        }
-    }
-    if let Some(tcp) = &result.scan.scan.tcp {
-        match tcp.get("22") {
-            Some(tcp_result) => match &tcp_result.ssh {
-                Some(ssh_result) if ssh_result.success > 0 => {
-                    ports.push(22);
-                },
-                _ =>(),
-            },
-            _ => (),
-        }
-    }
-    ports
-}
-
-impl From<ScanAnalyseResult> for ScanResult {
-    fn from(mut result: ScanAnalyseResult) -> Self {
-        let mut ports: Vec<u16> = Vec::new();
-        let mut ftp_results: Vec<ScanTaskInfo<FTPScanResult>> = Vec::new();
-        let mut ssh_results: Vec<ScanTaskInfo<SSHScannResult>> = Vec::new();
-        let mut services: HashMap<String, ServiceAnalyseResult> = HashMap::new();
-        let mut http_response: Vec<ScanTaskInfo<HttpResponseData>> = Vec::new();
-        let mut https_response: Vec<ScanTaskInfo<HttpsResponse>> = Vec::new();
-        match result.scan.scan.http {
-            Some(http) => {
-                if http.success > 0 {
-                    ports.push(80);
-                }
-                http_response.extend(http.results);
-            },
-            _ => ()
-        }
-        match result.scan.scan.https {
-            Some(https) => {
-                if https.success > 0 {
-                    ports.push(443);
-                }
-                https_response.extend(https.results);
-            },
-            _ => ()
-        }
-        if let Some(tcp) = &mut result.scan.scan.tcp {
-            match tcp.remove("21") {
-                Some(tcp_result) => match tcp_result.ftp {
-                    Some(ftp_result) => {
-                        if ftp_result.success > 0 {
-                            ports.push(21);
-                        }
-                        ftp_results.extend(ftp_result.results);
-                    },
-                    _ =>(),
-                },
-                _ => (),
-            }
-        }
-        if let Some(tcp) = &mut result.scan.scan.tcp {
-            match tcp.remove("22") {
-                Some(tcp_result) => match tcp_result.ssh {
-                    Some(ssh_result) => {
-                        if ssh_result.success > 0 {
-                            ports.push(22);
-                        }
-                        ssh_results.extend(ssh_result.results);
-                    },
-                    _ =>(),
-                },
-                _ => (),
-            }
-        }
-        if let Some(service) = result.analyse {
-            if let Some(ssh_service) = service.ssh {
-
-                services.extend(ssh_service);
-            }
-            if let Some(web_service) = service.web {
-                services.extend(web_service);
-            }
-            if let Some(ftp_service) = service.ftp {
-                services.extend(ftp_service);
-            }
-        }
-
-        Self {
-            addr: result.scan.addr,
-            opened_ports: ports,
-            ftp_results,
-            last_update: result.scan.last_update.timestamp_millis(),
-            http_results: http_response,
-            https_results: https_response,
-            ssh_results,
-            services,
-            vulns: result.vulns.unwrap_or(HashMap::new()),
-        }
-    }
 }
 
 #[derive(Deserialize)]
@@ -178,7 +44,7 @@ async fn get_stats(service: Data<WorkerService>, model: Data<Model>) -> ApiResul
 }
 
 #[get("/{addr}")]
-async fn get_by_ip(addr_str: Path<String>, model: Data<Model>) -> ApiResult<Vec<ScanResult>> {
+async fn get_by_ip(addr_str: Path<String>, model: Data<Model>) -> ApiResult<Vec<ScanAnalyseResult>> {
     let addr = parse_ip(&addr_str).map_err(|_|ApiError(StatusCode::BAD_REQUEST, "Invalid address format".to_owned()))?;
     let result = model.get_details_by_ip(addr).await?;
 
@@ -198,7 +64,7 @@ async fn get_range_by_cidr(path: Path<(String, String)>, query: Query<QueryParam
     
     let result = model.get_by_ip_range(range, query.skip, query.count, online_only).await?;
 
-    Ok(Response(result.into_iter().map(ScanResultBreif::from).collect()))
+    Ok(Response(result))
 }
 
 #[post("/{addr}")]

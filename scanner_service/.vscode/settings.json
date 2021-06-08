@@ -1,0 +1,5 @@
+{
+    "rust-analyzer.checkOnSave.extraArgs": [
+        "--no-default-features"
+    ]
+}
