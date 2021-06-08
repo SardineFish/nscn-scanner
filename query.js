@@ -297,11 +297,6 @@
 // union analyse from scan
 [
     {
-        $match: {
-            online: true,
-        }
-    },
-    {
         $project: {
             addr: 1,
             addr_int: 1,

@@ -99,7 +99,7 @@ export interface BreifResult
     addr: string,
     last_update: number,
     ports: number[],
-    services: Array<{
+    services?: Array<{
         name: string,
         version: string,
         vulns: number,

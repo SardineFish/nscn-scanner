@@ -135,7 +135,7 @@ export const ResultSearch: React.FC = () =>
 const SearchResultItem = (props: { result: BreifResult, onClick: (addr: string) => any }) =>
 {
     const time = new Date(props.result.last_update).toLocaleString();
-    const vulns = props.result.services.reduce((sum, current) => sum + current.vulns, 0);
+    const vulns = (props.result.services ?? []).reduce((sum, current) => sum + current.vulns, 0);
     return (<List.Item>
         <List.Item.Meta
             avatar={<DatabaseOutlined style={{ fontSize: "32px" }} />}
@@ -150,7 +150,7 @@ const SearchResultItem = (props: { result: BreifResult, onClick: (addr: string) 
                         : props.result.ports.map((port, key) => (<Tag color="green" key={key}>{port}</Tag>))
                 }
                 {
-                    props.result.services.map((service, key) => (
+                    props.result.services?.map((service, key) => (
                         <Tag color="blue" key={key}>
                             {service.name}
                             {service.version !== "" ? ` ${service.version}` : null}

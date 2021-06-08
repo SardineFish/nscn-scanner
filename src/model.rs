@@ -70,7 +70,7 @@ pub struct ScanResultBreif {
     pub last_update: bson::DateTime,
     pub addr: String,
     pub ports: Vec<i32>,
-    pub services: Vec<ServiceAnalyseResultBrif>,
+    pub services: Option<Vec<ServiceAnalyseResultBrif>>,
 }
 
 fn serialize_timestamp<S>(time: &bson::DateTime, serializer: S) -> Result<S::Ok, S::Error> where S: serde::ser::Serializer {
