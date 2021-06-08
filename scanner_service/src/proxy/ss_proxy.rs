@@ -33,7 +33,7 @@ mod test {
 
     #[tokio::test]
     async fn test_ss_proxy() {
-        if let Some(cfg_list) = &GLOBAL_CONFIG.proxy_pool.shadowsocks {
+        if let Some(cfg_list) = &GLOBAL_CONFIG.proxy.shadowsocks {
             for cfg in cfg_list {
                 let proxy = SSProxy {
                     cfg,

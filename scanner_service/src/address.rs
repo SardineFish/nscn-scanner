@@ -25,7 +25,7 @@ pub fn parse_ipv4_cidr(cidr: &str) -> Result<Range<u32>, SimpleError> {
 pub async fn fetch_address_list(url: &str) -> Result<Vec<String>, SimpleError> {
     log::info!("{}", url);
     let mut builder = reqwest::Client::builder();
-    if let Some(proxy_addr) = &GLOBAL_CONFIG.scanner.task.proxy {
+    if let Some(proxy_addr) = &GLOBAL_CONFIG.proxy.task_fetch_proxy {
         builder = builder.proxy(Proxy::http(proxy_addr)?)
             .proxy(Proxy::https(proxy_addr)?);
     }

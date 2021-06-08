@@ -56,11 +56,11 @@ pub struct Socks5ProxyUpdater {
 }
 impl Socks5ProxyUpdater {
     pub async fn start(self) {
-        if let Some(fetch_url) = &GLOBAL_CONFIG.proxy_pool.socks5.first_fetch {
+        if let Some(fetch_url) = &GLOBAL_CONFIG.proxy.socks5.first_fetch {
             self.fetch_new_proxy(fetch_url).await;
         } else {
-            for _ in 0..GLOBAL_CONFIG.proxy_pool.socks5.pool_size {
-                self.fetch_new_proxy(&GLOBAL_CONFIG.proxy_pool.socks5.fetch).await;
+            for _ in 0..GLOBAL_CONFIG.proxy.socks5.pool_size {
+                self.fetch_new_proxy(&GLOBAL_CONFIG.proxy.socks5.fetch).await;
             }
         }
     }
@@ -70,7 +70,7 @@ impl Socks5ProxyUpdater {
             loop {
                 sleep(std::time::Duration::from_secs(3)).await;
                 let proxy = proxy_pool.get_socks5_proxy().await;
-                if let Some(url) = &GLOBAL_CONFIG.proxy_pool.socks5.validate {
+                if let Some(url) = &GLOBAL_CONFIG.proxy.socks5.validate {
                     if let Err(err) = Self::validate_proxy(&proxy, url).await {
                         log::warn!("Proxy {} validate failed: {}", proxy.addr, err.msg);
                     }
@@ -92,7 +92,7 @@ impl Socks5ProxyUpdater {
             sleep(std::time::Duration::from_millis(duration.num_milliseconds() as u64)).await;
             log::info!("{} expired", addr);
 
-            self.fetch_new_proxy(&GLOBAL_CONFIG.proxy_pool.socks5.fetch).await;
+            self.fetch_new_proxy(&GLOBAL_CONFIG.proxy.socks5.fetch).await;
 
             let mut guard = self.pool.lock().await;
             guard.iter().position(|proxy| proxy.addr == addr)

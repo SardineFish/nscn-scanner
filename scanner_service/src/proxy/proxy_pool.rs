@@ -37,7 +37,7 @@ impl ProxyPool {
             socks5_proxy_pool: Arc::new(Mutex::new(Vec::new())),
             rng: Arc::new(Mutex::new(rand::rngs::SmallRng::from_entropy())),
             #[cfg(feature = "ss_proxy")]
-            ss_proxy_pool: Arc::new(match &GLOBAL_CONFIG.proxy_pool.shadowsocks {
+            ss_proxy_pool: Arc::new(match &GLOBAL_CONFIG.proxy.shadowsocks {
                 Some(cfg) => cfg.iter().map(|cfg| SSProxy {
                     cfg,
                     ctx: shadowsocks::context::Context::new_shared(shadowsocks::config::ServerType::Local),
@@ -50,13 +50,13 @@ impl ProxyPool {
     pub async fn start(&self) {
         let mut updater = ProxyPoolUpdator::new(self.http_client_pool.clone(), self.tunnel_client_pool.clone());
         // let client_pool = self.http_client_pool.clone();
-        if GLOBAL_CONFIG.proxy_pool.socks5.enabled {
+        if GLOBAL_CONFIG.proxy.socks5.enabled {
             let socks5_updater = Socks5ProxyUpdater {
                 pool: self.socks5_proxy_pool.clone(),
             };
             socks5_updater.start().await;
             Socks5ProxyUpdater::start_monitor(self);
-            if let Some(servers_list) = &GLOBAL_CONFIG.proxy_pool.socks5.servers {
+            if let Some(servers_list) = &GLOBAL_CONFIG.proxy.socks5.servers {
                 let mut guard = self.socks5_proxy_pool.lock().await;
                 for server in servers_list {
                     guard.push(Socks5ProxyInfo {
@@ -68,7 +68,7 @@ impl ProxyPool {
                 }
             }
         }
-        if GLOBAL_CONFIG.proxy_pool.update_http_proxy {
+        if GLOBAL_CONFIG.proxy.http.update {
             if let Err(err) = updater.try_update().await {
                 log::error!("Failed to initially update proxy pool: {}", err.msg);
             }
@@ -92,7 +92,7 @@ impl ProxyPool {
                 }
             }
             // log::warn!("Proxy pool is empty, retry in {}s", GLOBAL_CONFIG.proxy_pool.update_interval);
-            sleep(tokio::time::Duration::from_secs(GLOBAL_CONFIG.proxy_pool.update_interval)).await;
+            sleep(tokio::time::Duration::from_secs(GLOBAL_CONFIG.proxy.http.update_interval)).await;
         }
     }
     pub async fn get_tunnel_client(&self) -> TunnelProxyClient {
@@ -106,7 +106,7 @@ impl ProxyPool {
                 }
             }
             // log::warn!("Proxy pool is empty, retry in {}s", GLOBAL_CONFIG.proxy_pool.update_interval);
-            sleep(tokio::time::Duration::from_secs(GLOBAL_CONFIG.proxy_pool.update_interval)).await;
+            sleep(tokio::time::Duration::from_secs(GLOBAL_CONFIG.proxy.http.update_interval)).await;
         }
     }
     pub async fn get_socks5_proxy(&self) -> Socks5Proxy {
@@ -118,7 +118,7 @@ impl ProxyPool {
             if pool.len() > 0 {
                 break pool[idx].addr.clone();
             }
-            log::warn!("Socks5 proxy pool is empty, retry in {}s", GLOBAL_CONFIG.proxy_pool.update_interval);
+            log::warn!("Socks5 proxy pool is empty, retry in {}s", GLOBAL_CONFIG.proxy.http.update_interval);
             sleep(tokio::time::Duration::from_secs(3)).await;
         };
         Socks5Proxy {
@@ -158,7 +158,7 @@ impl ProxyPoolUpdator {
 
     pub async fn update(&mut self) {
         loop {
-            sleep(tokio::time::Duration::from_secs(GLOBAL_CONFIG.proxy_pool.update_interval)).await;
+            sleep(tokio::time::Duration::from_secs(GLOBAL_CONFIG.proxy.http.update_interval)).await;
             if let Err(err) = self.try_update().await {
                 log::warn!("Failed to update proxy pool: {}", err.msg);
             }
@@ -167,7 +167,7 @@ impl ProxyPoolUpdator {
 
     pub async fn try_update(&mut self) -> Result<(), SimpleError>
     {
-        let proxy_list: Vec<ProxyInfo> = reqwest::get(&GLOBAL_CONFIG.proxy_pool.fetch_addr)
+        let proxy_list: Vec<ProxyInfo> = reqwest::get(&GLOBAL_CONFIG.proxy.http.fetch_addr)
             .await?
             .json()
             .await?;

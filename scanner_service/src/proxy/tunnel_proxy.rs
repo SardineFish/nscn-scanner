@@ -51,7 +51,7 @@ impl TunnelProxyClient {
     }
 
     pub async fn verify(self) -> Result<Self, SimpleError> {
-        let stream = self.establish(&GLOBAL_CONFIG.proxy_pool.https_validate).await.log_debug("https_proxy_verify")?;
+        let stream = self.establish(&GLOBAL_CONFIG.proxy.http.https_validate).await.log_debug("https_proxy_verify")?;
         log::debug!("Proxy {} passed tunnel test.", self.proxy_addr);
 
         let ssl = ssl::Ssl::new(&SSL_CONTEXT)?;

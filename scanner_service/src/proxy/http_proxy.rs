@@ -25,7 +25,7 @@ impl HttpProxyClient {
     }
 
     pub(super) async fn verify(&self) -> Result<bool, SimpleError> {
-        for (idx, verify_method) in GLOBAL_CONFIG.proxy_pool.http_validate.iter().enumerate() {
+        for (idx, verify_method) in GLOBAL_CONFIG.proxy.http.http_validate.iter().enumerate() {
             match verify_method {
                 ProxyVerify::Plain(url) => {
                     let response = self.client.get(url)

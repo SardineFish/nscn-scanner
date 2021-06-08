@@ -16,7 +16,7 @@ pub struct Config {
     pub workers: Option<Vec<String>>,
     pub master: Option<String>,
     pub init: Option<bool>,
-    pub proxy_pool: ProxyPoolConfig,
+    pub proxy: ProxyPoolConfig,
     pub scanner: ScannerConfig,
     pub analyser: ServiceAnalyserOptions,
     pub stats: StatsConfig,
@@ -49,15 +49,22 @@ pub struct StatsConfig {
 
 #[derive(Deserialize, Clone)]
 pub struct ProxyPoolConfig {
-    pub update_http_proxy: bool,
-    pub fetch_addr: String,
-    pub update_interval: u64,
-    pub http_validate: Vec<ProxyVerify>,
-    pub https_validate: String,
+    pub http: HttpProxyPoolConfig,
     pub socks5: Socks5ProxyOptions,
     #[cfg(feature = "ss_proxy")]
     #[serde(deserialize_with = "ss_config::deserialize_ss_config")]
     pub shadowsocks: Option<Vec<shadowsocks::ServerConfig>>,
+
+    pub task_fetch_proxy: Option<String>,
+}
+
+#[derive(Deserialize, Clone)]
+pub struct HttpProxyPoolConfig {
+    pub update: bool,
+    pub fetch_addr: String,
+    pub update_interval: u64,
+    pub http_validate: Vec<ProxyVerify>,
+    pub https_validate: String,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -95,10 +102,8 @@ pub struct ResultSavingOption {
 
 #[derive(Deserialize, Clone, PartialEq, Eq, Debug)]
 pub struct ScannerConfig {
-    #[serde(flatten)]
     pub config: HashMap<String, UniversalScannerOption>,
     pub ports: HashMap<u16, Vec<String>>,
-    pub task: TaskOptions,
     pub scheduler: WorkerSchedulerOptions,
     pub save: ResultSavingOption,
 }
