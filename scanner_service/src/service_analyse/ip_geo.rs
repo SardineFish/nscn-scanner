@@ -22,8 +22,10 @@ impl IP2Geo {
         let mut geo = IPGeoData::from(info);
         if let Some(city) = self.geo_data.get(&geo.city) {
             geo.location = GeoJSON::Point{ coordinates: city.center.clone() };
-        } else {
-            // log::warn!("Unknown IP Geo {}:{}>{}>{}>{}", geo.citycode, geo.country, geo.region, geo.province, geo.city);
+        } else if let Some(province) = self.geo_data.get(&geo.province) {
+            geo.location = GeoJSON::Point{ coordinates: province.center.clone() };
+        } else if let Some(country) = self.geo_data.get(&geo.country) {
+            geo.location = GeoJSON::Point{ coordinates: country.center.clone() };
         }
         Some(geo)
     }

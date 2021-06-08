@@ -21,7 +21,7 @@ pub(super) struct CacheHitRateStats {
 lazy_static! {
     pub(super) static ref HIT_RATE_STATS: Arc<Mutex<CacheHitRateStats>> = {
         let stats = Arc::new(Mutex::new(CacheHitRateStats::default()));
-        let stats_clone = stats.clone();
+        // let stats_clone = stats.clone();
         // tokio::task::spawn(async move {
         //     loop {
         //         tokio::time::sleep(std::time::Duration::from_secs(10)).await;
