@@ -19,5 +19,5 @@ serde = "1.0.124"
 serde_json = "1.0.64"
 
 [features]
-default = []
+default = ["ss_proxy"]
 ss_proxy = ["nscn/ss_proxy"]
