@@ -51,8 +51,12 @@ impl ScanTask<HttpResponseData> for HttpScanTask {
         let mut response = async_h1::connect(UnsafeStreamWrapper::from(stream), request).await?;
         let mut reader = response.take_body().into_reader();
         let mut buf = [0u8;8192];
-        reader.read_exact(&mut buf).await.log_warn_consume("http-scan-body");
-        let body = std::str::from_utf8(&buf).log_warn("http-scan-body").unwrap_or_default();
+        match reader.read_exact(&mut buf).await {
+            Ok(_) => log::warn!("Http body exceeded size limit {}", buf.len()),
+            Err(err) if err.kind() == std::io::ErrorKind::UnexpectedEof => (),
+            Err(err) => log::warn!("Failed to read HTTP body: {}", err),
+        }
+        let body = std::str::from_utf8(&buf).log_warn("http}-scan-body").unwrap_or_default();
 
         log::info!("{}/HTTP was opened at {}", self.1, self.0);
         
